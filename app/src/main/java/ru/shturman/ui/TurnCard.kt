@@ -38,7 +38,7 @@ fun TurnCard(
             .padding(start = 10.dp, end = 18.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        RallySign(severity = severity, isLeft = isLeft)
+        RallyPacenote(severity = severity, isLeft = isLeft)
         Spacer(Modifier.width(12.dp))
         Column {
             Text(text = distance, color = ShColors.TextPrimary, style = ShText.Distance)
