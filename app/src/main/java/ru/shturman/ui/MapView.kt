@@ -146,6 +146,8 @@ private fun enableLocation(context: Context, map: MapLibreMap, style: Style) {
         .pulseEnabled(false)
         .accuracyAlpha(0f)
         .foregroundTintColor(0xFF3DDCFF.toInt())
+        .minZoomIconScale(0.3f) // размер стрелки при отдалении (было 0.6)
+        .maxZoomIconScale(0.5f) // размер стрелки при приближении (было 1.0)
         .build()
 
     val request = LocationEngineRequest.Builder(1000)
