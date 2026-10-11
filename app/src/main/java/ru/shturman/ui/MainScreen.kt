@@ -126,6 +126,19 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             !s.dataReady -> "Загружаю дорожные данные: ${(s.dataProgress * 100).toInt()}%" to ShColors.TextPrimary
             else -> null
         }
+        val weather = s.weather
+        if (message == null && weather != null && s.options.isNotEmpty() && !s.navigating) {
+            val extra = ((1.0 / weather.speedFactor - 1.0) * 100).toInt()
+            StatusPill(
+                text = "${weather.label}, ${weather.tempC}°" + if (extra > 0) " · в пути дольше на $extra%" else "",
+                color = if (extra > 0) ShColors.Sign3 else ShColors.TextSecondary,
+                onClick = null,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(start = 72.dp, top = 12.dp, end = 12.dp)
+            )
+        }
         if (message != null && !s.navigating) {
             StatusPill(
                 text = message.first,

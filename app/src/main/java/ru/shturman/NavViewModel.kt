@@ -19,6 +19,8 @@ import ru.shturman.routing.RoutePosition
 import ru.shturman.routing.Router
 import ru.shturman.routing.LimitSeg
 import ru.shturman.routing.Snap
+import ru.shturman.routing.Weather
+import ru.shturman.routing.fetchWeather
 import ru.shturman.routing.SpeedRecorder
 import ru.shturman.routing.StopRecorder
 import ru.shturman.routing.SpeedStore
@@ -59,7 +61,9 @@ data class NavState(
     val turn: NextTurn? = null,
 
     /** Ограничение скорости на участке, где мы сейчас едем, км/ч (если оно известно). */
-    val limitKmh: Int? = null
+    val limitKmh: Int? = null,
+
+    val weather: Weather? = null
 ) {
     val route: RouteOption? get() = options.getOrNull(selected)
 }
@@ -160,10 +164,16 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                         }.sortedBy { it.timeSec }
                     }.getOrDefault(result.options)
                 }
+                // Погода на час выезда замедляет прогноз (дождь, снег, гололёд)
+                val weather = fetchWeather(from, departAt.time)
+                val adjusted = if (weather != null && weather.speedFactor < 1.0) {
+                    forecast.map { o -> RouteOption(o.timeSec / weather.speedFactor, o.lengthM, o.points, o.maneuvers) }
+                } else forecast
                 _state.update {
                     it.copy(
+                        weather = weather,
                         routeLoading = false,
-                        options = forecast,
+                        options = adjusted,
                         selected = 0,
                         timeAware = result.timeAware
                     )
@@ -263,7 +273,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(
                 destination = null, options = emptyList(), selected = 0, routeError = null,
                 routeLoading = false, navigating = false, position = null, turn = null,
-                departOffsetMin = 0, limitKmh = null
+                departOffsetMin = 0, limitKmh = null, weather = null
             )
         }
     }
