@@ -1,0 +1,80 @@
+name: Build road data
+
+# Готовит дорожные данные Псковской области для Valhalla на телефоне.
+# Запускается вручную: Actions -> Build road data -> Run workflow.
+# Valhalla собирается ровно той версии, что зашита в библиотеку приложения, чтобы данные подошли.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  VALHALLA_COMMIT: bafb69902220615a48307d5c790fb6c943802ba4
+  # Псковская область с запасом (запад, юг, восток, север)
+  BBOX: "27.0,55.6,31.6,59.3"
+  PBF_URL: https://download.geofabrik.de/russia/northwestern-fed-district-latest.osm.pbf
+
+jobs:
+  roaddata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /usr/local/share/boost
+          df -h /
+
+      - name: Get Valhalla source (exact version used by the app)
+        run: |
+          mkdir valhalla-src && cd valhalla-src
+          git init -q .
+          git remote add origin https://github.com/valhalla/valhalla.git
+          git fetch --depth 1 origin "$VALHALLA_COMMIT"
+          git checkout -q FETCH_HEAD
+          git submodule update --init --recursive --depth 1
+
+      - name: Build Valhalla tools image
+        run: docker build -t valhalla-pinned -f valhalla-src/docker/Dockerfile valhalla-src
+
+      - name: Download OpenStreetMap data
+        run: |
+          mkdir -p work
+          curl -fL --retry 5 --retry-delay 10 -o work/region.osm.pbf "$PBF_URL"
+          ls -lh work
+
+      - name: Cut out Pskov region
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q osmium-tool
+          osmium extract --bbox "$BBOX" --strategy smart -o work/pskov.osm.pbf work/region.osm.pbf
+          rm work/region.osm.pbf
+          ls -lh work
+
+      - name: Build routing tiles
+        run: |
+          docker run --rm -v "$PWD/work:/data" valhalla-pinned bash -ec '
+            valhalla_build_config \
+              --mjolnir-tile-dir /data/tiles \
+              --mjolnir-tile-extract /data/tiles.tar \
+              --mjolnir-timezone /data/timezones.sqlite \
+              --mjolnir-admin /data/admins.sqlite > /data/valhalla.json
+            valhalla_build_timezones > /data/timezones.sqlite
+            valhalla_build_admins -c /data/valhalla.json /data/pskov.osm.pbf || echo "admins skipped"
+            valhalla_build_tiles -c /data/valhalla.json /data/pskov.osm.pbf
+            valhalla_build_extract -c /data/valhalla.json -v
+          '
+          ls -lh work
+
+      - name: Publish road data to Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: roaddata-pskov
+          make_latest: false
+          name: Дорожные данные Псковской области
+          body: Файлы для Valhalla на телефоне. Обновляются при каждом запуске сборки.
+          files: |
+            work/tiles.tar
+            work/timezones.sqlite
+            work/admins.sqlite
