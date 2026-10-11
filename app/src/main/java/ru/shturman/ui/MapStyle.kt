@@ -4,34 +4,36 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 
 /**
  * Свой тёмный стиль 3D-карты. Данные: OpenStreetMap через бесплатные тайлы OpenFreeMap.
- * Здания выдавливаются по высоте, леса и парки покрыты символическими деревьями.
+ * Здания выдавливаются по высоте. На односторонних дорогах нарисованы стрелки по направлению
+ * движения, на двусторонних — пунктирная осевая линия.
  * Все цвета можно менять прямо здесь.
  */
 object MapStyle {
 
-    const val TREE_IMAGE = "tree"
+    const val ONEWAY_IMAGE = "oneway"
 
-    /** Маленькое символическое дерево: тёмная крона с подсветкой и ствол. Рисуется кодом, без файлов. */
-    fun treeBitmap(): Bitmap {
-        val size = 48
+    /** Стрелка-шеврон, смотрит вправо. Вдоль дороги Карта сама поворачивает её по направлению движения. */
+    fun onewayBitmap(): Bitmap {
+        val size = 32
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        val p = Paint(Paint.ANTI_ALIAS_FLAG)
-
-        c.drawColor(Color.parseColor("#0C130F"))   // фон леса
-
-        p.color = Color.parseColor("#2B1F17")       // ствол
-        c.drawRect(22f, 30f, 26f, 40f, p)
-
-        p.color = Color.parseColor("#17301F")       // крона, тёмная часть
-        c.drawCircle(24f, 22f, 12f, p)
-        p.color = Color.parseColor("#1F4A2C")       // крона, светлая часть
-        c.drawCircle(21f, 19f, 8f, p)
-        p.color = Color.parseColor("#2A6A3C")       // блик
-        c.drawCircle(19f, 16f, 3.5f, p)
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#CC3DDCFF")
+            style = Paint.Style.STROKE
+            strokeWidth = 5f
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+        val path = Path().apply {
+            moveTo(10f, 7f)
+            lineTo(22f, 16f)
+            lineTo(10f, 25f)
+        }
+        c.drawPath(path, p)
         return bmp
     }
 
@@ -55,12 +57,16 @@ object MapStyle {
       "filter": ["in", "class", "grass", "farmland"],
       "paint": { "fill-color": "#0C120F" } },
 
+    { "id": "wood", "type": "fill", "source": "omt", "source-layer": "landcover",
+      "filter": ["==", "class", "wood"],
+      "paint": { "fill-color": "#0D1612" } },
+
     { "id": "residential", "type": "fill", "source": "omt", "source-layer": "landuse",
       "filter": ["in", "class", "residential", "suburb", "neighbourhood"],
       "paint": { "fill-color": "#0D1015" } },
 
     { "id": "park-flat", "type": "fill", "source": "omt", "source-layer": "park",
-      "paint": { "fill-color": "#0C130F" } },
+      "paint": { "fill-color": "#0D1612" } },
 
     { "id": "water", "type": "fill", "source": "omt", "source-layer": "water",
       "paint": { "fill-color": "#0B1823" } },
@@ -86,14 +92,16 @@ object MapStyle {
       "paint": { "line-color": "#46515E",
                  "line-width": ["interpolate", ["exponential", 1.5], ["zoom"], 8, 0.5, 14, 2.8, 18, 13, 20, 28] } },
 
-    { "id": "wood-3d", "type": "fill-extrusion", "source": "omt", "source-layer": "landcover",
-      "filter": ["==", "class", "wood"], "minzoom": 12,
-      "paint": { "fill-extrusion-pattern": "tree", "fill-extrusion-height": 5, "fill-extrusion-base": 0,
-                 "fill-extrusion-opacity": 0.95 } },
+    { "id": "centerline", "type": "line", "source": "omt", "source-layer": "transportation", "minzoom": 14,
+      "filter": ["all", ["in", "class", "tertiary", "secondary", "primary", "trunk"],
+                 ["!=", "oneway", 1], ["!=", "oneway", -1]],
+      "paint": { "line-color": "#7D8896", "line-dasharray": [3, 3],
+                 "line-width": ["interpolate", ["linear"], ["zoom"], 14, 0.3, 18, 1.4] } },
 
-    { "id": "park-3d", "type": "fill-extrusion", "source": "omt", "source-layer": "park", "minzoom": 13,
-      "paint": { "fill-extrusion-pattern": "tree", "fill-extrusion-height": 3, "fill-extrusion-base": 0,
-                 "fill-extrusion-opacity": 0.95 } },
+    { "id": "centerline-minor", "type": "line", "source": "omt", "source-layer": "transportation", "minzoom": 16,
+      "filter": ["all", ["==", "class", "minor"], ["!=", "oneway", 1], ["!=", "oneway", -1]],
+      "paint": { "line-color": "#5A6572", "line-dasharray": [3, 3],
+                 "line-width": ["interpolate", ["linear"], ["zoom"], 16, 0.4, 19, 1.2] } },
 
     { "id": "building-3d", "type": "fill-extrusion", "source": "omt", "source-layer": "building", "minzoom": 13,
       "paint": {
@@ -101,6 +109,24 @@ object MapStyle {
         "fill-extrusion-height": ["coalesce", ["get", "render_height"], 8],
         "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
         "fill-extrusion-opacity": 0.92 } },
+
+    { "id": "oneway-forward", "type": "symbol", "source": "omt", "source-layer": "transportation", "minzoom": 15,
+      "filter": ["all", ["==", "oneway", 1],
+                 ["in", "class", "minor", "tertiary", "secondary", "primary", "trunk", "motorway"]],
+      "layout": { "symbol-placement": "line", "symbol-spacing": 60,
+                  "icon-image": "oneway",
+                  "icon-size": ["interpolate", ["linear"], ["zoom"], 15, 0.5, 19, 1.0],
+                  "icon-rotation-alignment": "map", "icon-pitch-alignment": "map",
+                  "icon-keep-upright": false, "icon-allow-overlap": true } },
+
+    { "id": "oneway-backward", "type": "symbol", "source": "omt", "source-layer": "transportation", "minzoom": 15,
+      "filter": ["all", ["==", "oneway", -1],
+                 ["in", "class", "minor", "tertiary", "secondary", "primary", "trunk", "motorway"]],
+      "layout": { "symbol-placement": "line", "symbol-spacing": 60,
+                  "icon-image": "oneway", "icon-rotate": 180,
+                  "icon-size": ["interpolate", ["linear"], ["zoom"], 15, 0.5, 19, 1.0],
+                  "icon-rotation-alignment": "map", "icon-pitch-alignment": "map",
+                  "icon-keep-upright": false, "icon-allow-overlap": true } },
 
     { "id": "road-names", "type": "symbol", "source": "omt", "source-layer": "transportation_name", "minzoom": 15,
       "layout": { "symbol-placement": "line", "text-field": ["coalesce", ["get", "name:ru"], ["get", "name"]],

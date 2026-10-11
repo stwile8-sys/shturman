@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
@@ -29,13 +30,14 @@ import ru.shturman.ui.theme.ShColors
 @Composable
 fun MainScreen() {
     var showSettings by remember { mutableStateOf(false) }
+    var recenterKey by remember { mutableStateOf(0) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(ShColors.Background)
     ) {
-        DarkMap(modifier = Modifier.fillMaxSize())
+        DarkMap(modifier = Modifier.fillMaxSize(), recenterKey = recenterKey)
 
         Column(
             modifier = Modifier
@@ -61,6 +63,16 @@ fun MainScreen() {
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
                 .padding(12.dp)
+        )
+
+        MapButton(
+            icon = Icons.Filled.LocationOn,
+            description = "Где я",
+            onClick = { recenterKey++ },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 12.dp, bottom = 96.dp)
         )
 
         ProgressCard(
