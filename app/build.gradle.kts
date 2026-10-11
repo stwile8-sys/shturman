@@ -61,6 +61,10 @@ dependencies {
     // Карта на основе OpenStreetMap (MapLibre)
     implementation("org.maplibre.gl:android-sdk:11.5.2")
 
+    // Valhalla на телефоне: маршруты считаются прямо в приложении
+    implementation("io.github.rallista:valhalla-mobile:0.6.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
+
     // Вход через Google (Firebase Authentication)
     implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
     implementation("com.google.firebase:firebase-auth")
