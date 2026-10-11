@@ -24,6 +24,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,15 +33,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import ru.shturman.auth.UserInfo
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.theme.ShText
 
 /** Настройки: профиль, приватность и ручная синхронизация. Пока всё — макет. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsSheet(onDismiss: () -> Unit) {
+fun SettingsSheet(user: UserInfo, onSignOut: () -> Unit, onDismiss: () -> Unit) {
     var shareData by remember { mutableStateOf(true) }
 
     ModalBottomSheet(
@@ -56,7 +60,7 @@ fun SettingsSheet(onDismiss: () -> Unit) {
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 20.dp)
         ) {
-            // Профиль (заглушка вместо данных из Google)
+            // Профиль: имя, почта и аватарка из Google-аккаунта
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -65,21 +69,30 @@ fun SettingsSheet(onDismiss: () -> Unit) {
                         .background(ShColors.Divider),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Person,
-                        contentDescription = null,
-                        tint = ShColors.TextSecondary
-                    )
+                    if (user.photoUrl != null) {
+                        AsyncImage(
+                            model = user.photoUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(52.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Filled.Person,
+                            contentDescription = null,
+                            tint = ShColors.TextSecondary
+                        )
+                    }
                 }
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Text(
-                        text = "Имя из Google",
+                        text = user.name,
                         color = ShColors.TextPrimary,
                         style = ShText.Distance.copy(fontSize = 20.sp)
                     )
                     Text(
-                        text = "почта@gmail.com",
+                        text = user.email,
                         color = ShColors.TextSecondary,
                         style = ShText.Street
                     )
@@ -143,6 +156,14 @@ fun SettingsSheet(onDismiss: () -> Unit) {
                 )
             ) {
                 Text(text = "Синхронизировать", style = ShText.Button)
+            }
+
+            Spacer(Modifier.height(8.dp))
+            TextButton(
+                onClick = onSignOut,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(text = "Выйти из аккаунта", color = ShColors.TextSecondary, style = ShText.Small)
             }
         }
     }

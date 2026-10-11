@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import ru.shturman.auth.UserInfo
 import ru.shturman.ui.theme.ShColors
 
 /**
@@ -28,7 +29,7 @@ import ru.shturman.ui.theme.ShColors
  * снизу — сколько проехали.
  */
 @Composable
-fun MainScreen() {
+fun MainScreen(user: UserInfo, onSignOut: () -> Unit) {
     var showSettings by remember { mutableStateOf(false) }
     var recenterKey by remember { mutableStateOf(0) }
 
@@ -83,7 +84,14 @@ fun MainScreen() {
         )
 
         if (showSettings) {
-            SettingsSheet(onDismiss = { showSettings = false })
+            SettingsSheet(
+                user = user,
+                onSignOut = {
+                    showSettings = false
+                    onSignOut()
+                },
+                onDismiss = { showSettings = false }
+            )
         }
     }
 }
