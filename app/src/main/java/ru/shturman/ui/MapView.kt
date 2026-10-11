@@ -15,11 +15,7 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 
-// Тёмная карта на данных OpenStreetMap (бесплатный стиль CARTO Dark Matter).
-private const val DARK_STYLE_URL =
-    "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-
-/** Карта на весь экран. Пока просто тёмный фон с дорогами, без логики. */
+/** Карта на весь экран: тёмная 3D-карта с наклоном камеры, объёмными зданиями и символическими деревьями. */
 @Composable
 fun DarkMap(modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -28,10 +24,16 @@ fun DarkMap(modifier: Modifier = Modifier) {
         MapLibre.getInstance(context)
         MapView(context).apply {
             getMapAsync { map ->
-                map.setStyle(Style.Builder().fromUri(DARK_STYLE_URL))
+                map.setStyle(
+                    Style.Builder()
+                        .fromJson(MapStyle.JSON)
+                        .withImage(MapStyle.TREE_IMAGE, MapStyle.treeBitmap())
+                )
                 map.cameraPosition = CameraPosition.Builder()
-                    .target(LatLng(55.7558, 37.6173)) // заглушка: центр Москвы
-                    .zoom(13.0)
+                    .target(LatLng(55.7558, 37.6173)) // заглушка: центр Москвы, потом будет твоё положение
+                    .zoom(16.0)
+                    .tilt(60.0)
+                    .bearing(20.0)
                     .build()
             }
         }
