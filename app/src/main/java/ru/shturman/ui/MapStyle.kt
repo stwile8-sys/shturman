@@ -50,7 +50,8 @@ object MapStyle {
       "attribution": "<a href=\"https://openfreemap.org\">OpenFreeMap</a> © <a href=\"https://www.openmaptiles.org/\">OpenMapTiles</a> Data from <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>"
     },
     "route": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
-    "dest": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } }
+    "dest": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
+    "cams": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } }
   },
   "layers": [
     { "id": "bg", "type": "background", "paint": { "background-color": "#0A0C10" } },
@@ -150,6 +151,10 @@ object MapStyle {
       "layout": { "text-field": ["coalesce", ["get", "name:ru"], ["get", "name"]],
                   "text-font": ["Noto Sans Regular"], "text-size": 13 },
       "paint": { "text-color": "#8A9099", "text-halo-color": "#0A0C10", "text-halo-width": 1.5 } },
+
+    { "id": "cam-dots", "type": "circle", "source": "cams", "minzoom": 12,
+      "paint": { "circle-radius": 6, "circle-color": "#FFB020",
+                 "circle-stroke-color": "#0A0C10", "circle-stroke-width": 2 } },
 
     { "id": "dest-pin", "type": "circle", "source": "dest",
       "paint": { "circle-radius": 8, "circle-color": "#FF2E2E",

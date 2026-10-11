@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.shturman.routing.Cameras
 import ru.shturman.routing.Geocoder
 import ru.shturman.routing.LatLon
 import ru.shturman.routing.NextTurn
@@ -19,6 +20,7 @@ import ru.shturman.routing.Snap
 import ru.shturman.routing.SpeedRecorder
 import ru.shturman.routing.SpeedStore
 import ru.shturman.routing.forecastTimeSec
+import ru.shturman.routing.camerasOnRoute
 import ru.shturman.routing.lastKnownPosition
 import ru.shturman.routing.locateOnRoute
 import ru.shturman.routing.nextTurn
@@ -52,7 +54,11 @@ data class NavState(
 
     val navigating: Boolean = false,
     val position: RoutePosition? = null,
-    val turn: NextTurn? = null
+    val turn: NextTurn? = null,
+
+    val cameras: List<LatLon> = emptyList(),
+    /** Метров до ближайшей камеры на маршруте впереди, если она ближе 600 м. */
+    val cameraAheadM: Double? = null
 ) {
     val route: RouteOption? get() = options.getOrNull(selected)
 }
@@ -62,6 +68,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private val roadData = RoadData(app)
     private val router = Router(roadData)
 
+    private val cameraRepo = Cameras(app)
+    private var routeCameras: List<Double> = emptyList()
     private val speedStore = SpeedStore(app)
     private val recorder = SpeedRecorder(speedStore)
     private var offRouteCount = 0
@@ -73,6 +81,10 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         downloadDataIfNeeded()
+        viewModelScope.launch {
+            _state.update { it.copy(cameras = cameraRepo.load()) }
+            if (cameraRepo.updateIfStale()) _state.update { it.copy(cameras = cameraRepo.load()) }
+        }
         // Раз в неделю подтягиваем свежие дорожные данные, чтобы старые значения не оставались
         viewModelScope.launch {
             if (roadData.updateIfStale()) router.close()
@@ -169,6 +181,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     fun startNavigation() {
         val route = _state.value.route ?: return
         offRouteCount = 0
+        routeCameras = camerasOnRoute(route, _state.value.cameras)
         val position = RoutePosition(0, 0.0)
         _state.update { it.copy(navigating = true, position = position, turn = nextTurn(route, position)) }
     }
@@ -194,7 +207,9 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             locateOnRoute(route, here, fromIndex)
         }
-        _state.update { it.copy(position = position, turn = nextTurn(route, position)) }
+        val ahead = routeCameras.firstOrNull { it > position.traveledM }
+            ?.let { it - position.traveledM }?.takeIf { it < 600.0 }
+        _state.update { it.copy(position = position, turn = nextTurn(route, position), cameraAheadM = ahead) }
 
         // Съехали с маршрута: после нескольких подряд положений вдали строим новый путь отсюда
         offRouteCount = if (snap == null) offRouteCount + 1 else 0
@@ -214,6 +229,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 if (result.options.isNotEmpty() && _state.value.navigating) {
                     val fresh = result.options[0]
                     val position = RoutePosition(0, 0.0)
+                    routeCameras = camerasOnRoute(fresh, _state.value.cameras)
                     _state.update {
                         it.copy(
                             options = listOf(fresh), selected = 0,
@@ -230,12 +246,20 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Добавляет камеру вручную в текущем месте. */
+    fun addCameraHere() {
+        val here = lastKnownPosition(getApplication()) ?: return
+        cameraRepo.addManual(here)
+        _state.update { it.copy(cameras = cameraRepo.load()) }
+        if (_state.value.navigating) routeCameras = _state.value.route?.let { r -> camerasOnRoute(r, _state.value.cameras) } ?: emptyList()
+    }
+
     fun clearRoute() {
         _state.update {
             it.copy(
                 destination = null, options = emptyList(), selected = 0, routeError = null,
                 routeLoading = false, navigating = false, position = null, turn = null,
-                departOffsetMin = 0
+                departOffsetMin = 0, cameraAheadM = null
             )
         }
     }
