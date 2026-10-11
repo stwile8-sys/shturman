@@ -25,9 +25,13 @@ class GpsTracker(
         override fun onLocationChanged(location: Location) {
             val now = SystemClock.elapsedRealtime()
             if (location.provider == LocationManager.GPS_PROVIDER) {
+                // Грубые спутниковые данные (город, тоннель, холодный старт) только сбивают стрелку
+                if (location.hasAccuracy() && location.accuracy > MAX_GPS_ACCURACY_M) return
                 lastGpsAt = now
-            } else if (lastGpsAt != 0L && now - lastGpsAt < 15_000L) {
-                return // GPS жив, неточные данные из сети не нужны
+            } else {
+                // Сеть годится только пока GPS ещё ни разу не поймал, и только если она не слишком грубая
+                if (lastGpsAt != 0L) return
+                if (!location.hasAccuracy() || location.accuracy > MAX_NETWORK_ACCURACY_M) return
             }
             onFix(location)
         }
@@ -53,7 +57,13 @@ class GpsTracker(
         val last = manager.getProviders(true)
             .mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
             .maxByOrNull { it.time }
-        if (last != null) onFix(last)
+        // Старое положение (больше двух минут назад) не показываем: оно только обманет
+        if (last != null && System.currentTimeMillis() - last.time < 120_000L) onFix(last)
+    }
+
+    private companion object {
+        const val MAX_GPS_ACCURACY_M = 35f
+        const val MAX_NETWORK_ACCURACY_M = 150f
     }
 
     fun stop() {

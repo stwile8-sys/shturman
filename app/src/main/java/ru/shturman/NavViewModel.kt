@@ -25,6 +25,10 @@ import java.util.Date
 /** Дальше этого расстояния от линии маршрута стрелка уже не прилипает к дороге. */
 private const val SNAP_MAX_M = 40.0
 
+/** Столько подряд положений вдали от маршрута нужно, чтобы решить, что мы свернули, и построить новый путь. */
+private const val OFF_ROUTE_FIXES = 4
+private const val REROUTE_PAUSE_MS = 15_000L
+
 /** Всё, что показывает экран: состояние данных, поиск, маршрут и поездка. */
 data class NavState(
     val dataReady: Boolean = false,
@@ -54,6 +58,10 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     private val roadData = RoadData(app)
     private val router = Router(roadData)
+
+    private var offRouteCount = 0
+    private var rerouting = false
+    private var lastRerouteAt = 0L
 
     private val _state = MutableStateFlow(NavState(dataReady = roadData.isReady()))
     val state: StateFlow<NavState> = _state
@@ -151,6 +159,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startNavigation() {
         val route = _state.value.route ?: return
+        offRouteCount = 0
         val position = RoutePosition(0, 0.0)
         _state.update { it.copy(navigating = true, position = position, turn = nextTurn(route, position)) }
     }
@@ -173,7 +182,39 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             locateOnRoute(route, here, fromIndex)
         }
         _state.update { it.copy(position = position, turn = nextTurn(route, position)) }
+
+        // Съехали с маршрута: после нескольких подряд положений вдали строим новый путь отсюда
+        offRouteCount = if (snap == null) offRouteCount + 1 else 0
+        if (offRouteCount >= OFF_ROUTE_FIXES) reroute(here)
         return snap
+    }
+
+    private fun reroute(here: LatLon) {
+        val destination = _state.value.destination ?: return
+        val now = System.currentTimeMillis()
+        if (rerouting || now - lastRerouteAt < REROUTE_PAUSE_MS) return
+        rerouting = true
+        lastRerouteAt = now
+        viewModelScope.launch {
+            try {
+                val result = router.route(here, destination.position, Date())
+                if (result.options.isNotEmpty() && _state.value.navigating) {
+                    val fresh = result.options[0]
+                    val position = RoutePosition(0, 0.0)
+                    _state.update {
+                        it.copy(
+                            options = listOf(fresh), selected = 0,
+                            position = position, turn = nextTurn(fresh, position)
+                        )
+                    }
+                    offRouteCount = 0
+                }
+            } catch (e: Exception) {
+                // Не вышло, попробуем снова через паузу
+            } finally {
+                rerouting = false
+            }
+        }
     }
 
     fun clearRoute() {
