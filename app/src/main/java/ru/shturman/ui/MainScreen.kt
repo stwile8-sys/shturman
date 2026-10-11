@@ -74,7 +74,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             navigating = s.navigating,
             route = route?.points,
             destination = s.destination?.position,
-            onFix = { here, _ -> vm.onFix(here) }
+            onFix = { here, speed -> vm.onFix(here, speed) }
         )
 
         Column(

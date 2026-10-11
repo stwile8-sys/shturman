@@ -16,6 +16,9 @@ import ru.shturman.routing.RouteOption
 import ru.shturman.routing.RoutePosition
 import ru.shturman.routing.Router
 import ru.shturman.routing.Snap
+import ru.shturman.routing.SpeedRecorder
+import ru.shturman.routing.SpeedStore
+import ru.shturman.routing.forecastTimeSec
 import ru.shturman.routing.lastKnownPosition
 import ru.shturman.routing.locateOnRoute
 import ru.shturman.routing.nextTurn
@@ -59,6 +62,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private val roadData = RoadData(app)
     private val router = Router(roadData)
 
+    private val speedStore = SpeedStore(app)
+    private val recorder = SpeedRecorder(speedStore)
     private var offRouteCount = 0
     private var rerouting = false
     private var lastRerouteAt = 0L
@@ -137,10 +142,14 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val departAt = Date(System.currentTimeMillis() + s.departOffsetMin * 60_000L)
                 val result = router.route(from, destination.position, departAt)
+                // Время каждого варианта пересчитываем по запомненным скоростям на это время недели
+                val forecast = result.options.map { o ->
+                    RouteOption(forecastTimeSec(o, speedStore, departAt.time), o.lengthM, o.points, o.maneuvers)
+                }.sortedBy { it.timeSec }
                 _state.update {
                     it.copy(
                         routeLoading = false,
-                        options = result.options,
+                        options = forecast,
                         selected = 0,
                         timeAware = result.timeAware
                     )
@@ -169,8 +178,12 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
      * обновляет пройденный путь и ближайший поворот и возвращает точку, где рисовать стрелку.
      * Если телефон ушёл от маршрута дальше SNAP_MAX_M, стрелка остаётся на настоящем GPS-положении.
      */
-    fun onFix(here: LatLon): Snap? {
+    fun onFix(here: LatLon, speedMps: Float = 0f): Snap? {
         val s = _state.value
+        // Запоминаем, как быстро здесь едут: всегда в поездке, а вне её только на скорости
+        if (s.navigating || speedMps > 3f) {
+            recorder.add(here.lat, here.lon, speedMps.toDouble(), System.currentTimeMillis())
+        }
         val route = s.route ?: return null
         if (!s.navigating) return null
 
@@ -228,6 +241,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        recorder.flush()
         router.close()
     }
 }
