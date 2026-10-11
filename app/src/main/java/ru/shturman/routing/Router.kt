@@ -125,6 +125,7 @@ class Router(private val roadData: RoadData) {
     }
 
     @Synchronized
+    @Synchronized
     fun close() {
         engine?.close()
         engine = null

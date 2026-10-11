@@ -15,10 +15,15 @@ import ru.shturman.routing.RoadData
 import ru.shturman.routing.RouteOption
 import ru.shturman.routing.RoutePosition
 import ru.shturman.routing.Router
+import ru.shturman.routing.Snap
 import ru.shturman.routing.lastKnownPosition
 import ru.shturman.routing.locateOnRoute
 import ru.shturman.routing.nextTurn
+import ru.shturman.routing.snapToRoute
 import java.util.Date
+
+/** Дальше этого расстояния от линии маршрута стрелка уже не прилипает к дороге. */
+private const val SNAP_MAX_M = 40.0
 
 /** Всё, что показывает экран: состояние данных, поиск, маршрут и поездка. */
 data class NavState(
@@ -55,6 +60,10 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         downloadDataIfNeeded()
+        // Раз в неделю подтягиваем свежие дорожные данные, чтобы старые значения не оставались
+        viewModelScope.launch {
+            if (roadData.updateIfStale()) router.close()
+        }
     }
 
     fun downloadDataIfNeeded() {
@@ -146,13 +155,25 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(navigating = true, position = position, turn = nextTurn(route, position)) }
     }
 
-    /** Вызывается каждую секунду во время поездки: обновляет пройденный путь и ближайший поворот. */
-    fun tick(here: LatLon) {
+    /**
+     * Вызывается на каждое новое положение GPS. Во время поездки привязывает его к линии маршрута,
+     * обновляет пройденный путь и ближайший поворот и возвращает точку, где рисовать стрелку.
+     * Если телефон ушёл от маршрута дальше SNAP_MAX_M, стрелка остаётся на настоящем GPS-положении.
+     */
+    fun onFix(here: LatLon): Snap? {
         val s = _state.value
-        val route = s.route ?: return
-        if (!s.navigating) return
-        val position = locateOnRoute(route, here, s.position?.index ?: 0)
+        val route = s.route ?: return null
+        if (!s.navigating) return null
+
+        val fromIndex = s.position?.index ?: 0
+        val snap = snapToRoute(route, here, fromIndex)?.takeIf { it.offsetM <= SNAP_MAX_M }
+        val position = if (snap != null) {
+            RoutePosition(snap.index, snap.traveledM)
+        } else {
+            locateOnRoute(route, here, fromIndex)
+        }
         _state.update { it.copy(position = position, turn = nextTurn(route, position)) }
+        return snap
     }
 
     fun clearRoute() {

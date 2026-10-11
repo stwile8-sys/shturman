@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -49,6 +50,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
     var showSettings by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var recenterKey by remember { mutableStateOf(0) }
+    var startKey by remember { mutableStateOf(0) }
+    val context = LocalContext.current
 
     val route = s.route
     val total = (route?.totalM ?: 0.0).coerceAtLeast(1.0)
@@ -69,9 +72,11 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         DarkMap(
             modifier = Modifier.fillMaxSize(),
             recenterKey = recenterKey,
+            startKey = startKey,
+            navigating = s.navigating,
             route = route?.points,
             destination = s.destination?.position,
-            onLocation = { here, _ -> vm.tick(here) }
+            onFix = { here, _ -> vm.onFix(here) }
         )
 
         Column(
@@ -171,7 +176,11 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 destinationTitle = s.destination?.title ?: "",
                 onSelect = vm::selectOption,
                 onDepart = vm::setDeparture,
-                onStart = vm::startNavigation,
+                onStart = {
+                    startKey++
+                    StartSound.play(context)
+                    vm.startNavigation()
+                },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
@@ -203,6 +212,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 onClose = { showSearch = false }
             )
         }
+
+        StartOverlay(trigger = startKey)
     }
 }
 

@@ -5,6 +5,8 @@ name: Build road data
 # Valhalla собирается ровно той версии, что зашита в библиотеку приложения, чтобы данные подошли.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 1 * * 1"   # каждый понедельник: свежие данные OSM
 
 permissions:
   contents: write
