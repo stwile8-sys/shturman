@@ -6,34 +6,54 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
+import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 
 /**
- * Свой приём GPS раз в секунду. Нужен, чтобы перед показом стрелки мы могли привязать
- * положение к линии маршрута и повернуть стрелку по курсу.
- * Сеть (вышки, Wi-Fi) используется только пока GPS молчит.
+ * Приём положения для стрелки. Основной источник — служба местоположения Google (она смешивает
+ * GPS, ГЛОНАСС, Galileo и датчики телефона и точнее обычного GPS). Если её нет, берём чистый GPS.
+ * Каждое положение проходит через фильтр Калмана, который гасит шум: стоя на месте стрелка
+ * не дрожит, а в движении не скачет.
  */
 class GpsTracker(
     context: Context,
     private val onFix: (Location) -> Unit
 ) {
     private val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    private val fused = LocationServices.getFusedLocationProviderClient(context)
+    private val kalman = Kalman()
     private var lastGpsAt = 0L
+    private var fusedWorks = false
+    private var fallbackOn = false
+
+    private fun accept(raw: Location) {
+        if (raw.hasAccuracy() && raw.accuracy > MAX_ACCURACY_M) return
+        onFix(kalman.filter(raw))
+    }
+
+    private val fusedCallback = object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+            fusedWorks = true
+            result.locations.forEach { accept(it) }
+        }
+    }
 
     private val listener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
+            if (fusedWorks) return
             val now = SystemClock.elapsedRealtime()
             if (location.provider == LocationManager.GPS_PROVIDER) {
-                // Грубые спутниковые данные (город, тоннель, холодный старт) только сбивают стрелку
-                if (location.hasAccuracy() && location.accuracy > MAX_GPS_ACCURACY_M) return
                 lastGpsAt = now
-            } else {
-                // Сеть годится только пока GPS ещё ни разу не поймал, и только если она не слишком грубая
-                if (lastGpsAt != 0L) return
-                if (!location.hasAccuracy() || location.accuracy > MAX_NETWORK_ACCURACY_M) return
+            } else if (lastGpsAt != 0L) {
+                return
             }
-            onFix(location)
+            accept(location)
         }
 
         override fun onProviderEnabled(provider: String) {}
@@ -46,27 +66,79 @@ class GpsTracker(
 
     @SuppressLint("MissingPermission")
     fun start() {
-        for (provider in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
-            if (manager.allProviders.contains(provider)) {
-                runCatching {
-                    manager.requestLocationUpdates(provider, 1000L, 0f, listener, Looper.getMainLooper())
-                }
-            }
-        }
-        // Сразу показываем последнее известное положение, пока GPS ловит спутники
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500L)
+            .setMinUpdateIntervalMillis(250L)
+            .setWaitForAccurateLocation(false)
+            .build()
+        runCatching {
+            fused.requestLocationUpdates(request, fusedCallback, Looper.getMainLooper())
+                .addOnFailureListener { startFallback() }
+        }.onFailure { startFallback() }
+        // Если служба Google молчит, через 4 секунды включаем обычный GPS
+        Handler(Looper.getMainLooper()).postDelayed({ if (!fusedWorks) startFallback() }, 4000L)
+
         val last = manager.getProviders(true)
             .mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
             .maxByOrNull { it.time }
-        // Старое положение (больше двух минут назад) не показываем: оно только обманет
-        if (last != null && System.currentTimeMillis() - last.time < 120_000L) onFix(last)
+        if (last != null && System.currentTimeMillis() - last.time < 120_000L) accept(last)
     }
 
-    private companion object {
-        const val MAX_GPS_ACCURACY_M = 35f
-        const val MAX_NETWORK_ACCURACY_M = 150f
+    @SuppressLint("MissingPermission")
+    private fun startFallback() {
+        if (fallbackOn) return
+        fallbackOn = true
+        for (provider in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
+            if (manager.allProviders.contains(provider)) {
+                runCatching {
+                    manager.requestLocationUpdates(provider, 500L, 0f, listener, Looper.getMainLooper())
+                }
+            }
+        }
     }
 
     fun stop() {
+        runCatching { fused.removeLocationUpdates(fusedCallback) }
         runCatching { manager.removeUpdates(listener) }
+    }
+
+    private companion object {
+        /** Положения грубее этого отбрасываются: они только сбивают стрелку. */
+        const val MAX_ACCURACY_M = 30f
+    }
+}
+
+/**
+ * Фильтр Калмана для широты и долготы. Чем точнее новое измерение и чем меньше мы успели
+ * проехать, тем меньше оно двигает оценку. Курс и скорость берутся из измерения как есть.
+ */
+private class Kalman {
+    private var lat = 0.0
+    private var lon = 0.0
+    private var variance = -1.0 // квадрат ошибки, м²; отрицательное — ещё нет данных
+    private var timeMs = 0L
+
+    fun filter(raw: Location): Location {
+        val accuracy = if (raw.hasAccuracy()) raw.accuracy.coerceAtLeast(3f) else 10f
+        if (variance < 0 || raw.time - timeMs > 10_000L) {
+            lat = raw.latitude
+            lon = raw.longitude
+            variance = (accuracy * accuracy).toDouble()
+            timeMs = raw.time
+            return raw
+        }
+        val dt = ((raw.time - timeMs).coerceAtLeast(0L)) / 1000.0
+        timeMs = raw.time
+        // Сколько мы могли проехать с прошлого измерения: растит неопределённость
+        val speed = if (raw.hasSpeed()) raw.speed.toDouble() else 5.0
+        variance += dt * maxOf(speed, 1.0) * maxOf(speed, 1.0) * 0.25
+        val gain = variance / (variance + accuracy * accuracy)
+        lat += gain * (raw.latitude - lat)
+        lon += gain * (raw.longitude - lon)
+        variance *= (1 - gain)
+        return Location(raw).apply {
+            latitude = lat
+            longitude = lon
+            this.accuracy = Math.sqrt(variance).toFloat()
+        }
     }
 }
