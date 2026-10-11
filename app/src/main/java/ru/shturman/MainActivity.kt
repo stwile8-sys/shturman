@@ -25,6 +25,7 @@ import ru.shturman.auth.UserInfo
 import ru.shturman.auth.currentUserInfo
 import ru.shturman.auth.signOut
 import ru.shturman.auth.toInfo
+import ru.shturman.ui.LicenseGate
 import ru.shturman.ui.LoginScreen
 import ru.shturman.ui.MainScreen
 import ru.shturman.ui.SplashOverlay
@@ -81,10 +82,12 @@ class MainActivity : ComponentActivity() {
                     if (current == null) {
                         LoginScreen()
                     } else {
-                        MainScreen(
-                            user = current,
-                            onSignOut = { scope.launch { signOut(context) } }
-                        )
+                        LicenseGate(onSignOut = { scope.launch { signOut(context) } }) {
+                            MainScreen(
+                                user = current,
+                                onSignOut = { scope.launch { signOut(context) } }
+                            )
+                        }
                     }
                     if (showSplash) SplashOverlay(onFinished = { showSplash = false })
                 }

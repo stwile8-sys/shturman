@@ -59,6 +59,8 @@ fun SettingsSheet(
     user: UserInfo,
     s: NavState,
     vm: NavViewModel,
+    isAdmin: Boolean,
+    onAdmin: () -> Unit,
     onSignOut: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -200,6 +202,16 @@ fun SettingsSheet(
             s.syncMessage?.let {
                 Spacer(Modifier.height(8.dp))
                 Text(text = it, color = ShColors.TextSecondary, fontSize = 13.sp)
+            }
+
+            if (isAdmin) {
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = onAdmin,
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.Gold)
+                ) { Text("Коды доступа (владелец)", style = ShText.Small) }
             }
 
             Spacer(Modifier.height(8.dp))
