@@ -12,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -20,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
@@ -31,21 +33,34 @@ import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.sources.GeoJsonSource
+import ru.shturman.routing.LatLon
+import ru.shturman.routing.lineGeoJson
+import ru.shturman.routing.pointGeoJson
 
 private const val FOLLOW_ZOOM = 17.0
 private const val FOLLOW_TILT = 60.0
 
 /**
- * Карта на весь экран: тёмная 3D-карта. Показывает стрелку «ты здесь» и ведёт за ней камеру.
+ * Карта на весь экран: тёмная 3D-карта. Показывает стрелку «ты здесь», ведёт за ней камеру,
+ * рисует линию маршрута и точку назначения.
  * recenterKey: каждый раз, когда число меняется, камера снова начинает следить за стрелкой.
+ * onLocation вызывается примерно раз в секунду с положением и скоростью (м/с).
  */
 @Composable
-fun DarkMap(modifier: Modifier = Modifier, recenterKey: Int = 0) {
+fun DarkMap(
+    modifier: Modifier = Modifier,
+    recenterKey: Int = 0,
+    route: List<LatLon>? = null,
+    destination: LatLon? = null,
+    onLocation: (LatLon, Float) -> Unit = { _, _ -> }
+) {
     val context = LocalContext.current
 
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var style by remember { mutableStateOf<Style?>(null) }
     var hasPermission by remember { mutableStateOf(hasLocationPermission(context)) }
+    val currentOnLocation by rememberUpdatedState(onLocation)
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -85,13 +100,27 @@ fun DarkMap(modifier: Modifier = Modifier, recenterKey: Int = 0) {
         }
     }
 
-    // Включаем стрелку положения, когда есть и стиль, и разрешение
+    // Включаем стрелку положения, когда есть и стиль, и разрешение, и раз в секунду сообщаем положение
     LaunchedEffect(map, style, hasPermission) {
         val m = map
         val st = style
-        if (m != null && st != null && hasPermission) {
-            enableLocation(context, m, st)
+        if (m == null || st == null || !hasPermission) return@LaunchedEffect
+        enableLocation(context, m, st)
+        while (true) {
+            delay(1000)
+            if (m.locationComponent.isLocationComponentActivated) {
+                val loc = m.locationComponent.lastKnownLocation
+                if (loc != null) currentOnLocation(LatLon(loc.latitude, loc.longitude), loc.speed)
+            }
         }
+    }
+
+    // Линия маршрута и точка назначения на карте
+    LaunchedEffect(style, route) {
+        style?.getSourceAs<GeoJsonSource>("route")?.setGeoJson(lineGeoJson(route))
+    }
+    LaunchedEffect(style, destination) {
+        style?.getSourceAs<GeoJsonSource>("dest")?.setGeoJson(pointGeoJson(destination))
     }
 
     // Кнопка «вернуться к себе»

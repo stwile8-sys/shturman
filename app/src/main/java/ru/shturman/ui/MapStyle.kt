@@ -48,7 +48,9 @@ object MapStyle {
       "type": "vector",
       "url": "https://tiles.openfreemap.org/planet",
       "attribution": "<a href=\"https://openfreemap.org\">OpenFreeMap</a> © <a href=\"https://www.openmaptiles.org/\">OpenMapTiles</a> Data from <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>"
-    }
+    },
+    "route": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
+    "dest": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } }
   },
   "layers": [
     { "id": "bg", "type": "background", "paint": { "background-color": "#0A0C10" } },
@@ -103,6 +105,16 @@ object MapStyle {
       "paint": { "line-color": "#5A6572", "line-dasharray": [3, 3],
                  "line-width": ["interpolate", ["linear"], ["zoom"], 16, 0.4, 19, 1.2] } },
 
+    { "id": "route-casing", "type": "line", "source": "route",
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": "#0A0C10", "line-opacity": 0.85,
+                 "line-width": ["interpolate", ["linear"], ["zoom"], 10, 5, 16, 10, 19, 15] } },
+
+    { "id": "route-line", "type": "line", "source": "route",
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": "#3DDCFF",
+                 "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 16, 6, 19, 9] } },
+
     { "id": "building-3d", "type": "fill-extrusion", "source": "omt", "source-layer": "building", "minzoom": 13,
       "paint": {
         "fill-extrusion-color": "#1C222B",
@@ -137,7 +149,11 @@ object MapStyle {
       "filter": ["in", "class", "city", "town", "village", "suburb"],
       "layout": { "text-field": ["coalesce", ["get", "name:ru"], ["get", "name"]],
                   "text-font": ["Noto Sans Regular"], "text-size": 13 },
-      "paint": { "text-color": "#8A9099", "text-halo-color": "#0A0C10", "text-halo-width": 1.5 } }
+      "paint": { "text-color": "#8A9099", "text-halo-color": "#0A0C10", "text-halo-width": 1.5 } },
+
+    { "id": "dest-pin", "type": "circle", "source": "dest",
+      "paint": { "circle-radius": 8, "circle-color": "#FF2E2E",
+                 "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 2 } }
   ]
 }
 """.trimIndent()

@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "ru.shturman"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "ru.shturmani"

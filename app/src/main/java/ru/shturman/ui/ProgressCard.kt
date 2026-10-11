@@ -27,7 +27,8 @@ fun ProgressCard(
     modifier: Modifier = Modifier,
     progress: Float = 0.42f,
     traveledKm: String = "12,4",
-    totalKm: String = "29,5"
+    totalKm: String = "29,5",
+    eta: String? = null
 ) {
     val shape = RoundedCornerShape(24.dp)
     Column(
@@ -49,7 +50,7 @@ fun ProgressCard(
             )
             Spacer(Modifier.weight(1f))
             Text(
-                text = "$traveledKm из $totalKm км",
+                text = "$traveledKm из $totalKm км" + (eta?.let { " · прибытие $it" } ?: ""),
                 color = ShColors.TextSecondary,
                 style = ShText.Small
             )
