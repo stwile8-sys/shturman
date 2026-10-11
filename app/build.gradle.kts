@@ -16,6 +16,16 @@ android {
         versionName = "0.1"
     }
 
+    // Постоянный ключ подписи: нужен, чтобы вход через Google узнавал приложение при каждой сборке
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("shturman-debug.keystore")
+            storePassword = "android"
+            keyAlias = "shturman"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
