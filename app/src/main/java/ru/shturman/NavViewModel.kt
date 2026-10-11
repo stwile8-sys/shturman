@@ -92,6 +92,15 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         downloadDataIfNeeded()
+        // Раз в неделю пересчитываем время ожидания на светофорах: берём самое частое за неделю
+        viewModelScope.launch(Dispatchers.IO) {
+            val prefs = app.getSharedPreferences("sync", android.content.Context.MODE_PRIVATE)
+            val now = System.currentTimeMillis()
+            if (now - prefs.getLong("stops_recomputed", 0L) > 7L * 24 * 3600 * 1000) {
+                speedStore.recomputeStops(now)
+                prefs.edit().putLong("stops_recomputed", now).apply()
+            }
+        }
         // Раз в сутки сами обмениваемся данными с общей базой, тихо
         viewModelScope.launch {
             if (System.currentTimeMillis() - sharedSync.lastSyncAt > 24L * 3600 * 1000) {

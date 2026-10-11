@@ -31,6 +31,8 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
 
     override fun onOpen(db: SQLiteDatabase) {
         db.execSQL(STOPS_TABLE)
+        db.execSQL(OBS_TABLE)
+        db.execSQL("CREATE INDEX IF NOT EXISTS obs_k ON stop_obs (k)")
     }
 
     init {
@@ -82,6 +84,8 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
         runCatching {
             val key = "s" + SpeedStore.stopKey(lat, lon, atMs)
             val db = writableDatabase
+            // Каждое наблюдение сохраняем отдельно: раз в неделю из них выбирается самое частое время
+            db.insert("stop_obs", null, ContentValues().apply { put("k", key); put("wait", waitSec); put("at", atMs) })
             var row: DoubleArray? = null
             var updated = 0L
             db.rawQuery("SELECT lat, lon, wait, n, updated FROM stops WHERE k = ?", arrayOf(key)).use { c ->
@@ -123,6 +127,38 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
         }
         out
     }.getOrDefault(emptyList())
+
+    /**
+     * Раз в неделю пересчитывает время ожидания каждого светофора, где за последние 7 дней были проезды:
+     * проезды раскладываются по корзинам в 5 секунд, берётся самая частая корзина (при равенстве — более
+     * свежая), а значением становится среднее внутри неё. Записи светофоров без новых проездов не трогаются
+     * и не удаляются. Сырые наблюдения старше 14 дней чистятся.
+     */
+    @Synchronized
+    fun recomputeStops(nowMs: Long): Int = runCatching {
+        val db = writableDatabase
+        val weekAgo = nowMs - 7L * 24 * 3600 * 1000
+        val byKey = LinkedHashMap<String, MutableList<Pair<Double, Long>>>()
+        db.rawQuery("SELECT k, wait, at FROM stop_obs WHERE at > ?", arrayOf(weekAgo.toString())).use { c ->
+            while (c.moveToNext()) byKey.getOrPut(c.getString(0)) { ArrayList() }.add(c.getDouble(1) to c.getLong(2))
+        }
+        var changed = 0
+        for ((key, obs) in byKey) {
+            val bins = obs.groupBy { (it.first / 5.0).toInt() }
+            val best = bins.values.maxWithOrNull(
+                compareBy<List<Pair<Double, Long>>> { it.size }.thenBy { list -> list.maxOf { it.second } }
+            ) ?: continue
+            val mode = best.map { it.first }.average()
+            val values = ContentValues().apply {
+                put("wait", mode)
+                put("n", minOf(obs.size, 20))
+                put("updated", nowMs)
+            }
+            if (db.update("stops", values, "k = ?", arrayOf(key)) > 0) changed++
+        }
+        db.delete("stop_obs", "at < ?", arrayOf((nowMs - 14L * 24 * 3600 * 1000).toString()))
+        changed
+    }.getOrDefault(0)
 
     // ---------- обмен с общей базой ----------
 
@@ -193,6 +229,9 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
     companion object {
         private const val REPLACE_MS = 14L * 24 * 3600 * 1000
         private const val EXPIRE_MS = 28L * 24 * 3600 * 1000
+
+        private const val OBS_TABLE =
+            "CREATE TABLE IF NOT EXISTS stop_obs (id INTEGER PRIMARY KEY AUTOINCREMENT, k TEXT NOT NULL, wait REAL NOT NULL, at INTEGER NOT NULL)"
 
         private const val STOPS_TABLE =
             "CREATE TABLE IF NOT EXISTS stops (k TEXT PRIMARY KEY, lat REAL NOT NULL, lon REAL NOT NULL, " +
