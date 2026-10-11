@@ -20,6 +20,7 @@ import ru.shturman.routing.Router
 import ru.shturman.routing.LimitSeg
 import ru.shturman.routing.Snap
 import ru.shturman.routing.SpeedRecorder
+import ru.shturman.routing.StopRecorder
 import ru.shturman.routing.SpeedStore
 import ru.shturman.routing.forecastTimeSec
 import ru.shturman.routing.lastKnownPosition
@@ -71,6 +72,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private var limits: List<LimitSeg> = emptyList()
     private val speedStore = SpeedStore(app)
     private val recorder = SpeedRecorder(speedStore)
+    private val stopRecorder = StopRecorder(speedStore)
     private var offRouteCount = 0
     private var rerouting = false
     private var lastRerouteAt = 0L
@@ -181,6 +183,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     fun startNavigation() {
         val route = _state.value.route ?: return
         offRouteCount = 0
+        stopRecorder.reset()
         loadLimits(route)
         val position = RoutePosition(0, 0.0)
         _state.update { it.copy(navigating = true, position = position, turn = nextTurn(route, position)) }
@@ -197,6 +200,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         if (s.navigating || speedMps > 3f) {
             recorder.add(here.lat, here.lon, speedMps.toDouble(), System.currentTimeMillis())
         }
+        if (s.navigating) stopRecorder.add(here, speedMps.toDouble(), System.currentTimeMillis())
         val route = s.route ?: return null
         if (!s.navigating) return null
 
