@@ -41,6 +41,13 @@ private const val SNAP_MAX_M = 40.0
 private const val OFF_ROUTE_FIXES = 4
 private const val REROUTE_PAUSE_MS = 15_000L
 
+private fun loadPlace(app: Application, kind: String): Place? = runCatching {
+    val text = app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getString("fav_$kind", null)
+        ?: return null
+    val o = org.json.JSONObject(text)
+    Place(o.getString("title"), o.optString("subtitle"), LatLon(o.getDouble("lat"), o.getDouble("lon")))
+}.getOrNull()
+
 /** Всё, что показывает экран: состояние данных, поиск, маршрут и поездка. */
 data class NavState(
     val dataReady: Boolean = false,
@@ -70,6 +77,9 @@ data class NavState(
 
     val shareData: Boolean = true,
     val voiceOn: Boolean = true,
+    val home: Place? = null,
+    val work: Place? = null,
+    val speedKmh: Int = 0,
     val syncing: Boolean = false,
     val syncMessage: String? = null
 ) {
@@ -94,7 +104,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private var rerouting = false
     private var lastRerouteAt = 0L
 
-    private val _state = MutableStateFlow(NavState(dataReady = roadData.isReady(), shareData = sharedSync.share, voiceOn = settings.getBoolean("voice", true)))
+    private val _state = MutableStateFlow(NavState(dataReady = roadData.isReady(), shareData = sharedSync.share, voiceOn = settings.getBoolean("voice", true),
+        home = loadPlace(app, "home"), work = loadPlace(app, "work")))
     val state: StateFlow<NavState> = _state
 
     init {
@@ -236,6 +247,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun onFix(here: LatLon, speedMps: Float = 0f): Snap? {
         val s = _state.value
+        val kmh = (speedMps * 3.6f).toInt()
+        if (kmh != s.speedKmh) _state.update { it.copy(speedKmh = kmh) }
         // Запоминаем, как быстро здесь едут: всегда в поездке, а вне её только на скорости
         if (s.navigating || speedMps > 3f) {
             recorder.add(here.lat, here.lon, speedMps.toDouble(), System.currentTimeMillis())
@@ -315,6 +328,15 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             spokenLevel = level
             voice.say(turnPhrase(level, d, turn.isLeft, turn.severity, turn.street))
         }
+    }
+
+    /** Запоминает «Дом» или «Работа» (kind = "home" или "work"). */
+    fun setFavorite(kind: String, place: Place) {
+        val o = org.json.JSONObject()
+            .put("title", place.title).put("subtitle", place.subtitle)
+            .put("lat", place.position.lat).put("lon", place.position.lon)
+        settings.edit().putString("fav_$kind", o.toString()).apply()
+        _state.update { if (kind == "home") it.copy(home = place) else it.copy(work = place) }
     }
 
     fun setVoiceOn(on: Boolean) {

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -163,6 +164,19 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             )
         }
 
+        // Текущая скорость
+        if (s.navigating || s.speedKmh >= 5) {
+            val over = s.limitKmh != null && s.speedKmh > s.limitKmh!! + 2
+            SpeedReadout(
+                kmh = s.speedKmh,
+                over = over,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .navigationBarsPadding()
+                    .padding(start = 12.dp, bottom = if (s.navigating) 180.dp else 24.dp)
+            )
+        }
+
         val bottomPadding = when {
             s.navigating -> 112.dp
             s.options.isNotEmpty() -> 300.dp
@@ -230,6 +244,9 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
 
         if (showSearch) {
             SearchScreen(
+                home = s.home,
+                work = s.work,
+                onSetFavorite = vm::setFavorite,
                 results = s.results,
                 searching = s.searching,
                 error = s.searchError,
@@ -266,5 +283,27 @@ private fun StatusPill(
         contentAlignment = Alignment.CenterStart
     ) {
         Text(text = text, color = color, style = ShText.Small.copy(fontSize = 13.sp), maxLines = 2)
+    }
+}
+
+/** Текущая скорость: число и «км/ч». Краснеет, если быстрее ограничения. */
+@Composable
+private fun SpeedReadout(kmh: Int, over: Boolean, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier = modifier
+            .width(60.dp)
+            .clip(shape)
+            .background(ShColors.Panel.copy(alpha = 0.92f))
+            .border(1.dp, ShBorder, shape)
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = kmh.toString(),
+            color = if (over) ShColors.Danger else ShColors.TextPrimary,
+            style = ShText.Distance.copy(fontSize = 24.sp)
+        )
+        Text(text = "км/ч", color = ShColors.TextSecondary, fontSize = 11.sp)
     }
 }

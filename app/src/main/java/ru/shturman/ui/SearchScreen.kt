@@ -2,7 +2,11 @@ package ru.shturman.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,9 +42,13 @@ import ru.shturman.routing.Place
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.theme.ShText
 
-/** Экран ввода адреса: подсказки появляются по мере набора. */
+/** Экран ввода адреса: подсказки появляются по мере набора, сверху быстрые «Дом» и «Работа». */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SearchScreen(
+    home: Place?,
+    work: Place?,
+    onSetFavorite: (String, Place) -> Unit,
     results: List<Place>,
     searching: Boolean,
     error: String?,
@@ -49,6 +57,8 @@ fun SearchScreen(
     onClose: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
+    // Если не null, ближайший выбранный адрес сохраняется как «home» или «work», а не открывает маршрут
+    var saving by remember { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
 
     BackHandler(onBack = onClose)
@@ -77,7 +87,16 @@ fun SearchScreen(
             TextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("Куда едем?", color = ShColors.TextSecondary) },
+                placeholder = {
+                    Text(
+                        when (saving) {
+                            "home" -> "Адрес для «Дом»"
+                            "work" -> "Адрес для «Работа»"
+                            else -> "Куда едем?"
+                        },
+                        color = ShColors.TextSecondary
+                    )
+                },
                 singleLine = true,
                 shape = RoundedCornerShape(24.dp),
                 colors = TextFieldDefaults.colors(
@@ -94,6 +113,40 @@ fun SearchScreen(
                     .focusRequester(focus)
             )
         }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)
+        ) {
+            for ((kind, label, place) in listOf(Triple("home", "Дом", home), Triple("work", "Работа", work))) {
+                val shape = RoundedCornerShape(20.dp)
+                Box(
+                    modifier = Modifier
+                        .clip(shape)
+                        .background(ShColors.SearchField)
+                        .border(1.dp, if (saving == kind) ShColors.Accent else ShBorder, shape)
+                        .combinedClickable(
+                            onClick = { if (place != null) onPick(place) else saving = kind },
+                            onLongClick = { saving = kind }
+                        )
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = if (place == null) "$label: задать" else label,
+                        color = if (place == null) ShColors.TextSecondary else ShColors.TextPrimary,
+                        style = ShText.Small
+                    )
+                }
+            }
+        }
+        Text(
+            text = "Нажмите «Дом» или «Работа», чтобы поехать. Долгое нажатие — изменить адрес.",
+            color = ShColors.TextSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+        )
 
         when {
             error != null -> Text(
@@ -121,7 +174,16 @@ fun SearchScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onPick(place) }
+                        .clickable {
+                            val kind = saving
+                            if (kind != null) {
+                                onSetFavorite(kind, place)
+                                saving = null
+                                query = ""
+                            } else {
+                                onPick(place)
+                            }
+                        }
                         .padding(horizontal = 20.dp, vertical = 12.dp)
                 ) {
                     Text(text = place.title, color = ShColors.TextPrimary, style = ShText.Small)
