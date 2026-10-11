@@ -48,8 +48,7 @@ object MapStyle {
       "type": "vector",
       "url": "https://tiles.openfreemap.org/planet",
       "attribution": "<a href=\"https://openfreemap.org\">OpenFreeMap</a> © <a href=\"https://www.openmaptiles.org/\">OpenMapTiles</a> Data from <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>"
-    },
-    "car": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } }
+    }
   },
   "layers": [
     { "id": "bg", "type": "background", "paint": { "background-color": "#0A0C10" } },
@@ -138,11 +137,7 @@ object MapStyle {
       "filter": ["in", "class", "city", "town", "village", "suburb"],
       "layout": { "text-field": ["coalesce", ["get", "name:ru"], ["get", "name"]],
                   "text-font": ["Noto Sans Regular"], "text-size": 13 },
-      "paint": { "text-color": "#8A9099", "text-halo-color": "#0A0C10", "text-halo-width": 1.5 } },
-
-    { "id": "car-3d", "type": "fill-extrusion", "source": "car",
-      "paint": { "fill-extrusion-color": ["get", "c"], "fill-extrusion-height": ["get", "h"],
-                 "fill-extrusion-base": ["get", "b"], "fill-extrusion-opacity": 1 } }
+      "paint": { "text-color": "#8A9099", "text-halo-color": "#0A0C10", "text-halo-width": 1.5 } }
   ]
 }
 """.trimIndent()
