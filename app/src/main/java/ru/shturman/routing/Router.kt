@@ -10,6 +10,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** Участок маршрута с известным ограничением скорости, км/ч. */
+class LimitSeg(val startM: Double, val endM: Double, val kmh: Int)
+
 /** Результат построения: варианты маршрута и признак, что время выезда учтено движком. */
 class RouteResult(val options: List<RouteOption>, val timeAware: Boolean)
 
@@ -122,6 +125,38 @@ class Router(private val roadData: RoadData) {
                 maneuvers = maneuvers
             )
         }.sortedBy { it.timeSec }
+    }
+
+    /**
+     * Ограничения скорости вдоль линии маршрута (из тех же дорожных данных, что и маршрут).
+     * Участки, где ограничение в данных не указано, в список не попадают, и знак не показывается.
+     */
+    suspend fun speedLimits(points: List<LatLon>): List<LimitSeg> = withContext(Dispatchers.Default) {
+        if (points.size < 2) return@withContext emptyList()
+        val shape = JSONArray()
+        points.forEach { shape.put(JSONObject().put("lat", it.lat).put("lon", it.lon)) }
+        val request = JSONObject()
+            .put("shape", shape)
+            .put("costing", "auto")
+            .put("shape_match", "edge_walk")
+            .put(
+                "filters",
+                JSONObject()
+                    .put("attributes", JSONArray().put("edge.length").put("edge.speed_limit"))
+                    .put("action", "include")
+            )
+        val raw = engine().traceAttributesRaw(request.toString())
+        val edges = JSONObject(raw).optJSONArray("edges") ?: return@withContext emptyList()
+        val result = ArrayList<LimitSeg>()
+        var at = 0.0
+        for (i in 0 until edges.length()) {
+            val e = edges.getJSONObject(i)
+            val len = e.optDouble("length", 0.0) * 1000.0
+            val limit = e.optInt("speed_limit", 0)
+            if (limit in 5..140) result += LimitSeg(at, at + len, limit)
+            at += len
+        }
+        result
     }
 
     @Synchronized

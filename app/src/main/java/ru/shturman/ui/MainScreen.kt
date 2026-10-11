@@ -18,7 +18,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -75,7 +74,6 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             navigating = s.navigating,
             route = route?.points,
             destination = s.destination?.position,
-            cameras = s.cameras,
             onFix = { here, speed -> vm.onFix(here, speed) }
         )
 
@@ -140,25 +138,11 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             )
         }
 
-        // Камера впереди
-        val camAhead = s.cameraAheadM
-        if (s.navigating && camAhead != null) {
-            StatusPill(
-                text = "Камера через ${formatDistance(camAhead)}",
-                color = Color(0xFFFFB020),
-                onClick = null,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(start = 12.dp, top = 12.dp, end = 160.dp)
-            )
-        }
-
-        if (s.navigating) {
-            MapButton(
-                icon = Icons.Filled.Warning,
-                description = "Добавить камеру здесь",
-                onClick = { vm.addCameraHere() },
+        // Знак ограничения скорости
+        val limit = s.limitKmh
+        if (s.navigating && limit != null) {
+            SpeedLimitSign(
+                limit = limit,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .navigationBarsPadding()

@@ -40,7 +40,6 @@ import ru.shturman.R
 import ru.shturman.routing.GpsTracker
 import ru.shturman.routing.LatLon
 import ru.shturman.routing.Snap
-import ru.shturman.routing.camerasGeoJson
 import ru.shturman.routing.lineGeoJson
 import ru.shturman.routing.pointGeoJson
 
@@ -69,7 +68,6 @@ fun DarkMap(
     navigating: Boolean = false,
     route: List<LatLon>? = null,
     destination: LatLon? = null,
-    cameras: List<LatLon> = emptyList(),
     onFix: (LatLon, Float) -> Snap? = { _, _ -> null }
 ) {
     val context = LocalContext.current
@@ -155,9 +153,6 @@ fun DarkMap(
     // Линия маршрута и точка назначения на карте
     LaunchedEffect(style, route) {
         style?.getSourceAs<GeoJsonSource>("route")?.setGeoJson(lineGeoJson(route))
-    }
-    LaunchedEffect(style, cameras) {
-        style?.getSourceAs<GeoJsonSource>("cams")?.setGeoJson(camerasGeoJson(cameras))
     }
     LaunchedEffect(style, destination) {
         style?.getSourceAs<GeoJsonSource>("dest")?.setGeoJson(pointGeoJson(destination))
