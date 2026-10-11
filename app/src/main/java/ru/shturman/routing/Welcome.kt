@@ -6,7 +6,7 @@ import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
 /**
- * Приветствие при запуске: «Welcome to Verity Airline» спокойным женским голосом.
+ * Приветствие при запуске: «Welcome to Gerty Airline» спокойным женским голосом.
  * Используется английский голос телефона; если его нет, приветствие просто пропускается.
  */
 class Welcome(context: Context) {
@@ -35,7 +35,7 @@ class Welcome(context: Context) {
                 @Deprecated("Нужен для старых версий Android")
                 override fun onError(utteranceId: String?) { engine.shutdown() }
             })
-            engine.speak("Welcome to Verity Airline.", TextToSpeech.QUEUE_FLUSH, null, "welcome")
+            engine.speak("Welcome to Gerty Airline.", TextToSpeech.QUEUE_FLUSH, null, "welcome")
         }
     }
 }
