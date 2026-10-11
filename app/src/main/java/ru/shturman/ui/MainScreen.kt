@@ -191,9 +191,9 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         val weather = s.weather
         val pills = ArrayList<Triple<String, Color, (() -> Unit)?>>()
         if (s.listening) {
-            pills += Triple("Слушаю… скажите команду", ShColors.Accent, null)
-        } else if (s.voiceMessage != null) {
-            pills += Triple(s.voiceMessage!!, ShColors.TextPrimary, null)
+            pills += Triple("Слушаю…" + (s.heardText?.let { "\n«$it»" } ?: " скажите команду"), ShColors.Accent, null)
+        } else if (s.voiceMessage != null || s.heardText != null) {
+            pills += Triple((s.heardText?.let { "«$it»\n" } ?: "") + (s.voiceMessage ?: ""), ShColors.TextPrimary, null)
         }
         if (message != null && !s.navigating) {
             pills += Triple(message.first, message.second, if (!s.dataReady && s.dataError != null) ({ vm.downloadDataIfNeeded() }) else null)

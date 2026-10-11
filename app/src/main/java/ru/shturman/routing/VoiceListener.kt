@@ -11,7 +11,9 @@ import android.speech.SpeechRecognizer
 class VoiceListener(
     context: Context,
     private val onText: (String) -> Unit,
-    private val onState: (Boolean) -> Unit
+    private val onState: (Boolean) -> Unit,
+    private val onPartial: (String) -> Unit = {},
+    private val onProblem: (String) -> Unit = {}
 ) {
     private val app = context.applicationContext
     private var recognizer: SpeechRecognizer? = null
@@ -19,7 +21,10 @@ class VoiceListener(
     fun available(): Boolean = SpeechRecognizer.isRecognitionAvailable(app)
 
     fun start() {
-        if (!available()) return
+        if (!available()) {
+            onProblem("На телефоне нет службы распознавания речи (нужно приложение Google или голосовой ввод)")
+            return
+        }
         stop()
         val r = SpeechRecognizer.createSpeechRecognizer(app)
         recognizer = r
@@ -29,18 +34,30 @@ class VoiceListener(
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() {}
-            override fun onError(error: Int) { onState(false) }
+            override fun onError(error: Int) {
+                onState(false)
+                onProblem(when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Ничего не услышала, попробуйте ещё раз"
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Нет разрешения на микрофон"
+                    SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Для распознавания нужен интернет"
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Распознавание занято, повторите"
+                    else -> "Ошибка распознавания речи (код $error)"
+                })
+            }
             override fun onResults(results: Bundle?) {
                 onState(false)
                 results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(onText)
             }
-            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onPartialResults(partialResults: Bundle?) {
+                partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(onPartial)
+            }
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         }
         r.startListening(intent)
     }

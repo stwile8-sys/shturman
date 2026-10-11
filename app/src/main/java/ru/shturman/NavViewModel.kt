@@ -135,7 +135,8 @@ data class NavState(
 
     // Голосовое управление
     val listening: Boolean = false,
-    val voiceMessage: String? = null
+    val voiceMessage: String? = null,
+    val heardText: String? = null
 ) {
     val route: RouteOption? get() = options.getOrNull(selected)
 }
@@ -164,7 +165,9 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private val listener = VoiceListener(
         app,
         onText = { text -> handleVoice(text) },
-        onState = { on -> _state.update { it.copy(listening = on) } }
+        onState = { on -> _state.update { it.copy(listening = on) } },
+        onPartial = { t -> _state.update { it.copy(heardText = t) } },
+        onProblem = { m -> _state.update { it.copy(voiceMessage = m) } }
     )
     private val speedStore = SpeedStore(app)
     private val recorder = SpeedRecorder(speedStore)
@@ -653,7 +656,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     // ---------- голосовое управление ----------
 
     fun listen() {
-        _state.update { it.copy(voiceMessage = null) }
+        _state.update { it.copy(voiceMessage = null, heardText = null) }
         listener.start()
     }
 
@@ -663,6 +666,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun handleVoice(text: String) {
+        _state.update { it.copy(heardText = text) }
         val audio = getApplication<Application>().getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
         when (val cmd = parseVoiceCommand(text)) {
             VoiceCommand.Home -> _state.value.home?.let { reply("Едем домой"); chooseDestination(it) } ?: reply("Дом не задан")
