@@ -31,9 +31,19 @@ import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.sources.GeoJsonSource
+import kotlinx.coroutines.delay
+import ru.shturman.R
 
 private const val FOLLOW_ZOOM = 17.0
 private const val FOLLOW_TILT = 60.0
+private const val CAR_LENGTH_DP = 34.0 // длина машинки на экране
+
+/** Плавный поворот угла a к углу b по кратчайшему пути. */
+private fun turnToward(a: Double, b: Double, k: Double): Double {
+    val diff = ((b - a + 540.0) % 360.0) - 180.0
+    return (a + diff * k + 360.0) % 360.0
+}
 
 /**
  * Карта на весь экран: тёмная 3D-карта. Показывает стрелку «ты здесь» и ведёт за ней камеру.
@@ -85,12 +95,40 @@ fun DarkMap(modifier: Modifier = Modifier, recenterKey: Int = 0) {
         }
     }
 
-    // Включаем стрелку положения, когда есть и стиль, и разрешение
+    // Включаем слежение за положением и рисуем 3D-машинку, когда есть и стиль, и разрешение
     LaunchedEffect(map, style, hasPermission) {
         val m = map
         val st = style
-        if (m != null && st != null && hasPermission) {
-            enableLocation(context, m, st)
+        if (m == null || st == null || !hasPermission) return@LaunchedEffect
+        enableLocation(context, m, st)
+        val carSource = st.getSourceAs<GeoJsonSource>("car") ?: return@LaunchedEffect
+
+        var lat = 0.0
+        var lon = 0.0
+        var bearing = 0.0
+        var have = false
+        while (true) {
+            val loc = if (m.locationComponent.isLocationComponentActivated) {
+                m.locationComponent.lastKnownLocation
+            } else null
+            if (loc != null) {
+                if (!have) {
+                    lat = loc.latitude
+                    lon = loc.longitude
+                    if (loc.hasBearing()) bearing = loc.bearing.toDouble()
+                    have = true
+                } else {
+                    // плавно подтягиваем машинку к новой точке GPS
+                    lat += (loc.latitude - lat) * 0.3
+                    lon += (loc.longitude - lon) * 0.3
+                    if (loc.hasBearing() && loc.speed > 1f) {
+                        bearing = turnToward(bearing, loc.bearing.toDouble(), 0.3)
+                    }
+                }
+                val metersPerPixel = m.projection.getMetersPerPixelAtLatitude(lat)
+                carSource.setGeoJson(CarModel.geoJson(lat, lon, bearing, CAR_LENGTH_DP * metersPerPixel))
+            }
+            delay(80)
         }
     }
 
@@ -142,10 +180,14 @@ private fun enableLocation(context: Context, map: MapLibreMap, style: Style) {
     val component = map.locationComponent
     if (component.isLocationComponentActivated) return
 
+    // Стандартную метку прячем: вместо неё рисуется 3D-машинка (см. CarModel)
     val options = LocationComponentOptions.builder(context)
         .pulseEnabled(false)
         .accuracyAlpha(0f)
-        .foregroundTintColor(0xFF3DDCFF.toInt())
+        .foregroundDrawable(R.drawable.puck_none)
+        .backgroundDrawable(R.drawable.puck_none)
+        .gpsDrawable(R.drawable.puck_none)
+        .bearingDrawable(R.drawable.puck_none)
         .build()
 
     val request = LocationEngineRequest.Builder(1000)
