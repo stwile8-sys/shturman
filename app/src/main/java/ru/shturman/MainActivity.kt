@@ -14,6 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.auth.FirebaseAuth
@@ -25,6 +27,7 @@ import ru.shturman.auth.signOut
 import ru.shturman.auth.toInfo
 import ru.shturman.ui.LoginScreen
 import ru.shturman.ui.MainScreen
+import ru.shturman.ui.SplashOverlay
 import ru.shturman.ui.theme.ShturmanTheme
 
 class MainActivity : ComponentActivity() {
@@ -44,6 +47,8 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         )
+        // Приветствие голосом только при свежем запуске, не при повороте экрана
+        if (savedInstanceState == null) ru.shturman.routing.Welcome(this)
         setContent {
             ShturmanTheme {
                 val context = LocalContext.current
@@ -70,14 +75,18 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                val current = user
-                if (current == null) {
-                    LoginScreen()
-                } else {
-                    MainScreen(
-                        user = current,
-                        onSignOut = { scope.launch { signOut(context) } }
-                    )
+                var showSplash by rememberSaveable { mutableStateOf(true) }
+                Box {
+                    val current = user
+                    if (current == null) {
+                        LoginScreen()
+                    } else {
+                        MainScreen(
+                            user = current,
+                            onSignOut = { scope.launch { signOut(context) } }
+                        )
+                    }
+                    if (showSplash) SplashOverlay(onFinished = { showSplash = false })
                 }
             }
         }
