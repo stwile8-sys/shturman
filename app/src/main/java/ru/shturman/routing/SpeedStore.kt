@@ -122,12 +122,14 @@ fun forecastTimeSec(route: RouteOption, store: SpeedStore, departMs: Long): Doub
     if (route.points.size < 2 || route.timeSec <= 0) return route.timeSec
     val baseline = (route.lengthM / route.timeSec).coerceAtLeast(2.0)
     var t = 0.0
+    val cache = HashMap<String, Double?>()
     for (i in 1 until route.points.size) {
         val a = route.points[i - 1]
         val b = route.points[i]
         val len = distanceM(a, b)
         val at = departMs + (t * 1000).toLong()
-        val v = store.expected(SpeedStore.key((a.lat + b.lat) / 2, (a.lon + b.lon) / 2, at), at)
+        val key = SpeedStore.key((a.lat + b.lat) / 2, (a.lon + b.lon) / 2, at)
+        val v = if (cache.containsKey(key)) cache[key] else store.expected(key, at).also { cache[key] = it }
         t += len / (v ?: baseline).coerceIn(1.5, 40.0)
     }
     return t

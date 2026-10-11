@@ -3,6 +3,8 @@ package ru.shturman
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -82,8 +84,12 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     init {
         downloadDataIfNeeded()
         viewModelScope.launch {
-            _state.update { it.copy(cameras = cameraRepo.load()) }
-            if (cameraRepo.updateIfStale()) _state.update { it.copy(cameras = cameraRepo.load()) }
+            val cached = withContext(Dispatchers.IO) { cameraRepo.load() }
+            _state.update { it.copy(cameras = cached) }
+            if (cameraRepo.updateIfStale()) {
+                val fresh = withContext(Dispatchers.IO) { cameraRepo.load() }
+                _state.update { it.copy(cameras = fresh) }
+            }
         }
         // Раз в неделю подтягиваем свежие дорожные данные, чтобы старые значения не оставались
         viewModelScope.launch {
@@ -155,9 +161,14 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 val departAt = Date(System.currentTimeMillis() + s.departOffsetMin * 60_000L)
                 val result = router.route(from, destination.position, departAt)
                 // Время каждого варианта пересчитываем по запомненным скоростям на это время недели
-                val forecast = result.options.map { o ->
-                    RouteOption(forecastTimeSec(o, speedStore, departAt.time), o.lengthM, o.points, o.maneuvers)
-                }.sortedBy { it.timeSec }
+                // Тяжёлый подсчёт идёт не в главном потоке; при любой ошибке остаётся время движка
+                val forecast = withContext(Dispatchers.Default) {
+                    runCatching {
+                        result.options.map { o ->
+                            RouteOption(forecastTimeSec(o, speedStore, departAt.time), o.lengthM, o.points, o.maneuvers)
+                        }.sortedBy { it.timeSec }
+                    }.getOrDefault(result.options)
+                }
                 _state.update {
                     it.copy(
                         routeLoading = false,

@@ -34,6 +34,7 @@ class Cameras(context: Context) {
                 .openConnection() as HttpURLConnection).apply {
                 connectTimeout = 20_000
                 readTimeout = 70_000
+                setRequestProperty("User-Agent", "Shturman/1.0 (Android navigation app)")
             }
             val text = try {
                 if (conn.responseCode != 200) return@withContext false
