@@ -25,7 +25,6 @@ import ru.shturman.auth.UserInfo
 import ru.shturman.auth.currentUserInfo
 import ru.shturman.auth.signOut
 import ru.shturman.auth.toInfo
-import ru.shturman.ui.LicenseGate
 import ru.shturman.ui.LoginScreen
 import ru.shturman.ui.AccessGate
 import ru.shturman.ui.MainScreen
@@ -83,7 +82,7 @@ class MainActivity : ComponentActivity() {
                     if (current == null) {
                         LoginScreen()
                     } else {
-                        LicenseGate(onSignOut = { scope.launch { signOut(context) } }) {
+                        AccessGate(uid = current.uid, onSignOut = { scope.launch { signOut(context) } }) {
                             MainScreen(
                                 user = current,
                                 onSignOut = { scope.launch { signOut(context) } }
