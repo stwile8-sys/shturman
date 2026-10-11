@@ -27,6 +27,7 @@ import ru.shturman.auth.signOut
 import ru.shturman.auth.toInfo
 import ru.shturman.ui.LicenseGate
 import ru.shturman.ui.LoginScreen
+import ru.shturman.ui.AccessGate
 import ru.shturman.ui.MainScreen
 import ru.shturman.ui.SplashOverlay
 import ru.shturman.ui.theme.ShturmanTheme

@@ -71,6 +71,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
     var showSettings by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showAdmin by remember { mutableStateOf(false) }
+    var showAdmin by remember { mutableStateOf(false) }
     var recenterKey by remember { mutableStateOf(0) }
     var startKey by remember { mutableStateOf(0) }
     val context = LocalContext.current
@@ -323,6 +324,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 user = user,
                 s = s,
                 vm = vm,
+                isAdmin = user.email == ru.shturman.access.ADMIN_EMAIL,
+                onOpenAdmin = { showSettings = false; showAdmin = true },
                 isAdmin = ru.shturman.license.License.isAdmin(user.email),
                 onAdmin = { showSettings = false; showAdmin = true },
                 onSignOut = {
@@ -353,6 +356,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 onClose = { showSearch = false }
             )
         }
+
+        if (showAdmin) AdminCodesScreen(onClose = { showAdmin = false })
 
         StartOverlay(trigger = startKey)
     }

@@ -180,6 +180,16 @@ fun SettingsSheet(
             }
             s.caravanMessage?.let { Text(text = it, color = ShColors.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
 
+            if (isAdmin) {
+                Section("Для владельца")
+                Button(
+                    onClick = onOpenAdmin,
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+                ) { Text("Коды доступа", style = ShText.Small) }
+            }
+
             Section("Приватность")
             SwitchRow(
                 "Участвовать в общем обучении",

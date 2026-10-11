@@ -18,12 +18,13 @@ import kotlinx.coroutines.tasks.await
 import ru.shturman.R
 
 /** Данные пользователя из Google-аккаунта: имя, почта и фото подтягиваются автоматически. */
-data class UserInfo(val name: String, val email: String, val photoUrl: String?)
+data class UserInfo(val name: String, val email: String, val photoUrl: String?, val uid: String = "")
 
 fun FirebaseUser.toInfo() = UserInfo(
     name = displayName ?: "Водитель",
     email = email ?: "",
-    photoUrl = photoUrl?.toString()
+    photoUrl = photoUrl?.toString(),
+    uid = uid
 )
 
 fun currentUserInfo(): UserInfo? = FirebaseAuth.getInstance().currentUser?.toInfo()

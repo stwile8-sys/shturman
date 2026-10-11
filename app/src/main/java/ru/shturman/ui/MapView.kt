@@ -152,7 +152,7 @@ fun DarkMap(
             }
             bearing.value?.let { shown.bearing = it }
 
-            if (m.locationComponent.isLocationComponentActivated) {
+            if (shown.latitude.isFinite() && shown.longitude.isFinite() && m.locationComponent.isLocationComponentActivated) {
                 m.locationComponent.forceLocationUpdate(shown)
             }
         }

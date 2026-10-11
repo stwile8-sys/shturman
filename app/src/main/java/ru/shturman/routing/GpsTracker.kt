@@ -33,6 +33,8 @@ class GpsTracker(
     private var fallbackOn = false
 
     private fun accept(raw: Location) {
+        // Бывают положения с пустыми (NaN) координатами: такие просто пропускаем
+        if (!raw.latitude.isFinite() || !raw.longitude.isFinite()) return
         if (raw.hasAccuracy() && raw.accuracy > MAX_ACCURACY_M) return
         onFix(kalman.filter(raw))
     }
@@ -118,7 +120,7 @@ private class Kalman {
     private var timeMs = 0L
 
     fun filter(raw: Location): Location {
-        val accuracy = if (raw.hasAccuracy()) raw.accuracy.coerceAtLeast(3f) else 10f
+        val accuracy = if (raw.hasAccuracy() && raw.accuracy.isFinite()) raw.accuracy.coerceAtLeast(3f) else 10f
         if (variance < 0 || raw.time - timeMs > 10_000L) {
             lat = raw.latitude
             lon = raw.longitude
@@ -129,12 +131,19 @@ private class Kalman {
         val dt = ((raw.time - timeMs).coerceAtLeast(0L)) / 1000.0
         timeMs = raw.time
         // Сколько мы могли проехать с прошлого измерения: растит неопределённость
-        val speed = if (raw.hasSpeed()) raw.speed.toDouble() else 5.0
+        val speed = if (raw.hasSpeed() && raw.speed.isFinite()) raw.speed.toDouble() else 5.0
         variance += dt * maxOf(speed, 1.0) * maxOf(speed, 1.0) * 0.25
         val gain = variance / (variance + accuracy * accuracy)
         lat += gain * (raw.latitude - lat)
         lon += gain * (raw.longitude - lon)
         variance *= (1 - gain)
+        // Если из-за чего-то в расчёт попал NaN, начинаем фильтр заново с этого измерения
+        if (!lat.isFinite() || !lon.isFinite() || !variance.isFinite()) {
+            lat = raw.latitude
+            lon = raw.longitude
+            variance = (accuracy * accuracy).toDouble()
+            return raw
+        }
         return Location(raw).apply {
             latitude = lat
             longitude = lon
