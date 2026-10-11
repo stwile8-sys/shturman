@@ -146,9 +146,10 @@ object MapStyle {
       "paint": { "text-color": "#6B737D", "text-halo-color": "#0A0C10", "text-halo-width": 1.5 } },
 
     { "id": "place-names", "type": "symbol", "source": "omt", "source-layer": "place",
-      "filter": ["in", "class", "city", "town", "village", "suburb"],
+      "maxzoom": 13.5,
+      "filter": ["in", "class", "city", "town"],
       "layout": { "text-field": ["coalesce", ["get", "name:ru"], ["get", "name"]],
-                  "text-font": ["Noto Sans Regular"], "text-size": 13 },
+                  "text-font": ["Noto Sans Regular"], "text-size": 15 },
       "paint": { "text-color": "#8A9099", "text-halo-color": "#0A0C10", "text-halo-width": 1.5 } },
 
     { "id": "dest-pin", "type": "circle", "source": "dest",

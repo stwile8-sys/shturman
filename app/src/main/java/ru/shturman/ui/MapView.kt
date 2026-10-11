@@ -270,7 +270,8 @@ private fun enableLocation(context: Context, map: MapLibreMap, style: Style) {
     // Все значки положения — одна и та же голубая стрелка (res/drawable/puck_arrow.xml)
     val options = LocationComponentOptions.builder(context)
         .pulseEnabled(false)
-        .accuracyAlpha(0f)
+        .accuracyAlpha(0.16f) // бледный круг показывает, насколько GPS сам не уверен в месте
+        .accuracyColor(0xFF3DDCFF.toInt())
         .elevation(0f)
         .enableStaleState(false)
         .gpsDrawable(R.drawable.puck_arrow)
