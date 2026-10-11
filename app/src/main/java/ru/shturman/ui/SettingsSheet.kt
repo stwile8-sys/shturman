@@ -46,6 +46,8 @@ import ru.shturman.ui.theme.ShText
 @Composable
 fun SettingsSheet(
     user: UserInfo,
+    voiceOn: Boolean,
+    onVoiceChange: (Boolean) -> Unit,
     shareData: Boolean,
     onShareChange: (Boolean) -> Unit,
     syncing: Boolean,
@@ -114,6 +116,29 @@ fun SettingsSheet(
                     .height(1.dp)
                     .background(ShColors.Divider)
             )
+            Spacer(Modifier.height(16.dp))
+
+            // Голосовые подсказки
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "Голосовые подсказки", color = ShColors.TextPrimary, style = ShText.Small)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "Говорит о поворотах голосом телефона. Нужен русский голос в настройках речи Android.",
+                        color = ShColors.TextSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Switch(
+                    checked = voiceOn,
+                    onCheckedChange = onVoiceChange,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = ShColors.Background,
+                        checkedTrackColor = ShColors.Accent
+                    )
+                )
+            }
             Spacer(Modifier.height(16.dp))
 
             // Приватность

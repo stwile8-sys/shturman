@@ -59,7 +59,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
 
     // Приехали: убираем маршрут
     LaunchedEffect(arrived) {
-        if (arrived) vm.clearRoute()
+        if (arrived) vm.arrived()
     }
 
     Box(
@@ -213,6 +213,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         if (showSettings) {
             SettingsSheet(
                 user = user,
+                voiceOn = s.voiceOn,
+                onVoiceChange = vm::setVoiceOn,
                 shareData = s.shareData,
                 onShareChange = vm::setShareData,
                 syncing = s.syncing,

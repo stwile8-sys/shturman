@@ -20,6 +20,8 @@ import ru.shturman.routing.Router
 import ru.shturman.routing.LimitSeg
 import ru.shturman.routing.SharedSync
 import ru.shturman.routing.Snap
+import ru.shturman.routing.Voice
+import ru.shturman.routing.turnPhrase
 import ru.shturman.routing.Weather
 import ru.shturman.routing.fetchWeather
 import ru.shturman.routing.SpeedRecorder
@@ -67,6 +69,7 @@ data class NavState(
     val weather: Weather? = null,
 
     val shareData: Boolean = true,
+    val voiceOn: Boolean = true,
     val syncing: Boolean = false,
     val syncMessage: String? = null
 ) {
@@ -83,11 +86,15 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private val recorder = SpeedRecorder(speedStore)
     private val stopRecorder = StopRecorder(speedStore)
     private val sharedSync = SharedSync(app, speedStore)
+    private val voice = Voice(app)
+    private val settings = app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+    private var spokenLevel = -1
+    private var lastTurnDistance = Double.MAX_VALUE
     private var offRouteCount = 0
     private var rerouting = false
     private var lastRerouteAt = 0L
 
-    private val _state = MutableStateFlow(NavState(dataReady = roadData.isReady(), shareData = sharedSync.share))
+    private val _state = MutableStateFlow(NavState(dataReady = roadData.isReady(), shareData = sharedSync.share, voiceOn = settings.getBoolean("voice", true)))
     val state: StateFlow<NavState> = _state
 
     init {
@@ -214,6 +221,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     fun startNavigation() {
         val route = _state.value.route ?: return
         offRouteCount = 0
+        spokenLevel = -1
+        lastTurnDistance = Double.MAX_VALUE
         stopRecorder.reset()
         loadLimits(route)
         val position = RoutePosition(0, 0.0)
@@ -242,6 +251,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             locateOnRoute(route, here, fromIndex)
         }
+        announceTurn(nextTurn(route, position))
         val limit = limits.firstOrNull { position.traveledM >= it.startM && position.traveledM < it.endM }?.kmh
         _state.update { it.copy(position = position, turn = nextTurn(route, position), limitKmh = limit) }
 
@@ -289,6 +299,35 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Голосовая подсказка о ближайшем повороте: заранее, близко и в момент поворота, по одному разу. */
+    private fun announceTurn(turn: NextTurn?) {
+        if (turn == null || !_state.value.voiceOn) return
+        val d = turn.distanceM
+        if (d > lastTurnDistance + 150.0) spokenLevel = -1 // начался новый поворот
+        lastTurnDistance = d
+        val level = when {
+            d <= 60.0 -> 2
+            d <= 250.0 -> 1
+            d <= 600.0 -> 0
+            else -> -1
+        }
+        if (level > spokenLevel) {
+            spokenLevel = level
+            voice.say(turnPhrase(level, d, turn.isLeft, turn.severity, turn.street))
+        }
+    }
+
+    fun setVoiceOn(on: Boolean) {
+        settings.edit().putBoolean("voice", on).apply()
+        _state.update { it.copy(voiceOn = on) }
+    }
+
+    /** Приехали: говорим об этом и убираем маршрут. */
+    fun arrived() {
+        if (_state.value.voiceOn) voice.say("Вы приехали")
+        clearRoute()
+    }
+
     fun setShareData(on: Boolean) {
         sharedSync.share = on
         _state.update { it.copy(shareData = on) }
@@ -319,6 +358,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        voice.shutdown()
         recorder.flush()
         router.close()
     }
