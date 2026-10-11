@@ -65,6 +65,7 @@ fun RoutePanel(
             options.forEachIndexed { i, option ->
                 val arrival = formatClock(departMillis + (option.timeSec * 1000).toLong())
                 Chip(
+                    tag = option.label.ifEmpty { null },
                     title = formatDuration(option.timeSec),
                     subtitle = "${formatDistance(option.totalM)} · $arrival",
                     selected = i == selected,
@@ -119,7 +120,7 @@ fun RoutePanel(
 }
 
 @Composable
-private fun Chip(title: String, subtitle: String?, selected: Boolean, onClick: () -> Unit) {
+private fun Chip(title: String, subtitle: String?, selected: Boolean, onClick: () -> Unit, tag: String? = null) {
     val shape = RoundedCornerShape(14.dp)
     Column(
         modifier = Modifier
@@ -129,6 +130,9 @@ private fun Chip(title: String, subtitle: String?, selected: Boolean, onClick: (
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
+        if (tag != null) {
+            Text(text = tag, color = if (selected) ShColors.Accent else ShColors.TextSecondary, fontSize = 11.sp)
+        }
         Text(
             text = title,
             color = if (selected) ShColors.Accent else ShColors.TextPrimary,

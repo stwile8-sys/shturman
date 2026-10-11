@@ -13,7 +13,9 @@ class RouteOption(
     val timeSec: Double,
     val lengthM: Double,
     val points: List<LatLon>,
-    val maneuvers: List<Maneuver>
+    val maneuvers: List<Maneuver>,
+    /** Название варианта: «Самый быстрый», «Без камер», «Спокойный». */
+    val label: String = ""
 ) {
     /** Накопленное расстояние от начала маршрута до каждой точки, в метрах. */
     val cumM: DoubleArray = DoubleArray(points.size).also { arr ->

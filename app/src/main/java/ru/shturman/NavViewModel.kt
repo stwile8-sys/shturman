@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.shturman.routing.Cameras
 import ru.shturman.routing.Geocoder
 import ru.shturman.routing.LatLon
 import ru.shturman.routing.NextTurn
@@ -92,6 +93,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private val router = Router(roadData)
 
     private var limits: List<LimitSeg> = emptyList()
+    private val cameraRepo = Cameras(app)
+    private var cameraList: List<LatLon> = emptyList()
     private val speedStore = SpeedStore(app)
     private val recorder = SpeedRecorder(speedStore)
     private val stopRecorder = StopRecorder(speedStore)
@@ -110,6 +113,11 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         downloadDataIfNeeded()
+        // Камеры на карте не показываются, но нужны, чтобы предложить маршрут «Без камер»
+        viewModelScope.launch {
+            cameraList = withContext(Dispatchers.IO) { cameraRepo.load() }
+            if (cameraRepo.updateIfStale()) cameraList = withContext(Dispatchers.IO) { cameraRepo.load() }
+        }
         // Раз в неделю пересчитываем время ожидания на светофорах: берём самое частое за неделю
         viewModelScope.launch(Dispatchers.IO) {
             val prefs = app.getSharedPreferences("sync", android.content.Context.MODE_PRIVATE)
@@ -193,20 +201,20 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val departAt = Date(System.currentTimeMillis() + s.departOffsetMin * 60_000L)
-                val result = router.route(from, destination.position, departAt)
+                val result = router.route(from, destination.position, departAt, cameraList)
                 // Время каждого варианта пересчитываем по запомненным скоростям на это время недели
                 // Тяжёлый подсчёт идёт не в главном потоке; при любой ошибке остаётся время движка
                 val forecast = withContext(Dispatchers.Default) {
                     runCatching {
                         result.options.map { o ->
-                            RouteOption(forecastTimeSec(o, speedStore, departAt.time), o.lengthM, o.points, o.maneuvers)
+                            RouteOption(forecastTimeSec(o, speedStore, departAt.time), o.lengthM, o.points, o.maneuvers, o.label)
                         }.sortedBy { it.timeSec }
                     }.getOrDefault(result.options)
                 }
                 // Погода на час выезда замедляет прогноз (дождь, снег, гололёд)
                 val weather = fetchWeather(from, departAt.time)
                 val adjusted = if (weather != null && weather.speedFactor < 1.0) {
-                    forecast.map { o -> RouteOption(o.timeSec / weather.speedFactor, o.lengthM, o.points, o.maneuvers) }
+                    forecast.map { o -> RouteOption(o.timeSec / weather.speedFactor, o.lengthM, o.points, o.maneuvers, o.label) }
                 } else forecast
                 _state.update {
                     it.copy(

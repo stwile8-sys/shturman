@@ -57,13 +57,19 @@ class Router(private val roadData: RoadData) {
         return file
     }
 
-    /** Строит до трёх вариантов маршрута от from до to с выездом в момент departAt. */
-    suspend fun route(from: LatLon, to: LatLon, departAt: Date): RouteResult =
+    /**
+     * Строит варианты маршрута от from до to с выездом в момент departAt:
+     *  - «Самый быстрый» — по времени;
+     *  - «Без камер» — объезжает известные камеры скорости, стоящие на быстром маршруте (если они есть);
+     *  - «Спокойный» — меньше поворотов, без разгонных трасс, дворов и грунтовок: ехать проще и не так напряжённо.
+     * Одинаковые варианты не повторяются.
+     */
+    suspend fun route(from: LatLon, to: LatLon, departAt: Date, cameras: List<LatLon> = emptyList()): RouteResult =
         withContext(Dispatchers.Default) {
             val valhalla = engine()
             val departure = SimpleDateFormat("yyyy-MM-dd'T'HH:mm", Locale.US).format(departAt)
 
-            fun request(withTime: Boolean): String {
+            fun request(withTime: Boolean, costing: JSONObject?, exclude: List<LatLon>): String {
                 val json = JSONObject()
                 json.put(
                     "locations",
@@ -72,7 +78,12 @@ class Router(private val roadData: RoadData) {
                         .put(JSONObject().put("lat", to.lat).put("lon", to.lon))
                 )
                 json.put("costing", "auto")
-                json.put("alternates", 2)
+                if (costing != null) json.put("costing_options", JSONObject().put("auto", costing))
+                if (exclude.isNotEmpty()) {
+                    val arr = JSONArray()
+                    exclude.forEach { arr.put(JSONObject().put("lat", it.lat).put("lon", it.lon)) }
+                    json.put("exclude_locations", arr)
+                }
                 json.put(
                     "directions_options",
                     JSONObject().put("language", "ru-RU").put("units", "kilometers")
@@ -83,18 +94,50 @@ class Router(private val roadData: RoadData) {
                 return json.toString()
             }
 
-            // Сначала пробуем с временем выезда; если движок его не принял, строим без него
             var timeAware = true
-            val raw = try {
-                valhalla.routeRaw(request(true))
-            } catch (e: Exception) {
-                timeAware = false
-                valhalla.routeRaw(request(false))
+            fun call(costing: JSONObject?, exclude: List<LatLon>): String =
+                if (timeAware) {
+                    try {
+                        valhalla.routeRaw(request(true, costing, exclude))
+                    } catch (e: Exception) {
+                        timeAware = false
+                        valhalla.routeRaw(request(false, costing, exclude))
+                    }
+                } else valhalla.routeRaw(request(false, costing, exclude))
+
+            // Самый быстрый: обязательный, без него маршрута нет
+            val fastest = parse(call(null, emptyList()), "Самый быстрый").first()
+            val result = arrayListOf(fastest)
+
+            fun addIfNew(option: RouteOption?) {
+                if (option == null) return
+                val same = result.any {
+                    Math.abs(it.lengthM - option.lengthM) < it.lengthM * 0.015 &&
+                        Math.abs(it.timeSec - option.timeSec) < it.timeSec * 0.015
+                }
+                if (!same) result += option
             }
-            RouteResult(parse(raw), timeAware)
+
+            // Без камер
+            val onRoute = camerasNear(fastest.points, cameras).take(40)
+            if (onRoute.isNotEmpty()) {
+                addIfNew(runCatching { parse(call(null, onRoute), "Без камер").firstOrNull() }.getOrNull())
+            }
+
+            // Спокойный
+            val calm = JSONObject()
+                .put("use_highways", 0.3)
+                .put("maneuver_penalty", 45)
+                .put("use_tracks", 0.0)
+                .put("use_living_streets", 0.0)
+                .put("alley_factor", 8.0)
+                .put("service_penalty", 40)
+            addIfNew(runCatching { parse(call(calm, emptyList()), "Спокойный").firstOrNull() }.getOrNull())
+
+            RouteResult(result, timeAware)
         }
 
-    private fun parse(raw: String): List<RouteOption> {
+    private fun parse(raw: String, label: String): List<RouteOption> {
         val root = JSONObject(raw)
         val trips = ArrayList<JSONObject>()
         trips.add(root.getJSONObject("trip"))
@@ -122,7 +165,8 @@ class Router(private val roadData: RoadData) {
                 timeSec = summary.getDouble("time"),
                 lengthM = summary.getDouble("length") * 1000.0,
                 points = decodePolyline6(leg.getString("shape")),
-                maneuvers = maneuvers
+                maneuvers = maneuvers,
+                label = label
             )
         }.sortedBy { it.timeSec }
     }
