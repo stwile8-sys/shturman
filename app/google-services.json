@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "982509008562",
+    "project_id": "shturman-239ef",
+    "storage_bucket": "shturman-239ef.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:982509008562:android:a5d8e358c4560b757fbbab",
+        "android_client_info": {
+          "package_name": "ru.shturmani"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "982509008562-vg43q7jn81k7pkj7h980ua0icajbfhu0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "ru.shturmani",
+            "certificate_hash": "02c9f32a43068bae04f6c19789233743eb8a73ab"
+          }
+        },
+        {
+          "client_id": "982509008562-m9g1thl39eed9l5raudv7aa2g8k1l2do.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBO6myuUYhpcfmAXL8HpU5ua_kQ0fIsS0I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "982509008562-m9g1thl39eed9l5raudv7aa2g8k1l2do.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
