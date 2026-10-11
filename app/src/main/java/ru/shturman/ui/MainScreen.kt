@@ -1,5 +1,12 @@
 package ru.shturman.ui
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -16,7 +24,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Text
@@ -31,6 +41,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.vectorResource
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import ru.shturman.R
+import ru.shturman.routing.fuelLiters
+import ru.shturman.routing.fuelText
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -51,6 +72,34 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
     var showSearch by remember { mutableStateOf(false) }
     var recenterKey by remember { mutableStateOf(0) }
     var startKey by remember { mutableStateOf(0) }
+    val context = LocalContext.current
+    val view = LocalView.current
+
+    // Полноэкранный режим: прячем системные панели Android (они выезжают свайпом от края)
+    LaunchedEffect(s.fullscreen) {
+        var c: Context = context
+        while (c is ContextWrapper && c !is Activity) c = c.baseContext
+        val window = (c as? Activity)?.window ?: return@LaunchedEffect
+        val controller = WindowCompat.getInsetsController(window, view)
+        if (s.fullscreen) {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    // Микрофон для голосовых команд
+    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) vm.listen()
+    }
+    val onMic = {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            vm.listen()
+        } else {
+            micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     val route = s.route
     val total = (route?.totalM ?: 0.0).coerceAtLeast(1.0)
@@ -75,6 +124,12 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             navigating = s.navigating,
             route = route?.points,
             destination = s.destination?.position,
+            bumps = s.bumps,
+            works = s.works,
+            danger = s.danger,
+            members = s.members,
+            satellite = s.satellite,
+            princess = s.princess,
             onFix = { here, speed -> vm.onFix(here, speed) }
         )
 
@@ -86,7 +141,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             MapButton(
-                icon = Icons.Filled.Menu,
+                icon = if (s.princess) Icons.Filled.Star else Icons.Filled.Menu,
                 description = "Меню",
                 onClick = { showSettings = true }
             )
@@ -94,6 +149,11 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 icon = Icons.Filled.Search,
                 description = "Куда едем?",
                 onClick = { showSearch = true }
+            )
+            MapButton(
+                icon = ImageVector.vectorResource(R.drawable.ic_mic),
+                description = "Голосовая команда",
+                onClick = { onMic() }
             )
             if (s.destination != null) {
                 MapButton(
@@ -128,27 +188,53 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             else -> null
         }
         val weather = s.weather
-        if (message == null && weather != null && s.options.isNotEmpty() && !s.navigating) {
-            val extra = ((1.0 / weather.speedFactor - 1.0) * 100).toInt()
-            StatusPill(
-                text = "${weather.label}, ${weather.tempC}°" + if (extra > 0) " · в пути дольше на $extra%" else "",
-                color = if (extra > 0) ShColors.Sign3 else ShColors.TextSecondary,
-                onClick = null,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(start = 72.dp, top = 12.dp, end = 12.dp)
-            )
+        val pills = ArrayList<Triple<String, Color, (() -> Unit)?>>()
+        if (s.listening) {
+            pills += Triple("Слушаю… скажите команду", ShColors.Accent, null)
+        } else if (s.voiceMessage != null) {
+            pills += Triple(s.voiceMessage!!, ShColors.TextPrimary, null)
         }
         if (message != null && !s.navigating) {
-            StatusPill(
-                text = message.first,
-                color = message.second,
-                onClick = if (!s.dataReady && s.dataError != null) ({ vm.downloadDataIfNeeded() }) else null,
+            pills += Triple(message.first, message.second, if (!s.dataReady && s.dataError != null) ({ vm.downloadDataIfNeeded() }) else null)
+        } else if (!s.navigating && s.options.isNotEmpty()) {
+            if (weather != null) {
+                val extra = ((1.0 / weather.speedFactor - 1.0) * 100).toInt()
+                val text = "${weather.label}, ${weather.tempC}°" + (if (extra > 0) " · дольше на $extra%" else "") +
+                    (s.seasonNote?.let { "\n$it" } ?: "")
+                pills += Triple(text, if (extra > 0 || s.seasonNote != null) ShColors.Sign3 else ShColors.TextSecondary, null)
+            } else if (s.seasonNote != null) {
+                pills += Triple(s.seasonNote!!, ShColors.Sign3, null)
+            }
+            s.departAdvice?.let { pills += Triple(it, ShColors.Gold, null) }
+        }
+        if (!s.navigating && s.destination == null && s.leaderDest != null) {
+            pills += Triple("Ведущий едет: ${s.leaderDest!!.title}. Нажмите, чтобы ехать туда же", ShColors.Gold, { vm.followLeader() })
+        }
+        if (s.navigating && s.hazard != null) {
+            pills += Triple(s.hazard!!, ShColors.Sign3, null)
+        }
+        if (pills.isNotEmpty()) {
+            Column(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .statusBarsPadding()
-                    .padding(start = 72.dp, top = 12.dp, end = 12.dp)
+                    .padding(start = 72.dp, top = 12.dp, end = if (s.navigating) 190.dp else 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                pills.forEach { (text, color, click) -> StatusPill(text = text, color = color, onClick = click) }
+            }
+        }
+
+        // Радар-круг: камера впереди на маршруте
+        val cam = s.cameraAhead
+        if (s.navigating && cam != null) {
+            RadarCircle(
+                distanceM = cam.distanceM,
+                place = cam.place,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 12.dp, bottom = 180.dp)
             )
         }
 
@@ -183,7 +269,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             else -> 24.dp
         }
         MapButton(
-            icon = Icons.Filled.LocationOn,
+            icon = if (s.princess) Icons.Filled.Favorite else Icons.Filled.LocationOn,
             description = "Где я",
             onClick = { recenterKey++ },
             modifier = Modifier
@@ -202,7 +288,12 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 progress = progress,
                 traveledKm = formatKm(traveled),
                 totalKm = formatKm(total),
-                eta = formatClock(System.currentTimeMillis() + (remainingSec * 1000).toLong())
+                eta = formatClock(System.currentTimeMillis() + (remainingSec * 1000).toLong()),
+                showPercent = s.cardPercent,
+                showDistance = s.cardDistance,
+                showEta = s.cardEta,
+                remaining = if (s.cardRemaining) "осталось ${formatDuration(remainingSec)} · ${formatKm(total - traveled)} км" else null,
+                fuel = if (s.cardFuel) fuelText(fuelLiters(route.lengthM, route.timeSec, s.consumption.toDouble()), s.fuelPrice.toDouble()) else null
             )
         } else if (s.options.isNotEmpty()) {
             RoutePanel(
@@ -211,6 +302,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 departOffsetMin = s.departOffsetMin,
                 timeAware = s.timeAware,
                 destinationTitle = s.destination?.title ?: "",
+                consumption = s.consumption,
+                fuelPrice = s.fuelPrice,
                 onSelect = vm::selectOption,
                 onDepart = vm::setDeparture,
                 onStart = {
@@ -227,13 +320,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         if (showSettings) {
             SettingsSheet(
                 user = user,
-                voiceOn = s.voiceOn,
-                onVoiceChange = vm::setVoiceOn,
-                shareData = s.shareData,
-                onShareChange = vm::setShareData,
-                syncing = s.syncing,
-                syncMessage = s.syncMessage,
-                onSync = vm::syncNow,
+                s = s,
+                vm = vm,
                 onSignOut = {
                     showSettings = false
                     onSignOut()
@@ -274,15 +362,15 @@ private fun StatusPill(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .heightIn(min = 48.dp)
             .clip(shape)
             .background(ShColors.Panel.copy(alpha = 0.92f))
             .border(1.dp, ShBorder, shape)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        Text(text = text, color = color, style = ShText.Small.copy(fontSize = 13.sp), maxLines = 2)
+        Text(text = text, color = color, style = ShText.Small.copy(fontSize = 13.sp), maxLines = 3)
     }
 }
 

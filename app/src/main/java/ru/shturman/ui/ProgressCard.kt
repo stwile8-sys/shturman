@@ -28,7 +28,12 @@ fun ProgressCard(
     progress: Float = 0.42f,
     traveledKm: String = "12,4",
     totalKm: String = "29,5",
-    eta: String? = null
+    eta: String? = null,
+    showPercent: Boolean = true,
+    showDistance: Boolean = true,
+    showEta: Boolean = true,
+    remaining: String? = null,
+    fuel: String? = null
 ) {
     val shape = RoundedCornerShape(24.dp)
     Column(
@@ -39,21 +44,32 @@ fun ProgressCard(
             .border(1.dp, ShBorder, shape)
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
+        val parts = ArrayList<String>()
+        if (showDistance) parts += "$traveledKm из $totalKm км"
+        if (showEta && eta != null) parts += "прибытие $eta"
+        if (remaining != null) parts += remaining
+        if (fuel != null) parts += fuel
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Bottom
         ) {
-            Text(
-                text = "${(progress * 100).toInt()}%",
-                color = ShColors.TextPrimary,
-                style = ShText.BigNumber
-            )
+            if (showPercent) {
+                Text(
+                    text = "${(progress * 100).toInt()}%",
+                    color = ShColors.TextPrimary,
+                    style = ShText.BigNumber
+                )
+            }
             Spacer(Modifier.weight(1f))
-            Text(
-                text = "$traveledKm из $totalKm км" + (eta?.let { " · прибытие $it" } ?: ""),
-                color = ShColors.TextSecondary,
-                style = ShText.Small
-            )
+            if (parts.isNotEmpty()) {
+                Text(
+                    text = parts.joinToString(" · "),
+                    color = ShColors.TextSecondary,
+                    style = ShText.Small,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    modifier = Modifier.weight(if (showPercent) 2f else 1f)
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))

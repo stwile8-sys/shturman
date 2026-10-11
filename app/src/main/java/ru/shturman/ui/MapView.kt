@@ -37,7 +37,11 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.sources.GeoJsonSource
 import ru.shturman.R
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory
+import ru.shturman.routing.CaravanMember
 import ru.shturman.routing.GpsTracker
+import ru.shturman.routing.pointsGeoJson
 import ru.shturman.routing.LatLon
 import ru.shturman.routing.Snap
 import ru.shturman.routing.lineGeoJson
@@ -68,6 +72,12 @@ fun DarkMap(
     navigating: Boolean = false,
     route: List<LatLon>? = null,
     destination: LatLon? = null,
+    bumps: List<LatLon> = emptyList(),
+    works: List<LatLon> = emptyList(),
+    danger: List<LatLon> = emptyList(),
+    members: List<CaravanMember> = emptyList(),
+    satellite: Boolean = false,
+    princess: Boolean = false,
     onFix: (LatLon, Float) -> Snap? = { _, _ -> null }
 ) {
     val context = LocalContext.current
@@ -153,6 +163,37 @@ fun DarkMap(
     // Линия маршрута и точка назначения на карте
     LaunchedEffect(style, route) {
         style?.getSourceAs<GeoJsonSource>("route")?.setGeoJson(lineGeoJson(route))
+    }
+    LaunchedEffect(style, bumps) {
+        style?.getSourceAs<GeoJsonSource>("bumps")?.setGeoJson(pointsGeoJson(bumps))
+    }
+    LaunchedEffect(style, works) {
+        style?.getSourceAs<GeoJsonSource>("works")?.setGeoJson(pointsGeoJson(works))
+    }
+    LaunchedEffect(style, danger) {
+        style?.getSourceAs<GeoJsonSource>("danger")?.setGeoJson(pointsGeoJson(danger))
+    }
+    LaunchedEffect(style, members) {
+        val features = members.joinToString(",") { m ->
+            val name = m.name.filter { it.isLetterOrDigit() || it == ' ' }
+            String.format(
+                java.util.Locale.US,
+                "{\"type\":\"Feature\",\"properties\":{\"name\":\"%s\",\"leader\":%b},\"geometry\":{\"type\":\"Point\",\"coordinates\":[%.6f,%.6f]}}",
+                name, m.leader, m.position.lon, m.position.lat
+            )
+        }
+        style?.getSourceAs<GeoJsonSource>("caravan")?.setGeoJson("{\"type\":\"FeatureCollection\",\"features\":[$features]}")
+    }
+    // Спутник: показываем снимки поверх карты и прячем 3D-дома
+    LaunchedEffect(style, satellite) {
+        val st = style ?: return@LaunchedEffect
+        st.getLayer("sat-layer")?.setProperties(PropertyFactory.visibility(if (satellite) Property.VISIBLE else Property.NONE))
+        st.getLayer("building-3d")?.setProperties(PropertyFactory.visibility(if (satellite) Property.NONE else Property.VISIBLE))
+    }
+    // Режим принцессы: маршрут розовый
+    LaunchedEffect(style, princess) {
+        val color = if (princess) "#F2709F" else "#3DDCFF"
+        style?.getLayer("route-line")?.setProperties(PropertyFactory.lineColor(color))
     }
     LaunchedEffect(style, destination) {
         style?.getSourceAs<GeoJsonSource>("dest")?.setGeoJson(pointGeoJson(destination))

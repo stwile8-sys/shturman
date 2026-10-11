@@ -32,6 +32,7 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
     override fun onOpen(db: SQLiteDatabase) {
         db.execSQL(STOPS_TABLE)
         db.execSQL(OBS_TABLE)
+        db.execSQL(DANGER_TABLE)
         db.execSQL("CREATE INDEX IF NOT EXISTS obs_k ON stop_obs (k)")
     }
 
@@ -160,6 +161,29 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
         changed
     }.getOrDefault(0)
 
+    /** Запоминает место резкого торможения (квадрат около 100 м). Чем чаще, тем опаснее место. */
+    @Synchronized
+    fun recordDanger(lat: Double, lon: Double, atMs: Long) {
+        runCatching {
+            val key = "${floor(lat / 0.0009).toLong()}:${floor(lon / 0.0016).toLong()}"
+            val db = writableDatabase
+            var n = 0
+            db.rawQuery("SELECT n FROM danger WHERE k = ?", arrayOf(key)).use { c -> if (c.moveToFirst()) n = c.getInt(0) }
+            val v = ContentValues().apply { put("k", key); put("lat", lat); put("lon", lon); put("n", n + 1); put("updated", atMs) }
+            db.insertWithOnConflict("danger", null, v, SQLiteDatabase.CONFLICT_REPLACE)
+        }
+    }
+
+    /** Места, где резко тормозили не меньше minCount раз. */
+    @Synchronized
+    fun dangerSpots(minCount: Int): List<LatLon> = runCatching {
+        val out = ArrayList<LatLon>()
+        readableDatabase.rawQuery("SELECT lat, lon FROM danger WHERE n >= ?", arrayOf(minCount.toString())).use { c ->
+            while (c.moveToNext()) out += LatLon(c.getDouble(0), c.getDouble(1))
+        }
+        out
+    }.getOrDefault(emptyList())
+
     // ---------- обмен с общей базой ----------
 
     @Synchronized
@@ -229,6 +253,9 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
     companion object {
         private const val REPLACE_MS = 14L * 24 * 3600 * 1000
         private const val EXPIRE_MS = 28L * 24 * 3600 * 1000
+
+        private const val DANGER_TABLE =
+            "CREATE TABLE IF NOT EXISTS danger (k TEXT PRIMARY KEY, lat REAL NOT NULL, lon REAL NOT NULL, n INTEGER NOT NULL, updated INTEGER NOT NULL)"
 
         private const val OBS_TABLE =
             "CREATE TABLE IF NOT EXISTS stop_obs (id INTEGER PRIMARY KEY AUTOINCREMENT, k TEXT NOT NULL, wait REAL NOT NULL, at INTEGER NOT NULL)"

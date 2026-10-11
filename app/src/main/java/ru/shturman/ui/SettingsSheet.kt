@@ -11,13 +11,17 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -25,38 +29,39 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import ru.shturman.NavState
+import ru.shturman.NavViewModel
 import ru.shturman.auth.UserInfo
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.theme.ShText
 
-/** Настройки: профиль, приватность и ручная синхронизация с общей базой. */
+/** Настройки: профиль, режимы, голос, экран, карточка, бензин, караван, приватность и синхронизация. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsSheet(
     user: UserInfo,
-    voiceOn: Boolean,
-    onVoiceChange: (Boolean) -> Unit,
-    shareData: Boolean,
-    onShareChange: (Boolean) -> Unit,
-    syncing: Boolean,
-    syncMessage: String?,
-    onSync: () -> Unit,
+    s: NavState,
+    vm: NavViewModel,
     onSignOut: () -> Unit,
     onDismiss: () -> Unit
 ) {
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = ShColors.Panel,
@@ -66,6 +71,7 @@ fun SettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 20.dp)
@@ -87,123 +93,197 @@ fun SettingsSheet(
                             modifier = Modifier.size(52.dp)
                         )
                     } else {
-                        Icon(
-                            imageVector = Icons.Filled.Person,
-                            contentDescription = null,
-                            tint = ShColors.TextSecondary
-                        )
+                        Icon(imageVector = Icons.Filled.Person, contentDescription = null, tint = ShColors.TextSecondary)
                     }
                 }
                 Spacer(Modifier.width(14.dp))
                 Column {
-                    Text(
-                        text = user.name,
-                        color = ShColors.TextPrimary,
-                        style = ShText.Distance.copy(fontSize = 20.sp)
-                    )
-                    Text(
-                        text = user.email,
-                        color = ShColors.TextSecondary,
-                        style = ShText.Street
-                    )
+                    Text(text = user.name, color = ShColors.TextPrimary, style = ShText.Distance.copy(fontSize = 20.sp))
+                    Text(text = user.email, color = ShColors.TextSecondary, style = ShText.Street)
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(ShColors.Divider)
-            )
-            Spacer(Modifier.height(16.dp))
+            Divider()
 
-            // Голосовые подсказки
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Голосовые подсказки", color = ShColors.TextPrimary, style = ShText.Small)
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "Говорит о поворотах голосом телефона. Нужен русский голос в настройках речи Android.",
-                        color = ShColors.TextSecondary,
-                        fontSize = 13.sp
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(
-                    checked = voiceOn,
-                    onCheckedChange = onVoiceChange,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = ShColors.Background,
-                        checkedTrackColor = ShColors.Accent
-                    )
-                )
-            }
-            Spacer(Modifier.height(16.dp))
-
-            // Приватность
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Участвовать в общем обучении",
-                        color = ShColors.TextPrimary,
-                        style = ShText.Small
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "Уходят только обезличенные данные о дорогах. Ваши координаты — никогда.",
-                        color = ShColors.TextSecondary,
-                        fontSize = 13.sp
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(
-                    checked = shareData,
-                    onCheckedChange = onShareChange,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = ShColors.Background,
-                        checkedTrackColor = ShColors.Accent
-                    )
-                )
-            }
-
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = "Вход через Google обязателен, анонимного режима нет.",
-                color = ShColors.TextSecondary,
-                fontSize = 13.sp
+            SwitchRow(
+                "Режим принцессы",
+                "Пастельные цвета, изящный шрифт, сердечки и звёздочки, мягкий голос. Функции те же.",
+                s.princess, vm::setPrincess
             )
 
-            Spacer(Modifier.height(20.dp))
+            Section("Голос и звуки")
+            SwitchRow("Голосовые подсказки", "Говорит о поворотах голосом телефона. Нужен русский голос в настройках речи Android.", s.voiceOn, vm::setVoiceOn)
+            SwitchRow("Ночной режим голоса", "С 22:00 до 6:00 голос тише, а фразы короче.", s.nightVoice, vm::setNightVoice)
+            SwitchRow("Звук при превышении", "Мягкое «вжжж», громче по мере превышения скорости.", s.overspeedSound, vm::setOverspeedSound)
+            SwitchRow("Радар-круг камер", "Показывает камеру впереди на маршруте: обычную, на мосту или в тоннеле.", s.radarOn, vm::setRadar)
 
-            // Синхронизация теперь здесь
-            Button(
-                onClick = onSync,
-                enabled = !syncing,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ShColors.Accent,
-                    contentColor = ShColors.Background
-                )
-            ) {
-                Text(text = if (syncing) "Синхронизирую…" else "Синхронизировать", style = ShText.Button)
+            Section("Экран")
+            SwitchRow("Полноэкранный режим", "Скрывает системные панели Android. Вернуть их можно свайпом от края.", s.fullscreen, vm::setFullscreen)
+            SwitchRow("Спутник", "Снимки со спутника вместо обычной карты.", s.satellite, vm::setSatellite)
+
+            Section("Нижняя карточка в поездке")
+            CheckRow("Проценты пути", s.cardPercent) { vm.setCardOption("percent", it) }
+            CheckRow("Сколько проехали из скольких", s.cardDistance) { vm.setCardOption("distance", it) }
+            CheckRow("Время прибытия", s.cardEta) { vm.setCardOption("eta", it) }
+            CheckRow("Сколько осталось (время и км)", s.cardRemaining) { vm.setCardOption("remaining", it) }
+            CheckRow("Расход бензина и стоимость", s.cardFuel) { vm.setCardOption("fuel", it) }
+
+            Section("Бензин")
+            var consumption by remember(s.consumption) { mutableStateOf(trimNumber(s.consumption)) }
+            var price by remember(s.fuelPrice) { mutableStateOf(trimNumber(s.fuelPrice)) }
+            Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+                NumberField("Расход, л на 100 км", consumption, Modifier.weight(1f)) {
+                    consumption = it
+                    it.replace(',', '.').toFloatOrNull()?.takeIf { v -> v in 1f..40f }?.let(vm::setConsumption)
+                }
+                NumberField("Цена за литр, ₽", price, Modifier.weight(1f)) {
+                    price = it
+                    it.replace(',', '.').toFloatOrNull()?.takeIf { v -> v in 1f..500f }?.let(vm::setFuelPrice)
+                }
             }
 
-            if (syncMessage != null) {
+            Section("Караван")
+            var code by remember { mutableStateOf("") }
+            if (s.caravanCode != null) {
+                Text(
+                    text = "Код каравана: ${s.caravanCode}" + if (s.caravanLeader) " (вы ведёте)" else "",
+                    color = ShColors.TextPrimary,
+                    style = ShText.Small
+                )
+                Text(
+                    text = "Участников на карте: ${s.members.size}. Ведущий задаёт общий пункт назначения.",
+                    color = ShColors.TextSecondary,
+                    fontSize = 13.sp
+                )
+                TextButton(onClick = vm::leaveCaravan) {
+                    Text("Выйти из каравана", color = ShColors.Danger, style = ShText.Small)
+                }
+            } else {
+                Button(
+                    onClick = vm::createCaravan,
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+                ) { Text("Создать караван (я веду)", style = ShText.Small) }
                 Spacer(Modifier.height(8.dp))
-                Text(text = syncMessage, color = ShColors.TextSecondary, fontSize = 13.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    NumberField("Код из 4 цифр", code, Modifier.weight(1f), integer = true) { code = it.filter(Char::isDigit).take(4) }
+                    Spacer(Modifier.width(10.dp))
+                    Button(
+                        onClick = { vm.joinCaravan(code) },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ShColors.Accent, contentColor = ShColors.Background)
+                    ) { Text("Войти", style = ShText.Button) }
+                }
+            }
+            s.caravanMessage?.let { Text(text = it, color = ShColors.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
+
+            Section("Приватность")
+            SwitchRow(
+                "Участвовать в общем обучении",
+                "Уходят только обезличенные данные о дорогах. Ваши координаты — никогда.",
+                s.shareData, vm::setShareData
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(text = "Вход через Google обязателен, анонимного режима нет.", color = ShColors.TextSecondary, fontSize = 13.sp)
+
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = vm::syncNow,
+                enabled = !s.syncing,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.Accent, contentColor = ShColors.Background)
+            ) {
+                Text(text = if (s.syncing) "Синхронизирую…" else "Синхронизировать", style = ShText.Button)
+            }
+            s.syncMessage?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(text = it, color = ShColors.TextSecondary, fontSize = 13.sp)
             }
 
             Spacer(Modifier.height(8.dp))
-            TextButton(
-                onClick = onSignOut,
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
                 Text(text = "Выйти из аккаунта", color = ShColors.TextSecondary, style = ShText.Small)
             }
         }
     }
+}
+
+private fun trimNumber(v: Float): String = if (v == v.toInt().toFloat()) v.toInt().toString() else v.toString()
+
+@Composable
+private fun Divider() {
+    Spacer(Modifier.height(16.dp))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(ShColors.Divider))
+    Spacer(Modifier.height(12.dp))
+}
+
+@Composable
+private fun Section(title: String) {
+    Spacer(Modifier.height(18.dp))
+    Text(text = title, color = ShColors.Accent, style = ShText.Button)
+    Spacer(Modifier.height(8.dp))
+}
+
+@Composable
+private fun SwitchRow(title: String, subtitle: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp)) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, color = ShColors.TextPrimary, style = ShText.Small)
+            if (subtitle != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(text = subtitle, color = ShColors.TextSecondary, fontSize = 13.sp)
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = ShColors.Background,
+                checkedTrackColor = ShColors.Accent
+            )
+        )
+    }
+}
+
+@Composable
+private fun CheckRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = CheckboxDefaults.colors(
+                checkedColor = ShColors.Accent,
+                checkmarkColor = ShColors.Background,
+                uncheckedColor = ShColors.TextSecondary
+            )
+        )
+        Text(text = title, color = ShColors.TextPrimary, style = ShText.Small)
+    }
+}
+
+@Composable
+private fun NumberField(label: String, value: String, modifier: Modifier, integer: Boolean = false, onChange: (String) -> Unit) {
+    TextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label, fontSize = 12.sp) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = if (integer) KeyboardType.NumberPassword else KeyboardType.Decimal),
+        shape = RoundedCornerShape(14.dp),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = ShColors.SearchField,
+            unfocusedContainerColor = ShColors.SearchField,
+            focusedTextColor = ShColors.TextPrimary,
+            unfocusedTextColor = ShColors.TextPrimary,
+            focusedLabelColor = ShColors.TextSecondary,
+            unfocusedLabelColor = ShColors.TextSecondary,
+            cursorColor = ShColors.Accent,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent
+        ),
+        modifier = modifier
+    )
 }

@@ -22,6 +22,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.shturman.routing.RouteOption
+import ru.shturman.routing.fuelLiters
+import ru.shturman.routing.fuelText
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.theme.ShText
 
@@ -33,6 +35,8 @@ fun RoutePanel(
     departOffsetMin: Int,
     timeAware: Boolean,
     destinationTitle: String,
+    consumption: Float,
+    fuelPrice: Float,
     onSelect: (Int) -> Unit,
     onDepart: (Int) -> Unit,
     onStart: () -> Unit,
@@ -67,7 +71,8 @@ fun RoutePanel(
                 Chip(
                     tag = option.label.ifEmpty { null },
                     title = formatDuration(option.timeSec),
-                    subtitle = "${formatDistance(option.totalM)} · $arrival",
+                    subtitle = "${formatDistance(option.totalM)} · $arrival\n" +
+                        fuelText(fuelLiters(option.lengthM, option.timeSec, consumption.toDouble()), fuelPrice.toDouble()),
                     selected = i == selected,
                     onClick = { onSelect(i) }
                 )

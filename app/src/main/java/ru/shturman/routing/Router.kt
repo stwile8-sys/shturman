@@ -134,6 +134,15 @@ class Router(private val roadData: RoadData) {
                 .put("service_penalty", 40)
             addIfNew(runCatching { parse(call(calm, emptyList()), "Спокойный").firstOrNull() }.getOrNull())
 
+            // Экономия бензина: ровная езда без разгонов за 90, поменьше поворотов и остановок
+            val eco = JSONObject()
+                .put("top_speed", 85)
+                .put("use_highways", 0.0)
+                .put("use_tolls", 0.0)
+                .put("maneuver_penalty", 30)
+                .put("use_living_streets", 0.0)
+            addIfNew(runCatching { parse(call(eco, emptyList()), "Экономия бензина").firstOrNull() }.getOrNull())
+
             RouteResult(result, timeAware)
         }
 
