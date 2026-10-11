@@ -9,7 +9,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "ru.shturman"
+        applicationId = "ru.shturmani"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
