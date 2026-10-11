@@ -39,7 +39,11 @@ class MainActivity : ComponentActivity() {
         val crashFile = File(filesDir, "crash.txt")
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
-            runCatching { crashFile.writeText(android.util.Log.getStackTraceString(error)) }
+            runCatching {
+                val t = android.util.Log.getStackTraceString(error)
+                crashFile.writeText(t)
+                File(filesDir, "crash_last.txt").writeText(t)
+            }
             previous?.uncaughtException(thread, error)
         }
         val lastCrash = runCatching { crashFile.takeIf { it.exists() }?.readText() }.getOrNull()

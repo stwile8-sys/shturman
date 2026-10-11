@@ -215,6 +215,20 @@ fun SettingsSheet(
             }
 
             Spacer(Modifier.height(8.dp))
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            Button(
+                onClick = {
+                    val sum = "маршрутов: ${s.options.size}, навигация: ${s.navigating}, данные готовы: ${s.dataReady}" +
+                        ", ошибка данных: ${s.dataError}, синхр.: ${s.syncMessage}, караван: ${s.caravanMessage}" +
+                        ", голос: ${s.voiceMessage}, услышано: ${s.heardText}, аккаунт: ${user.email}"
+                    ru.shturman.Report.send(ctx, sum)
+                },
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Отправить отчёт разработчику", style = ShText.Small) }
+
+            Spacer(Modifier.height(8.dp))
             TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
                 Text(text = "Выйти из аккаунта", color = ShColors.TextSecondary, style = ShText.Small)
             }
