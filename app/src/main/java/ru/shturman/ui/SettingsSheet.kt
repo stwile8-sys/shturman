@@ -41,11 +41,19 @@ import ru.shturman.auth.UserInfo
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.theme.ShText
 
-/** Настройки: профиль, приватность и ручная синхронизация. Пока всё — макет. */
+/** Настройки: профиль, приватность и ручная синхронизация с общей базой. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsSheet(user: UserInfo, onSignOut: () -> Unit, onDismiss: () -> Unit) {
-    var shareData by remember { mutableStateOf(true) }
+fun SettingsSheet(
+    user: UserInfo,
+    shareData: Boolean,
+    onShareChange: (Boolean) -> Unit,
+    syncing: Boolean,
+    syncMessage: String?,
+    onSync: () -> Unit,
+    onSignOut: () -> Unit,
+    onDismiss: () -> Unit
+) {
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -126,7 +134,7 @@ fun SettingsSheet(user: UserInfo, onSignOut: () -> Unit, onDismiss: () -> Unit) 
                 Spacer(Modifier.width(12.dp))
                 Switch(
                     checked = shareData,
-                    onCheckedChange = { shareData = it },
+                    onCheckedChange = onShareChange,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = ShColors.Background,
                         checkedTrackColor = ShColors.Accent
@@ -145,7 +153,8 @@ fun SettingsSheet(user: UserInfo, onSignOut: () -> Unit, onDismiss: () -> Unit) 
 
             // Синхронизация теперь здесь
             Button(
-                onClick = { },
+                onClick = onSync,
+                enabled = !syncing,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp),
@@ -155,7 +164,12 @@ fun SettingsSheet(user: UserInfo, onSignOut: () -> Unit, onDismiss: () -> Unit) 
                     contentColor = ShColors.Background
                 )
             ) {
-                Text(text = "Синхронизировать", style = ShText.Button)
+                Text(text = if (syncing) "Синхронизирую…" else "Синхронизировать", style = ShText.Button)
+            }
+
+            if (syncMessage != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(text = syncMessage, color = ShColors.TextSecondary, fontSize = 13.sp)
             }
 
             Spacer(Modifier.height(8.dp))

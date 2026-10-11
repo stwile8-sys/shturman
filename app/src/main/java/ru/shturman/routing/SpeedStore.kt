@@ -37,7 +37,6 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
         runCatching {
             val old = arrayOf((System.currentTimeMillis() - EXPIRE_MS).toString())
             writableDatabase.delete("cells", "updated < ?", old)
-            writableDatabase.delete("stops", "updated < ?", old)
         }
     }
 
@@ -109,13 +108,13 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
         }
     }
 
-    /** Все надёжные остановки (не меньше двух наблюдений, не старше 28 дней) в прямоугольнике. */
+    /** Все известные остановки в прямоугольнике. Записи светофоров не удаляются: их только обновляют новые проезды. */
     @Synchronized
     fun stopsIn(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, nowMs: Long): List<StopSpot> = runCatching {
         val out = ArrayList<StopSpot>()
         readableDatabase.rawQuery(
-            "SELECT k, lat, lon, wait FROM stops WHERE n >= 2 AND updated > ? AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
-            arrayOf((nowMs - EXPIRE_MS).toString(), minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString())
+            "SELECT k, lat, lon, wait FROM stops WHERE updated > ? AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
+            arrayOf("0", minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString())
         ).use { c ->
             while (c.moveToNext()) {
                 val bucket = c.getString(0).substringAfterLast(':').toInt()
@@ -124,6 +123,64 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
         }
         out
     }.getOrDefault(emptyList())
+
+    // ---------- обмен с общей базой ----------
+
+    @Synchronized
+    fun dirtyStops(since: Long, limit: Int): List<SharedRow> = runCatching {
+        val out = ArrayList<SharedRow>()
+        readableDatabase.rawQuery(
+            "SELECT k, lat, lon, wait, n, updated FROM stops WHERE updated > ? ORDER BY updated LIMIT ?",
+            arrayOf(since.toString(), limit.toString())
+        ).use { c ->
+            while (c.moveToNext()) out += SharedRow(c.getString(0), c.getDouble(1), c.getDouble(2), c.getDouble(3), c.getInt(4), c.getLong(5))
+        }
+        out
+    }.getOrDefault(emptyList())
+
+    @Synchronized
+    fun dirtyCells(since: Long, limit: Int): List<SharedRow> = runCatching {
+        val out = ArrayList<SharedRow>()
+        readableDatabase.rawQuery(
+            "SELECT k, speed, n, updated FROM cells WHERE updated > ? ORDER BY updated LIMIT ?",
+            arrayOf(since.toString(), limit.toString())
+        ).use { c ->
+            while (c.moveToNext()) out += SharedRow(c.getString(0), 0.0, 0.0, c.getDouble(1), c.getInt(2), c.getLong(3))
+        }
+        out
+    }.getOrDefault(emptyList())
+
+    /** Вливает строку из общей базы в свою (светофоры). */
+    @Synchronized
+    fun mergeStop(r: SharedRow) {
+        runCatching {
+            val db = writableDatabase
+            var mine: SharedRow? = null
+            db.rawQuery("SELECT lat, lon, wait, n, updated FROM stops WHERE k = ?", arrayOf(r.key)).use { c ->
+                if (c.moveToFirst()) mine = SharedRow(r.key, c.getDouble(0), c.getDouble(1), c.getDouble(2), c.getInt(3), c.getLong(4))
+            }
+            val m = mine?.let { combineRows(it, r) } ?: r
+            val v = ContentValues().apply {
+                put("k", m.key); put("lat", m.lat); put("lon", m.lon); put("wait", m.value); put("n", m.n); put("updated", m.updated)
+            }
+            db.insertWithOnConflict("stops", null, v, SQLiteDatabase.CONFLICT_REPLACE)
+        }
+    }
+
+    /** Вливает строку из общей базы в свою (скорости). */
+    @Synchronized
+    fun mergeCell(r: SharedRow) {
+        runCatching {
+            val db = writableDatabase
+            var mine: SharedRow? = null
+            db.rawQuery("SELECT speed, n, updated FROM cells WHERE k = ?", arrayOf(r.key)).use { c ->
+                if (c.moveToFirst()) mine = SharedRow(r.key, 0.0, 0.0, c.getDouble(0), c.getInt(1), c.getLong(2))
+            }
+            val m = mine?.let { combineRows(it, r) } ?: r
+            val v = ContentValues().apply { put("k", m.key); put("speed", m.value); put("n", m.n); put("updated", m.updated) }
+            db.insertWithOnConflict("cells", null, v, SQLiteDatabase.CONFLICT_REPLACE)
+        }
+    }
 
     /** Ожидаемая скорость в квадрате в это время или null, если данных мало или они старые. */
     @Synchronized
@@ -159,6 +216,29 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
             return "$a:$b:$bucket"
         }
     }
+}
+
+/** Строка для обмена: ключ, положение (для светофоров), значение (секунды ожидания или скорость), число наблюдений, время. */
+class SharedRow(val key: String, val lat: Double, val lon: Double, val value: Double, val n: Int, val updated: Long)
+
+/**
+ * Объединяет две записи об одном месте. Если одна заметно новее (больше 14 дней разницы), берётся она целиком,
+ * иначе значения усредняются с весом по числу наблюдений.
+ */
+fun combineRows(a: SharedRow, b: SharedRow): SharedRow {
+    val newer = if (a.updated >= b.updated) a else b
+    val older = if (newer === a) b else a
+    if (newer.updated - older.updated >= 14L * 24 * 3600 * 1000) return newer
+    val total = a.n + b.n
+    val w = if (total > 0) a.n.toDouble() / total else 0.5
+    return SharedRow(
+        key = a.key,
+        lat = a.lat * w + b.lat * (1 - w),
+        lon = a.lon * w + b.lon * (1 - w),
+        value = a.value * w + b.value * (1 - w),
+        n = minOf(total, 20),
+        updated = newer.updated
+    )
 }
 
 /** Место, где обычно стоят, и сколько. */

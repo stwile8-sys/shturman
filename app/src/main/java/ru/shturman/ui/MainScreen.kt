@@ -213,6 +213,11 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         if (showSettings) {
             SettingsSheet(
                 user = user,
+                shareData = s.shareData,
+                onShareChange = vm::setShareData,
+                syncing = s.syncing,
+                syncMessage = s.syncMessage,
+                onSync = vm::syncNow,
                 onSignOut = {
                     showSettings = false
                     onSignOut()

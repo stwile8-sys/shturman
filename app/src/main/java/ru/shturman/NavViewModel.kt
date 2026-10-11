@@ -18,6 +18,7 @@ import ru.shturman.routing.RouteOption
 import ru.shturman.routing.RoutePosition
 import ru.shturman.routing.Router
 import ru.shturman.routing.LimitSeg
+import ru.shturman.routing.SharedSync
 import ru.shturman.routing.Snap
 import ru.shturman.routing.Weather
 import ru.shturman.routing.fetchWeather
@@ -63,7 +64,11 @@ data class NavState(
     /** Ограничение скорости на участке, где мы сейчас едем, км/ч (если оно известно). */
     val limitKmh: Int? = null,
 
-    val weather: Weather? = null
+    val weather: Weather? = null,
+
+    val shareData: Boolean = true,
+    val syncing: Boolean = false,
+    val syncMessage: String? = null
 ) {
     val route: RouteOption? get() = options.getOrNull(selected)
 }
@@ -77,15 +82,22 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private val speedStore = SpeedStore(app)
     private val recorder = SpeedRecorder(speedStore)
     private val stopRecorder = StopRecorder(speedStore)
+    private val sharedSync = SharedSync(app, speedStore)
     private var offRouteCount = 0
     private var rerouting = false
     private var lastRerouteAt = 0L
 
-    private val _state = MutableStateFlow(NavState(dataReady = roadData.isReady()))
+    private val _state = MutableStateFlow(NavState(dataReady = roadData.isReady(), shareData = sharedSync.share))
     val state: StateFlow<NavState> = _state
 
     init {
         downloadDataIfNeeded()
+        // Раз в сутки сами обмениваемся данными с общей базой, тихо
+        viewModelScope.launch {
+            if (System.currentTimeMillis() - sharedSync.lastSyncAt > 24L * 3600 * 1000) {
+                runCatching { sharedSync.sync() }
+            }
+        }
         // Раз в неделю подтягиваем свежие дорожные данные, чтобы старые значения не оставались
         viewModelScope.launch {
             if (roadData.updateIfStale()) router.close()
@@ -265,6 +277,25 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val found = runCatching { router.speedLimits(route.points) }.getOrDefault(emptyList())
             limits = found
+        }
+    }
+
+    fun setShareData(on: Boolean) {
+        sharedSync.share = on
+        _state.update { it.copy(shareData = on) }
+    }
+
+    /** Кнопка «Синхронизировать» в настройках. */
+    fun syncNow() {
+        if (_state.value.syncing) return
+        _state.update { it.copy(syncing = true, syncMessage = null) }
+        viewModelScope.launch {
+            val message = try {
+                sharedSync.sync()
+            } catch (e: Exception) {
+                "Не вышло: ${e.message?.take(120) ?: e.javaClass.simpleName}"
+            }
+            _state.update { it.copy(syncing = false, syncMessage = message) }
         }
     }
 
