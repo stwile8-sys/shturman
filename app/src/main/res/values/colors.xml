@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Цвета тем оформления задаются в ui/themes/AppTheme.kt; здесь только то, что нужно системе до запуска интерфейса -->
+    <color name="window_background">#0A0C10</color>
+</resources>

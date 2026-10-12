@@ -1,6 +1,7 @@
 package ru.shturman.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -48,7 +49,7 @@ fun UpdatePrompt(enabled: Boolean) {
     val downloading = progress != null
     AlertDialog(
         onDismissRequest = { if (!downloading) info = null },
-        title = { Text("Доступно обновление") },
+        title = { Text(stringResource(ru.shturman.R.string.s_1c592b84)) },
         text = {
             Column {
                 Text("Вышла новая сборка ${update.build}, у вас ${BuildConfig.BUILD_NUMBER}. Установить сейчас?")
@@ -88,10 +89,10 @@ fun UpdatePrompt(enabled: Boolean) {
                         }
                     }
                 }
-            ) { Text("Установить") }
+            ) { Text(stringResource(ru.shturman.R.string.s_7fe136f1)) }
         },
         dismissButton = {
-            TextButton(enabled = !downloading, onClick = { info = null }) { Text("Не сейчас") }
+            TextButton(enabled = !downloading, onClick = { info = null }) { Text(stringResource(ru.shturman.R.string.s_660b3295)) }
         }
     )
 }

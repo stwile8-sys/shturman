@@ -1,6 +1,7 @@
 package ru.shturman.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -141,8 +142,7 @@ fun SearchScreen(
                 }
             }
         }
-        Text(
-            text = "Нажмите «Дом» или «Работа», чтобы поехать. Долгое нажатие — изменить адрес.",
+        Text(text = stringResource(ru.shturman.R.string.s_dd1a6281),
             color = ShColors.TextSecondary,
             fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
@@ -155,14 +155,12 @@ fun SearchScreen(
                 fontSize = 14.sp,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
             )
-            searching && results.isEmpty() -> Text(
-                text = "Ищу…",
+            searching && results.isEmpty() -> Text(text = stringResource(ru.shturman.R.string.s_5ab71ea3),
                 color = ShColors.TextSecondary,
                 style = ShText.Small,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
             )
-            query.trim().length >= 3 && !searching && results.isEmpty() -> Text(
-                text = "Ничего не найдено",
+            query.trim().length >= 3 && !searching && results.isEmpty() -> Text(text = stringResource(ru.shturman.R.string.s_8767f9ec),
                 color = ShColors.TextSecondary,
                 style = ShText.Small,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)

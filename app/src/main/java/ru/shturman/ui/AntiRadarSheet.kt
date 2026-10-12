@@ -1,6 +1,7 @@
 package ru.shturman.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -113,8 +114,7 @@ fun AntiRadarSheet(onDismiss: () -> Unit) {
 
             if (installed && !access) {
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    "Чтобы видеть его статус и останавливать его отсюда, разрешите «Штурману» доступ к уведомлениям.",
+                Text(stringResource(ru.shturman.R.string.s_63627b6b),
                     color = ShColors.TextSecondary, fontSize = 13.sp, textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(10.dp))

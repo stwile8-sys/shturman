@@ -1,6 +1,7 @@
 package ru.shturman.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -90,10 +91,9 @@ fun MusicSheet(onDismiss: () -> Unit) {
                 !access -> {
                     Cover(null)
                     Spacer(Modifier.height(18.dp))
-                    Text("Нужен доступ к музыке", style = ShText.Distance.copy(fontSize = 22.sp), color = ShColors.TextPrimary)
+                    Text(stringResource(ru.shturman.R.string.s_9ae289ed), style = ShText.Distance.copy(fontSize = 22.sp), color = ShColors.TextPrimary)
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Чтобы показывать, что играет в Яндекс Музыке, и управлять ею, разрешите приложению «Штурман» доступ к уведомлениям. Ваши уведомления приложение не читает.",
+                    Text(stringResource(ru.shturman.R.string.s_4da9d786),
                         color = ShColors.TextSecondary, fontSize = 14.sp, textAlign = TextAlign.Center
                     )
                     Spacer(Modifier.height(18.dp))
@@ -102,10 +102,9 @@ fun MusicSheet(onDismiss: () -> Unit) {
                 m == null -> {
                     Cover(null)
                     Spacer(Modifier.height(18.dp))
-                    Text("Ничего не играет", style = ShText.Distance.copy(fontSize = 22.sp), color = ShColors.TextPrimary)
+                    Text(stringResource(ru.shturman.R.string.s_87e63aae), style = ShText.Distance.copy(fontSize = 22.sp), color = ShColors.TextPrimary)
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Включите трек в Яндекс Музыке, и он появится здесь.",
+                    Text(stringResource(ru.shturman.R.string.s_842334ad),
                         color = ShColors.TextSecondary, fontSize = 14.sp, textAlign = TextAlign.Center
                     )
                     Spacer(Modifier.height(18.dp))
@@ -122,7 +121,7 @@ fun MusicSheet(onDismiss: () -> Unit) {
             if (access && music != null) {
                 TextButton(onClick = {
                     if (!Music.openYandex(context)) message = "Яндекс Музыка не установлена на этом телефоне"
-                }) { Text("Открыть Яндекс Музыку", color = ShColors.TextSecondary, style = ShText.Small) }
+                }) { Text(stringResource(ru.shturman.R.string.s_8f7d2d75), color = ShColors.TextSecondary, style = ShText.Small) }
             }
         }
     }

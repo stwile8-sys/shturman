@@ -1,6 +1,7 @@
 package ru.shturman.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
@@ -109,29 +110,29 @@ fun SettingsSheet(
 
             Divider()
 
-            Section("Тема оформления")
+            Section(stringResource(ru.shturman.R.string.s_ca179901))
             ru.shturman.ui.themes.ThemePicker(selected = s.theme, onSelect = vm::setTheme)
             var themeSounds by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.ui.themes.ThemeSounds.enabled) }
-            SwitchRow("Звуки темы", "Короткие звуки нажатий, начала маршрута, синхронизации и ошибок. Голос навигатора не меняется.", themeSounds) {
+            SwitchRow(stringResource(ru.shturman.R.string.s_7be14764), stringResource(ru.shturman.R.string.s_3320af3e), themeSounds) {
                 themeSounds = it
                 vm.setThemeSounds(it)
             }
 
-            Section("Голос и звуки")
-            SwitchRow("Голосовые подсказки", "Говорит о поворотах голосом телефона. Нужен русский голос в настройках речи Android.", s.voiceOn, vm::setVoiceOn)
+            Section(stringResource(ru.shturman.R.string.s_9232bbf3))
+            SwitchRow(stringResource(ru.shturman.R.string.s_d8914beb), stringResource(ru.shturman.R.string.s_4067a129), s.voiceOn, vm::setVoiceOn)
             Button(
                 onClick = vm::testVoice,
-                modifier = Modifier.fillMaxWidth().height(44.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-            ) { Text("Проверить голос", style = ShText.Small) }
+            ) { Text(stringResource(ru.shturman.R.string.s_fc6d20f9), style = ShText.Small) }
             s.voiceStatus?.let { Text(text = it, color = ShColors.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
-            SwitchRow("Ночной режим голоса", "С 22:00 до 6:00 голос тише, а фразы короче.", s.nightVoice, vm::setNightVoice)
-            SwitchRow("Вибрация перед поворотом", "Короткий отклик за 300, 150 и 50 метров до поворота.", s.turnVibro, vm::setTurnVibro)
-            SwitchRow("Звук при превышении", "Мягкое «вжжж», громче по мере превышения скорости.", s.overspeedSound, vm::setOverspeedSound)
+            SwitchRow(stringResource(ru.shturman.R.string.s_66efd4ed), stringResource(ru.shturman.R.string.s_a483e67b), s.nightVoice, vm::setNightVoice)
+            SwitchRow(stringResource(ru.shturman.R.string.s_dfe8ad96), stringResource(ru.shturman.R.string.s_f54ed96c), s.turnVibro, vm::setTurnVibro)
+            SwitchRow(stringResource(ru.shturman.R.string.s_29323c03), stringResource(ru.shturman.R.string.s_774dfed6), s.overspeedSound, vm::setOverspeedSound)
 
-            Section("Съезд с маршрута")
-            Text(text = "Чувствительность: как быстро навигатор решает, что вы свернули, и строит новый путь.", color = ShColors.TextSecondary, fontSize = 13.sp)
+            Section(stringResource(ru.shturman.R.string.s_edc3ad9b))
+            Text(text = stringResource(ru.shturman.R.string.s_a626bf4b), color = ShColors.TextSecondary, fontSize = 13.sp)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 listOf("Низкая", "Средняя", "Высокая").forEachIndexed { i, label ->
@@ -148,18 +149,18 @@ fun SettingsSheet(
                 }
             }
 
-            Section("Экран")
-            SwitchRow("Полноэкранный режим", "Скрывает системные панели Android. Вернуть их можно свайпом от края.", s.fullscreen, vm::setFullscreen)
-            SwitchRow("Спутник", "Снимки со спутника вместо обычной карты.", s.satellite, vm::setSatellite)
+            Section(stringResource(ru.shturman.R.string.s_ebadc474))
+            SwitchRow(stringResource(ru.shturman.R.string.s_42fc7088), stringResource(ru.shturman.R.string.s_d64dbd69), s.fullscreen, vm::setFullscreen)
+            SwitchRow(stringResource(ru.shturman.R.string.s_5b66acf3), stringResource(ru.shturman.R.string.s_efc34ccd), s.satellite, vm::setSatellite)
 
-            Section("Нижняя карточка в поездке")
+            Section(stringResource(ru.shturman.R.string.s_4a9ccc8c))
             CheckRow("Проценты пути", s.cardPercent) { vm.setCardOption("percent", it) }
             CheckRow("Сколько проехали из скольких", s.cardDistance) { vm.setCardOption("distance", it) }
             CheckRow("Время прибытия", s.cardEta) { vm.setCardOption("eta", it) }
             CheckRow("Сколько осталось (время и км)", s.cardRemaining) { vm.setCardOption("remaining", it) }
             CheckRow("Расход бензина и стоимость", s.cardFuel) { vm.setCardOption("fuel", it) }
 
-            Section("Бензин")
+            Section(stringResource(ru.shturman.R.string.s_5191dcb3))
             var consumption by remember(s.consumption) { mutableStateOf(trimNumber(s.consumption)) }
             var price by remember(s.fuelPrice) { mutableStateOf(trimNumber(s.fuelPrice)) }
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
@@ -173,7 +174,7 @@ fun SettingsSheet(
                 }
             }
 
-            Section("Караван")
+            Section(stringResource(ru.shturman.R.string.s_9c58e95b))
             var code by remember { mutableStateOf("") }
             if (s.caravanCode != null) {
                 Text(
@@ -187,15 +188,15 @@ fun SettingsSheet(
                     fontSize = 13.sp
                 )
                 TextButton(onClick = vm::leaveCaravan) {
-                    Text("Выйти из каравана", color = ShColors.Danger, style = ShText.Small)
+                    Text(stringResource(ru.shturman.R.string.s_25793d41), color = ShColors.Danger, style = ShText.Small)
                 }
             } else {
                 Button(
                     onClick = vm::createCaravan,
-                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-                ) { Text("Создать караван (я веду)", style = ShText.Small) }
+                ) { Text(stringResource(ru.shturman.R.string.s_c8735bdd), style = ShText.Small) }
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     NumberField("Код из 4 цифр", code, Modifier.weight(1f), integer = true) { code = it.filter(Char::isDigit).take(4) }
@@ -204,29 +205,29 @@ fun SettingsSheet(
                         onClick = { vm.joinCaravan(code) },
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = ShColors.Accent, contentColor = ShColors.Background)
-                    ) { Text("Войти", style = ShText.Button) }
+                    ) { Text(stringResource(ru.shturman.R.string.s_63a75375), style = ShText.Button) }
                 }
             }
             s.caravanMessage?.let { Text(text = it, color = ShColors.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
 
             if (isAdmin) {
-                Section("Для владельца")
+                Section(stringResource(ru.shturman.R.string.s_f42d869a))
                 Button(
                     onClick = onOpenAdmin,
-                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-                ) { Text("Коды доступа", style = ShText.Small) }
+                ) { Text(stringResource(ru.shturman.R.string.s_1abf35b1), style = ShText.Small) }
             }
 
-            Section("Приватность")
+            Section(stringResource(ru.shturman.R.string.s_0899eda1))
             SwitchRow(
                 "Участвовать в общем обучении",
                 "Уходят только обезличенные данные о дорогах. Ваши координаты — никогда.",
                 s.shareData, vm::setShareData
             )
             Spacer(Modifier.height(6.dp))
-            Text(text = "Вход через Google обязателен, анонимного режима нет.", color = ShColors.TextSecondary, fontSize = 13.sp)
+            Text(text = stringResource(ru.shturman.R.string.s_0f3468a4), color = ShColors.TextSecondary, fontSize = 13.sp)
 
             Spacer(Modifier.height(20.dp))
             Button(
@@ -252,12 +253,12 @@ fun SettingsSheet(
                         ", голос: ${s.voiceMessage}, состояние голоса: ${s.voiceStatus}, услышано: ${s.heardText}, аккаунт: ${user.email}"
                     ru.shturman.Report.send(ctx, sum)
                 },
-                modifier = Modifier.fillMaxWidth().height(44.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-            ) { Text("Отправить отчёт разработчику", style = ShText.Small) }
+            ) { Text(stringResource(ru.shturman.R.string.s_d995e9c5), style = ShText.Small) }
 
-            Section("Уведомления и автозапуск")
+            Section(stringResource(ru.shturman.R.string.s_e2ed7ad6))
             val ctxN = androidx.compose.ui.platform.LocalContext.current
             var nTrip by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.tripNotice(ctxN)) }
             var nQuiet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.quietHours(ctxN)) }
@@ -266,8 +267,8 @@ fun SettingsSheet(
             var nCharge by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.chargeAutostart(ctxN)) }
             var btName by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.btName(ctxN)) }
             var btList by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<Pair<String, String>>?>(null) }
-            SwitchRow("Итог поездки", "Уведомление со статистикой, когда поездка закончилась.", nTrip) { nTrip = it; ru.shturman.service.AutoPrefs.set(ctxN, "notif_trip", it) }
-            SwitchRow("Тихие часы", "С 23:00 до 7:00 необязательные уведомления не показываются.", nQuiet) { nQuiet = it; ru.shturman.service.AutoPrefs.set(ctxN, "quiet_hours", it) }
+            SwitchRow(stringResource(ru.shturman.R.string.s_85e8c0f1), stringResource(ru.shturman.R.string.s_76e7af47), nTrip) { nTrip = it; ru.shturman.service.AutoPrefs.set(ctxN, "notif_trip", it) }
+            SwitchRow(stringResource(ru.shturman.R.string.s_c1c10eb5), stringResource(ru.shturman.R.string.s_63e3c45e), nQuiet) { nQuiet = it; ru.shturman.service.AutoPrefs.set(ctxN, "quiet_hours", it) }
             fun loadBonded() {
                 btList = runCatching {
                     @Suppress("MissingPermission")
@@ -278,8 +279,8 @@ fun SettingsSheet(
             val btPerm = androidx.activity.compose.rememberLauncherForActivityResult(
                 androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
             ) { ok -> if (ok) loadBonded() }
-            SwitchRow("Автозапуск при подключении к авто", "Когда телефон подключается к выбранному Bluetooth авто, придёт предложение открыть Штурман.", nBt) { nBt = it; ru.shturman.service.AutoPrefs.set(ctxN, "bt_autostart", it) }
-            SwitchRow("Остановка маршрута при отключении", "Когда выбранное Bluetooth авто отключается, маршрут отменяется.", nBtStop) { nBtStop = it; ru.shturman.service.AutoPrefs.set(ctxN, "bt_autostop", it) }
+            SwitchRow(stringResource(ru.shturman.R.string.s_1d63dbdf), stringResource(ru.shturman.R.string.s_ce0470a5), nBt) { nBt = it; ru.shturman.service.AutoPrefs.set(ctxN, "bt_autostart", it) }
+            SwitchRow(stringResource(ru.shturman.R.string.s_7ef4135a), stringResource(ru.shturman.R.string.s_4cd9559c), nBtStop) { nBtStop = it; ru.shturman.service.AutoPrefs.set(ctxN, "bt_autostop", it) }
             Text(text = "Bluetooth авто: ${btName ?: "не выбрано"}", color = ShColors.TextSecondary, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
             Button(
@@ -291,9 +292,9 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-            ) { Text("Выбрать Bluetooth авто", style = ShText.Small) }
+            ) { Text(stringResource(ru.shturman.R.string.s_05e54559), style = ShText.Small) }
             btList?.let { list ->
-                if (list.isEmpty()) Text("Нет спаренных устройств. Сначала подключите телефон к авто в настройках Bluetooth.", color = ShColors.TextSecondary, fontSize = 13.sp)
+                if (list.isEmpty()) Text(stringResource(ru.shturman.R.string.s_120f7f9b), color = ShColors.TextSecondary, fontSize = 13.sp)
                 list.forEach { (name, addr) ->
                     TextButton(
                         onClick = { ru.shturman.service.AutoPrefs.setAddress(ctxN, addr, name); btName = name; btList = null },
@@ -301,9 +302,9 @@ fun SettingsSheet(
                     ) { Text(name, color = ShColors.Accent, style = ShText.Small) }
                 }
             }
-            SwitchRow("Автозапуск при подключении зарядки", "Придёт предложение открыть Штурман, когда подключается зарядка.", nCharge) { nCharge = it; ru.shturman.service.AutoPrefs.set(ctxN, "charge_autostart", it) }
+            SwitchRow(stringResource(ru.shturman.R.string.s_d36f16c1), stringResource(ru.shturman.R.string.s_6789d352), nCharge) { nCharge = it; ru.shturman.service.AutoPrefs.set(ctxN, "charge_autostart", it) }
 
-            Section("Резервная копия и положение")
+            Section(stringResource(ru.shturman.R.string.s_b230ab07))
             var backupMsg by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
             val backupScope = androidx.compose.runtime.rememberCoroutineScope()
             val ctxB = androidx.compose.ui.platform.LocalContext.current
@@ -313,12 +314,12 @@ fun SettingsSheet(
                     onClick = { backupMsg = "Сохраняю…"; backupScope.launch { backupMsg = vm.backupSettings() } },
                     modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-                ) { Text("Сохранить копию", style = ShText.Small) }
+                ) { Text(stringResource(ru.shturman.R.string.s_85ff0b56), style = ShText.Small) }
                 Button(
                     onClick = { backupMsg = "Восстанавливаю…"; backupScope.launch { backupMsg = vm.restoreSettings() } },
                     modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-                ) { Text("Восстановить", style = ShText.Small) }
+                ) { Text(stringResource(ru.shturman.R.string.s_f5682b32), style = ShText.Small) }
             }
             Spacer(Modifier.height(8.dp))
             Button(
@@ -333,9 +334,9 @@ fun SettingsSheet(
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-            ) { Text("Поделиться местоположением", style = ShText.Small) }
+            ) { Text(stringResource(ru.shturman.R.string.s_1db3ddfa), style = ShText.Small) }
 
-            Section("Статистика поездок")
+            Section(stringResource(ru.shturman.R.string.s_6ac9c557))
             var statsText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(vm.statsText()) }
             Text(text = statsText, color = ShColors.TextSecondary, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
@@ -354,16 +355,16 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-            ) { Text("Экспорт поездок и заправок (CSV)", style = ShText.Small) }
+            ) { Text(stringResource(ru.shturman.R.string.s_916157e7), style = ShText.Small) }
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = { vm.clearTrips(); statsText = vm.statsText() },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-            ) { Text("Очистить историю поездок", style = ShText.Small) }
+            ) { Text(stringResource(ru.shturman.R.string.s_422a09c7), style = ShText.Small) }
 
-            Section("Дневник заправок")
+            Section(stringResource(ru.shturman.R.string.s_fb4ac830))
             var refuelList by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(vm.refuelsText()) }
             if (refuelList.isNotBlank()) Text(text = refuelList, color = ShColors.TextSecondary, fontSize = 13.sp)
             var rfPlace by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
@@ -371,7 +372,7 @@ fun SettingsSheet(
             var rfPrice by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
             Spacer(Modifier.height(6.dp))
             TextField(
-                value = rfPlace, onValueChange = { rfPlace = it.take(40) }, label = { Text("Где заправились", fontSize = 12.sp) },
+                value = rfPlace, onValueChange = { rfPlace = it.take(40) }, label = { Text(stringResource(ru.shturman.R.string.s_a3c3bce3), fontSize = 12.sp) },
                 singleLine = true, shape = RoundedCornerShape(14.dp),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = ShColors.SearchField, unfocusedContainerColor = ShColors.SearchField,
@@ -399,11 +400,11 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-            ) { Text("Записать заправку", style = ShText.Small) }
+            ) { Text(stringResource(ru.shturman.R.string.s_d2e77ad1), style = ShText.Small) }
 
-            Section("Техобслуживание")
+            Section(stringResource(ru.shturman.R.string.s_57d32d98))
             var svcKm by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(vm.serviceIntervalKm.takeIf { it > 0 }?.toString() ?: "") }
-            Text(text = "Напомню перед поездкой, когда пробег с прошлого ТО достигнет этого числа. Пусто — не напоминать.", color = ShColors.TextSecondary, fontSize = 13.sp)
+            Text(text = stringResource(ru.shturman.R.string.s_1d36c01c), color = ShColors.TextSecondary, fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
             NumberField("Интервал ТО, км", svcKm, Modifier.fillMaxWidth(), integer = true) {
                 svcKm = it.filter { c -> c.isDigit() }.take(6)
@@ -415,9 +416,9 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-            ) { Text("ТО сделано сегодня", style = ShText.Small) }
+            ) { Text(stringResource(ru.shturman.R.string.s_e639e8c2), style = ShText.Small) }
 
-            Section("Данные")
+            Section(stringResource(ru.shturman.R.string.s_145f378b))
             var cacheText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
             var resetArmed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
             androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -433,7 +434,7 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-            ) { Text("Очистить кэш", style = ShText.Small) }
+            ) { Text(stringResource(ru.shturman.R.string.s_abe64288), style = ShText.Small) }
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = {
@@ -446,7 +447,7 @@ fun SettingsSheet(
 
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
-                Text(text = "Выйти из аккаунта", color = ShColors.TextSecondary, style = ShText.Small)
+                Text(text = stringResource(ru.shturman.R.string.s_6d4183b7), color = ShColors.TextSecondary, style = ShText.Small)
             }
         }
     }

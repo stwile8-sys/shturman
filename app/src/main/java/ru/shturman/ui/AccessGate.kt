@@ -1,6 +1,7 @@
 package ru.shturman.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -53,23 +54,22 @@ fun AccessGate(uid: String, onSignOut: () -> Unit, content: @Composable () -> Un
 
     when (val st = state) {
         AccessState.Granted -> content()
-        AccessState.Checking -> GateBox { Text("Проверяю доступ…", color = ShColors.TextSecondary, style = ShText.Small) }
+        AccessState.Checking -> GateBox { Text(stringResource(ru.shturman.R.string.s_cf1ae449), color = ShColors.TextSecondary, style = ShText.Small) }
         AccessState.NeedCode -> {
             var code by remember { mutableStateOf("") }
             var error by remember { mutableStateOf<String?>(null) }
             var busy by remember { mutableStateOf(false) }
             GateBox {
-                Text("Введите код активации", color = ShColors.TextPrimary, style = ShText.Distance.copy(fontSize = 24.sp), textAlign = TextAlign.Center)
+                Text(stringResource(ru.shturman.R.string.s_2064be22), color = ShColors.TextPrimary, style = ShText.Distance.copy(fontSize = 24.sp), textAlign = TextAlign.Center)
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "Код выдаёт тот, кто передал вам приложение. Он сработает один раз и закрепится за вашим аккаунтом и этим телефоном.",
+                Text(stringResource(ru.shturman.R.string.s_c08dc6d8),
                     color = ShColors.TextSecondary, fontSize = 14.sp, textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(20.dp))
                 TextField(
                     value = code,
                     onValueChange = { code = it.uppercase().take(14); error = null },
-                    placeholder = { Text("SH-XXXX-XXXX", color = ShColors.TextSecondary) },
+                    placeholder = { Text(stringResource(ru.shturman.R.string.s_2c73d337), color = ShColors.TextSecondary) },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
                     colors = fieldColors(),
@@ -94,13 +94,13 @@ fun AccessGate(uid: String, onSignOut: () -> Unit, content: @Composable () -> Un
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ShColors.Accent, contentColor = ShColors.Background)
                 ) { Text(if (busy) "Проверяю…" else "Активировать", style = ShText.Button) }
-                TextButton(onClick = onSignOut) { Text("Выйти из аккаунта", color = ShColors.TextSecondary, style = ShText.Small) }
+                TextButton(onClick = onSignOut) { Text(stringResource(ru.shturman.R.string.s_6d4183b7), color = ShColors.TextSecondary, style = ShText.Small) }
             }
         }
         is AccessState.Blocked -> GateBox {
             Text(st.message, color = ShColors.Danger, style = ShText.Small, textAlign = TextAlign.Center)
             Spacer(Modifier.height(12.dp))
-            TextButton(onClick = onSignOut) { Text("Выйти из аккаунта", color = ShColors.TextSecondary, style = ShText.Small) }
+            TextButton(onClick = onSignOut) { Text(stringResource(ru.shturman.R.string.s_6d4183b7), color = ShColors.TextSecondary, style = ShText.Small) }
         }
         is AccessState.Failed -> GateBox {
             Text(st.message, color = ShColors.Danger, style = ShText.Small, textAlign = TextAlign.Center)
@@ -108,8 +108,8 @@ fun AccessGate(uid: String, onSignOut: () -> Unit, content: @Composable () -> Un
             Button(
                 onClick = { attempt++ },
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.Accent, contentColor = ShColors.Background)
-            ) { Text("Повторить", style = ShText.Button) }
-            TextButton(onClick = onSignOut) { Text("Выйти из аккаунта", color = ShColors.TextSecondary, style = ShText.Small) }
+            ) { Text(stringResource(ru.shturman.R.string.s_b914bbbd), style = ShText.Button) }
+            TextButton(onClick = onSignOut) { Text(stringResource(ru.shturman.R.string.s_6d4183b7), color = ShColors.TextSecondary, style = ShText.Small) }
         }
     }
 }

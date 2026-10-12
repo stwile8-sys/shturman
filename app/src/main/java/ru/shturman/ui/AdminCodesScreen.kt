@@ -1,6 +1,7 @@
 package ru.shturman.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -83,7 +84,7 @@ fun AdminCodesScreen(onClose: () -> Unit) {
             MapButton(icon = Icons.Filled.Close, description = "Закрыть", onClick = onClose)
             Spacer(Modifier.padding(start = 12.dp))
             Column {
-                Text("Коды доступа", color = ShColors.TextPrimary, style = ShText.Distance.copy(fontSize = 22.sp))
+                Text(stringResource(ru.shturman.R.string.s_1abf35b1), color = ShColors.TextPrimary, style = ShText.Distance.copy(fontSize = 22.sp))
                 Text("Свободно: $free · использовано: ${rows.size - free}", color = ShColors.TextSecondary, fontSize = 13.sp)
             }
         }
@@ -92,12 +93,12 @@ fun AdminCodesScreen(onClose: () -> Unit) {
                 onClick = { run { Access.createCodes(1) } },
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.Accent, contentColor = ShColors.Background)
-            ) { Text("Создать код", style = ShText.Button) }
+            ) { Text(stringResource(ru.shturman.R.string.s_8f07f035), style = ShText.Button) }
             Button(
                 onClick = { run { Access.createCodes(5) } },
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
-            ) { Text("Создать 5", style = ShText.Button) }
+            ) { Text(stringResource(ru.shturman.R.string.s_fc80f0ff), style = ShText.Button) }
         }
         message?.let { Text(it, color = ShColors.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(16.dp)) }
 
@@ -136,18 +137,18 @@ fun AdminCodesScreen(onClose: () -> Unit) {
                     }
                     Row {
                         TextButton(onClick = { clipboard.setText(AnnotatedString(row.code)); message = "Скопировано: ${row.code}" }) {
-                            Text("Копировать", color = ShColors.Accent, fontSize = 13.sp)
+                            Text(stringResource(ru.shturman.R.string.s_112b141b), color = ShColors.Accent, fontSize = 13.sp)
                         }
                         if (!row.used) {
                             TextButton(onClick = { run { Access.deleteCode(row.code) } }) {
-                                Text("Удалить", color = ShColors.Danger, fontSize = 13.sp)
+                                Text(stringResource(ru.shturman.R.string.s_ed2bbfbc), color = ShColors.Danger, fontSize = 13.sp)
                             }
                         } else {
                             TextButton(onClick = { run { Access.resetDevice(row.usedByUid) } }) {
-                                Text("Сбросить устройство", color = ShColors.Accent, fontSize = 13.sp)
+                                Text(stringResource(ru.shturman.R.string.s_b48e76ae), color = ShColors.Accent, fontSize = 13.sp)
                             }
                             TextButton(onClick = { run { Access.revoke(row.usedByUid) } }) {
-                                Text("Отозвать", color = ShColors.Danger, fontSize = 13.sp)
+                                Text(stringResource(ru.shturman.R.string.s_7e645147), color = ShColors.Danger, fontSize = 13.sp)
                             }
                         }
                     }
