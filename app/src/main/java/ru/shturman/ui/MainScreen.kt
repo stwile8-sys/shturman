@@ -1,6 +1,7 @@
 package ru.shturman.ui
 
 import android.Manifest
+import androidx.compose.ui.res.stringResource
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -426,6 +427,6 @@ private fun SpeedReadout(kmh: Int, over: Boolean, modifier: Modifier = Modifier)
             color = if (over) ShColors.Danger else ShColors.TextPrimary,
             style = ShText.Distance.copy(fontSize = 24.sp)
         )
-        Text(text = "км/ч", color = ShColors.TextSecondary, fontSize = 11.sp)
+        Text(text = stringResource(ru.shturman.R.string.s_fee7a82e), color = ShColors.TextSecondary, fontSize = 11.sp)
     }
 }

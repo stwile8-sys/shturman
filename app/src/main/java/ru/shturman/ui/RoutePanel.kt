@@ -1,6 +1,7 @@
 package ru.shturman.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -121,7 +122,7 @@ fun RoutePanel(
                 contentColor = ShColors.Background
             )
         ) {
-            Text(text = "Поехали", style = ShText.Button)
+            Text(text = stringResource(ru.shturman.R.string.s_8276711c), style = ShText.Button)
         }
     }
 }

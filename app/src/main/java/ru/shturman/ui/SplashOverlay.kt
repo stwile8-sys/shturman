@@ -1,6 +1,7 @@
 package ru.shturman.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -103,8 +104,7 @@ fun SplashOverlay(onPlaySound: () -> Unit, onFinished: () -> Unit) {
         // Спонсорская подпись
         val sponsorA = if (t < SPONSOR_END) span(t, 200f, 600f) * (1f - span(t, 1300f, SPONSOR_END)) else 0f
         if (sponsorA > 0f) {
-            Text(
-                text = "ПРЕДСТАВЛЯЕТ",
+            Text(text = stringResource(ru.shturman.R.string.s_938c5e9f),
                 color = Color.White.copy(alpha = 0.7f * sponsorA),
                 style = TextStyle(fontSize = 13.sp, letterSpacing = 6.sp),
                 modifier = Modifier.align(Alignment.Center).padding(top = 150.dp)
@@ -112,8 +112,7 @@ fun SplashOverlay(onPlaySound: () -> Unit, onFinished: () -> Unit) {
         }
         val titleA = span(t, TITLE_START, TITLE_START + 700f)
         if (titleA > 0f) {
-            Text(
-                text = "GERTY AIRLINE",
+            Text(text = stringResource(ru.shturman.R.string.s_63090ef7),
                 color = Color.White.copy(alpha = titleA),
                 style = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = 9.sp),
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 130.dp)

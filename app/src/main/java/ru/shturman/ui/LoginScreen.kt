@@ -1,6 +1,7 @@
 package ru.shturman.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,16 +57,14 @@ fun LoginScreen() {
             modifier = Modifier.align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "Штурман",
+            Text(text = stringResource(ru.shturman.R.string.s_d246d2cf),
                 color = ShColors.TextPrimary,
                 fontFamily = NumberFont,
                 fontWeight = FontWeight.Bold,
                 fontSize = 44.sp
             )
             Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Навигатор, который думает наперёд",
+            Text(text = stringResource(ru.shturman.R.string.s_ce99d0a6),
                 color = ShColors.TextSecondary,
                 style = ShText.Street,
                 textAlign = TextAlign.Center
@@ -115,12 +114,11 @@ fun LoginScreen() {
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text(text = "Войти через Google", style = ShText.Button)
+                    Text(text = stringResource(ru.shturman.R.string.s_98bf3d4f), style = ShText.Button)
                 }
             }
 
-            Text(
-                text = "Вход через Google обязателен, анонимного режима нет.",
+            Text(text = stringResource(ru.shturman.R.string.s_0f3468a4),
                 color = ShColors.TextSecondary,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center

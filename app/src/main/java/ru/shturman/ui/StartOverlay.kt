@@ -1,6 +1,7 @@
 package ru.shturman.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -79,8 +80,7 @@ fun StartOverlay(trigger: Int) {
             }
         }
 
-        Text(
-            text = "ПОЕХАЛИ",
+        Text(text = stringResource(ru.shturman.R.string.s_5bc7124d),
             color = Color.White,
             fontFamily = NumberFont,
             fontWeight = FontWeight.Bold,
