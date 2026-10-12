@@ -1,10 +1,11 @@
 package ru.shturman.ui
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -17,161 +18,219 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.PI
-import kotlin.math.cos
+import kotlinx.coroutines.delay
 import kotlin.math.min
 import kotlin.math.sin
 
+// Хронология заставки, миллисекунды от конца первой чёрной паузы
+private const val BLACK_HOLD_MS = 900L      // чёрный экран, пока приложение грузится
+private const val SPONSOR_END = 1700f       // «спонсорская» заставка
+private const val SKY_START = 2200f         // из чёрного проявляется небо
+private const val SOUND_AT = 2900f          // начало появления самолёта и звук
+private const val REVEAL_END = 5000f        // самолёт полностью проявился
+private const val TITLE_START = 4300f
+private const val FADE_START = 5400f
+private const val TOTAL = 5800f
+
+private fun ease(x: Float): Float {
+    val t = x.coerceIn(0f, 1f)
+    return t * t * (3f - 2f * t)
+}
+
+private fun span(t: Float, a: Float, b: Float) = ease((t - a) / (b - a))
+
 /**
- * Заставка при запуске: кольцо компаса собирается, оранжевая стрелка делает оборот и встаёт на север,
- * проявляется название. Играет около 2,6 секунды, потом плавно гаснет.
+ * Заставка: чёрный экран, пока приложение грузится; короткая «заставка спонсора»; затем на фоне неба
+ * из чёрной фигуры медленно проявляется самолёт, в этот момент играет звук. Касание пропускает заставку.
  */
 @Composable
-fun SplashOverlay(onFinished: () -> Unit) {
-    val progress = remember { Animatable(0f) }
+fun SplashOverlay(onPlaySound: () -> Unit, onFinished: () -> Unit) {
+    val clock = remember { Animatable(0f) }
     val fade = remember { Animatable(1f) }
+    val done = remember { booleanArrayOf(false) }
 
     LaunchedEffect(Unit) {
-        progress.animateTo(1f, tween(2900, easing = CubicBezierEasing(0.22f, 0.8f, 0.3f, 1f)))
+        delay(BLACK_HOLD_MS)
+        var soundPlayed = false
+        // Звук запускается в нужный момент по таймеру, не зависящему от кадров
+        clock.animateTo(TOTAL, tween(TOTAL.toInt(), easing = LinearEasing)) {
+            if (!soundPlayed && value >= SOUND_AT) {
+                soundPlayed = true
+                onPlaySound()
+            }
+        }
         fade.animateTo(0f, tween(350))
-        onFinished()
+        if (!done[0]) { done[0] = true; onFinished() }
     }
 
-    val p = progress.value
+    val t = clock.value
     Box(
         modifier = Modifier
             .fillMaxSize()
             .alpha(fade.value)
-            .background(Color(0xFF0A0C10)),
+            .background(Color.Black)
+            .pointerInput(Unit) {
+                detectTapGestures {
+                    if (!done[0]) { done[0] = true; onFinished() }
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val c = Offset(size.width / 2, size.height * 0.42f)
-            val r = min(size.width, size.height) * 0.26f * (0.7f + 0.3f * p)
-            val cyan = Color(0xFF3DDCFF)
-            val orange = Color(0xFFFF8A00)
+            val sponsorA = if (t < SPONSOR_END) span(t, 0f, 400f) * (1f - span(t, 1300f, SPONSOR_END)) else 0f
+            if (sponsorA > 0f) drawSponsor(sponsorA, t)
 
-            // звёзды, мерцающие на фоне
-            for (i in 0 until 46) {
-                val sx = ((i * 7919) % 1000) / 1000f * size.width
-                val sy = ((i * 104729) % 1000) / 1000f * size.height
-                val tw = (0.5f + 0.5f * sin(p * 22f + i)).coerceIn(0f, 1f)
-                drawCircle(Color.White.copy(alpha = 0.12f + 0.4f * tw * min(1f, p * 2f)), radius = 1.5f + (i % 3), center = Offset(sx, sy))
-            }
-            // расходящиеся пульсирующие кольца
-            for (k in 0 until 3) {
-                val t = (p * 1.7f - k * 0.22f).coerceIn(0f, 1f)
-                if (t > 0f && t < 1f) {
-                    drawCircle(cyan.copy(alpha = (1f - t) * 0.35f), radius = r * (1.3f + 1.4f * t), center = c, style = Stroke(width = r * 0.025f))
-                }
-            }
-            // радарный луч, который крутится и гаснет
-            if (p < 0.9f) {
-                drawArc(
-                    color = cyan.copy(alpha = 0.16f * (1f - p)),
-                    startAngle = p * 900f,
-                    sweepAngle = 55f,
-                    useCenter = true,
-                    topLeft = Offset(c.x - r * 1.25f, c.y - r * 1.25f),
-                    size = Size(r * 2.5f, r * 2.5f)
-                )
-            }
-            // внешнее тёмное кольцо и голубое кольцо, которое рисуется по дуге
-            drawCircle(Color(0xFF1E242C).copy(alpha = p), radius = r * 1.27f, center = c, style = Stroke(width = r * 0.09f))
-            drawArc(
-                color = cyan,
-                startAngle = -90f,
-                sweepAngle = 360f * min(1f, p * 1.4f),
-                useCenter = false,
-                topLeft = Offset(c.x - r, c.y - r),
-                size = Size(r * 2, r * 2),
-                style = Stroke(width = r * 0.04f, cap = StrokeCap.Round)
-            )
-            // деления
-            if (p > 0.35f) {
-                val a = ((p - 0.35f) / 0.4f).coerceIn(0f, 1f)
-                for (deg in 0 until 360 step 30) {
-                    val big = deg % 90 == 0
-                    val r2 = if (big) r * 1.15f else r * 1.08f
-                    val rad = deg * PI / 180
-                    drawLine(
-                        color = (if (big) cyan else Color(0xFF2E6E80)).copy(alpha = a),
-                        start = Offset(c.x + (r * sin(rad)).toFloat(), c.y - (r * cos(rad)).toFloat()),
-                        end = Offset(c.x + (r2 * sin(rad)).toFloat(), c.y - (r2 * cos(rad)).toFloat()),
-                        strokeWidth = r * 0.05f,
-                        cap = StrokeCap.Round
-                    )
-                }
-            }
-            // стрелка: делает оборот и встаёт на север с лёгким покачиванием
-            val spin = (1f - p) * (1f - p) * 720f
-            val wobble = if (p > 0.8f) (sin((p - 0.8f) * 40f) * (1f - p) * 25f) else 0f
-            rotate(degrees = spin + wobble, pivot = c) {
-                val needle = Path().apply {
-                    moveTo(c.x, c.y - r * 0.8f)
-                    lineTo(c.x + r * 0.29f, c.y + r * 0.2f)
-                    lineTo(c.x, c.y)
-                    lineTo(c.x - r * 0.29f, c.y + r * 0.2f)
-                    close()
-                }
-                drawPath(needle, orange.copy(alpha = min(1f, p * 3f)))
-                val tail = Path().apply {
-                    moveTo(c.x, c.y + r * 0.8f)
-                    lineTo(c.x - r * 0.13f, c.y + r * 0.35f)
-                    lineTo(c.x, c.y + r * 0.2f)
-                    lineTo(c.x + r * 0.13f, c.y + r * 0.35f)
-                    close()
-                }
-                drawPath(tail, Color(0xFF2A2F38).copy(alpha = min(1f, p * 3f)))
-            }
-            drawCircle(Color(0xFF0A0C10), radius = r * 0.065f, center = c)
-
-            // дорога в перспективе: оранжевая разметка летит к зрителю, фары-огоньки уходят вдаль
-            run {
-                val horizon = size.height * 0.68f
-                val roadA = (p * 2.2f).coerceIn(0f, 1f)
-                val cx = size.width / 2
-                val half = size.width * 0.5f
-                val edge = Path().apply {
-                    moveTo(cx - half * 0.06f, horizon); lineTo(cx + half * 0.06f, horizon)
-                    lineTo(cx + half * 1.1f, size.height); lineTo(cx - half * 1.1f, size.height); close()
-                }
-                drawPath(edge, Color(0xFF12161C).copy(alpha = roadA))
-                drawLine(cyan.copy(alpha = 0.5f * roadA), Offset(cx - half * 0.06f, horizon), Offset(cx - half * 1.1f, size.height), strokeWidth = 3f)
-                drawLine(cyan.copy(alpha = 0.5f * roadA), Offset(cx + half * 0.06f, horizon), Offset(cx + half * 1.1f, size.height), strokeWidth = 3f)
-                val phase = (p * 5f) % 1f
-                for (i in 0 until 7) {
-                    val t0 = ((i + phase) / 7f)
-                    val t1 = t0 + 0.06f
-                    val y0 = horizon + (size.height - horizon) * t0 * t0
-                    val y1 = horizon + (size.height - horizon) * min(1f, t1) * min(1f, t1)
-                    val w0 = 2f + 16f * t0 * t0
-                    val w1 = 2f + 16f * min(1f, t1) * min(1f, t1)
-                    val dash = Path().apply {
-                        moveTo(cx - w0, y0); lineTo(cx + w0, y0); lineTo(cx + w1, y1); lineTo(cx - w1, y1); close()
-                    }
-                    drawPath(dash, orange.copy(alpha = roadA * (0.25f + 0.75f * t0)))
-                }
-                drawCircle(orange.copy(alpha = 0.18f * roadA), radius = size.width * 0.35f, center = Offset(cx, horizon))
+            val skyA = span(t, SKY_START, SKY_START + 700f)
+            if (skyA > 0f) {
+                drawSky(skyA, t)
+                val reveal = span(t, SOUND_AT, REVEAL_END)
+                drawPlane(t, skyA, reveal)
             }
         }
-        Text(
-            text = "ШТУРМАН",
-            color = Color.White,
-            style = TextStyle(fontSize = 30.sp, fontWeight = FontWeight.Bold, letterSpacing = 10.sp),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 150.dp)
-                .alpha(((p - 0.45f) / 0.4f).coerceIn(0f, 1f))
+        // Спонсорская подпись
+        val sponsorA = if (t < SPONSOR_END) span(t, 200f, 600f) * (1f - span(t, 1300f, SPONSOR_END)) else 0f
+        if (sponsorA > 0f) {
+            Text(
+                text = "ПРЕДСТАВЛЯЕТ",
+                color = Color.White.copy(alpha = 0.7f * sponsorA),
+                style = TextStyle(fontSize = 13.sp, letterSpacing = 6.sp),
+                modifier = Modifier.align(Alignment.Center).padding(top = 150.dp)
+            )
+        }
+        val titleA = span(t, TITLE_START, TITLE_START + 700f)
+        if (titleA > 0f) {
+            Text(
+                text = "GERTY AIRLINE",
+                color = Color.White.copy(alpha = titleA),
+                style = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = 9.sp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 130.dp)
+            )
+        }
+    }
+}
+
+/** «Спонсор»: тонкое кольцо рисуется по дуге, внутри светится точка, под ним название. */
+private fun DrawScope.drawSponsor(a: Float, t: Float) {
+    val c = Offset(size.width / 2, size.height * 0.45f)
+    val r = min(size.width, size.height) * 0.11f
+    val cyan = Color(0xFF3DDCFF)
+    val orange = Color(0xFFFF8A00)
+    val sweep = 360f * span(t, 100f, 1100f)
+    drawArc(
+        color = cyan.copy(alpha = a), startAngle = -90f, sweepAngle = sweep, useCenter = false,
+        topLeft = Offset(c.x - r, c.y - r), size = Size(r * 2, r * 2),
+        style = Stroke(width = r * 0.07f, cap = StrokeCap.Round)
+    )
+    drawCircle(orange.copy(alpha = a * (0.6f + 0.4f * sin(t / 120f))), radius = r * 0.22f, center = c)
+    drawCircle(orange.copy(alpha = a * 0.15f), radius = r * 0.55f, center = c)
+}
+
+private fun DrawScope.drawSky(a: Float, t: Float) {
+    drawRect(
+        brush = Brush.verticalGradient(
+            0f to Color(0xFF081A36).copy(alpha = a),
+            0.45f to Color(0xFF2A5A9C).copy(alpha = a),
+            0.78f to Color(0xFFF0A35E).copy(alpha = a),
+            1f to Color(0xFFFFD6A0).copy(alpha = a)
         )
+    )
+    // солнце у горизонта
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(Color(0xFFFFE6B0).copy(alpha = 0.8f * a), Color.Transparent),
+            center = Offset(size.width * 0.78f, size.height * 0.74f), radius = size.width * 0.5f
+        ),
+        radius = size.width * 0.5f, center = Offset(size.width * 0.78f, size.height * 0.74f)
+    )
+    // облака медленно плывут влево
+    for (i in 0 until 7) {
+        val speed = 0.012f + (i % 3) * 0.006f
+        val x = ((i * 0.23f - t * speed / 100f) % 1.3f + 1.3f) % 1.3f - 0.15f
+        val y = 0.12f + (i * 0.11f) % 0.6f
+        val w = size.width * (0.35f + (i % 3) * 0.12f)
+        for (k in 0 until 3) {
+            drawCircle(
+                Color.White.copy(alpha = 0.13f * a),
+                radius = w * (0.11f + 0.03f * k),
+                center = Offset(x * size.width + k * w * 0.18f, y * size.height + (k % 2) * w * 0.03f)
+            )
+        }
+    }
+}
+
+/** Самолёт (вид сбоку, летит вправо). Сначала это чёрная фигура, цвета «проливаются» от хвоста к носу. */
+private fun DrawScope.drawPlane(t: Float, skyA: Float, reveal: Float) {
+    val w = size.width * (0.62f + 0.1f * ease((t - SKY_START) / (REVEAL_END - SKY_START)))
+    val cx = size.width * (0.46f + 0.04f * ease((t - SKY_START) / (REVEAL_END - SKY_START)))
+    val cy = size.height * 0.42f - size.height * 0.02f * ease((t - SKY_START) / (REVEAL_END - SKY_START)) +
+        sin(t / 700f) * size.height * 0.006f
+    val tilt = -5f + sin(t / 900f) * 0.8f
+
+    fun P(x: Float, y: Float) = Offset(cx + x * w, cy + y * w)
+    fun poly(vararg pts: Pair<Float, Float>): Path = Path().apply {
+        moveTo(P(pts[0].first, pts[0].second).x, P(pts[0].first, pts[0].second).y)
+        for (i in 1 until pts.size) lineTo(P(pts[i].first, pts[i].second).x, P(pts[i].first, pts[i].second).y)
+        close()
+    }
+    val fuselage = Path().apply {
+        moveTo(P(-0.5f, -0.05f).x, P(-0.5f, -0.05f).y)
+        lineTo(P(0.30f, -0.075f).x, P(0.30f, -0.075f).y)
+        quadraticTo(P(0.5f, -0.05f).x, P(0.5f, -0.05f).y, P(0.53f, 0.0f).x, P(0.53f, 0.0f).y)
+        quadraticTo(P(0.48f, 0.065f).x, P(0.48f, 0.065f).y, P(0.30f, 0.078f).x, P(0.30f, 0.078f).y)
+        lineTo(P(-0.45f, 0.05f).x, P(-0.45f, 0.05f).y)
+        close()
+    }
+    val fin = poly(-0.5f to -0.05f, -0.57f to -0.25f, -0.45f to -0.25f, -0.33f to -0.06f)
+    val stab = poly(-0.47f to 0.0f, -0.6f to 0.05f, -0.55f to 0.065f, -0.38f to 0.02f)
+    val wing = poly(0.06f to 0.03f, -0.18f to 0.21f, -0.07f to 0.22f, 0.22f to 0.045f)
+    val engine = Path().apply {
+        addOval(androidx.compose.ui.geometry.Rect(P(-0.01f, 0.11f), Size(0.13f * w, 0.055f * w)))
+    }
+
+    rotate(tilt, pivot = Offset(cx, cy)) {
+        // чёрная фигура
+        val black = Color.Black.copy(alpha = skyA)
+        for (p in listOf(fin, stab, wing, fuselage, engine)) drawPath(p, black)
+
+        // цвета проявляются от хвоста к носу
+        val left = cx - 0.6f * w
+        val front = left + 1.2f * w * reveal
+        if (reveal > 0f) {
+            clipRect(left = left, top = cy - 0.4f * w, right = front, bottom = cy + 0.4f * w) {
+                drawPath(wing, Color(0xFFC3CCD8))
+                drawPath(stab, Color(0xFFE6EBF2))
+                drawPath(fuselage, Color(0xFFF4F7FB))
+                drawPath(fin, Color(0xFFFF8A00))
+                drawPath(engine, Color(0xFF9AA5B4))
+                // голубая полоса по борту и окна
+                drawRect(Color(0xFF3DDCFF), topLeft = P(-0.47f, 0.03f), size = Size(0.93f * w, 0.014f * w))
+                for (i in 0 until 14) {
+                    drawCircle(Color(0xFF2A5A9C), radius = 0.0075f * w, center = P(-0.30f + i * 0.045f, -0.025f))
+                }
+            }
+            // светящийся край проявления
+            if (reveal < 1f) {
+                drawRect(
+                    Brush.horizontalGradient(
+                        listOf(Color.Transparent, Color(0x66FFFFFF), Color.Transparent),
+                        startX = front - 0.05f * w, endX = front + 0.05f * w
+                    ),
+                    topLeft = Offset(front - 0.05f * w, cy - 0.3f * w), size = Size(0.1f * w, 0.6f * w)
+                )
+            }
+        }
     }
 }

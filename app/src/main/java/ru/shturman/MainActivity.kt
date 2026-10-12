@@ -32,6 +32,14 @@ import ru.shturman.ui.SplashOverlay
 import ru.shturman.ui.theme.ShturmanTheme
 
 class MainActivity : ComponentActivity() {
+    private var welcome: ru.shturman.routing.Welcome? = null
+
+    override fun onDestroy() {
+        welcome?.release()
+        welcome = null
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // навигатор: экран не гаснет
@@ -54,7 +62,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         )
         // Приветствие голосом только при свежем запуске, не при повороте экрана
-        if (savedInstanceState == null) ru.shturman.routing.Welcome(this)
+        welcome = ru.shturman.routing.Welcome(this)
         setContent {
             ShturmanTheme {
                 val context = LocalContext.current
@@ -94,7 +102,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
-                    if (showSplash) SplashOverlay(onFinished = { showSplash = false })
+                    if (showSplash) SplashOverlay(onPlaySound = { welcome?.play() }, onFinished = { showSplash = false })
                 }
             }
         }
