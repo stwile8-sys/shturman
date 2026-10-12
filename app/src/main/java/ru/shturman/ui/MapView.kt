@@ -225,6 +225,7 @@ fun DarkMap(
     // Линия маршрута и точка назначения на карте
     LaunchedEffect(style, route) {
         val src = style?.getSourceAs<GeoJsonSource>("route")
+        val bloom = style?.getSourceAs<GeoJsonSource>("bloom")
         val th = ru.shturman.ui.theme.ShColors.T
         if (src != null && route != null && route.size > 2 && !currentNavigating && th.routeMs > 0) {
             // Маршрут прорисовывается от начала к концу; у некоторых тем рывками
@@ -233,10 +234,19 @@ fun DarkMap(
             for (k in 1 until frames) {
                 val upto = (route.size * k / frames).coerceAtLeast(2)
                 src.setGeoJson(lineGeoJson(route.subList(0, upto)))
+                // Принцесса: по пути расцветают цветочки
+                if (th.id == 1) {
+                    val every = (route.size / 50).coerceAtLeast(1)
+                    bloom?.setGeoJson(pointsGeoJson((0 until upto step every).map { route[it] }))
+                }
                 kotlinx.coroutines.delay((th.routeMs / frames).toLong())
             }
         }
         src?.setGeoJson(lineGeoJson(route))
+        if (th.id == 1 && bloom != null && route != null) {
+            kotlinx.coroutines.delay(2500)
+            bloom.setGeoJson(pointsGeoJson(emptyList()))
+        }
     }
     LaunchedEffect(style, bumps) {
         style?.getSourceAs<GeoJsonSource>("bumps")?.setGeoJson(pointsGeoJson(bumps))

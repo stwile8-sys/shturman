@@ -130,6 +130,7 @@ object MapStyle {
     "danger": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "caravan": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "trail": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
+    "bloom": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "sat": { "type": "raster", "tileSize": 256, "maxzoom": 19,
              "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
              "attribution": "Esri, Maxar, Earthstar Geographics" }
@@ -259,6 +260,10 @@ object MapStyle {
                   "text-font": ["Noto Sans Regular"], "text-size": 12,
                   "text-offset": [0, 0.8], "text-anchor": "top", "text-max-width": 8 },
       "paint": { "text-color": "#D9C4FF", "text-halo-color": "#0A0C10", "text-halo-width": 1.5 } },
+
+    { "id": "route-bloom", "type": "circle", "source": "bloom",
+      "paint": { "circle-radius": 6, "circle-color": "#FF8FC8", "circle-stroke-color": "#FFD700",
+                 "circle-stroke-width": 3, "circle-opacity": 0.95 } },
 
     { "id": "trail-hearts", "type": "symbol", "source": "trail",
       "layout": { "visibility": "none", "icon-image": "heart", "icon-allow-overlap": true, "icon-ignore-placement": true,

@@ -126,7 +126,19 @@ fun Modifier.themedEnter(): Modifier {
         p.animateTo(1f, tween(t.enterMs, easing = easing))
     }
     val kind = t.enter
-    return this.graphicsLayer {
+    return this.drawBehind {
+        // Rally: за въезжающей панелью остаётся облако пыли
+        if (kind == EnterKind.SIDE_DUST) {
+            val q = 1f - p.value
+            if (q > 0.02f) {
+                for (i in 0 until 6) {
+                    val x = size.width * (1.02f + 0.14f * i) * (0.5f + 0.5f * q) 
+                    val y = size.height * (0.2f + 0.12f * i)
+                    drawCircle(Color(0xFFC79A66).copy(alpha = 0.35f * q), size.height * (0.16f + 0.03f * i), Offset(x, y))
+                }
+            }
+        }
+    }.graphicsLayer {
         val v = p.value
         val q = 1f - v
         when (kind) {
