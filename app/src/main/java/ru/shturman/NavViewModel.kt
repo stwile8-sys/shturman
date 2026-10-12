@@ -257,6 +257,19 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Объясняет, почему нет положения: разрешение не дано, геолокация выключена или просто слабый сигнал. */
+    private fun gpsProblemText(): String {
+        val app = getApplication<Application>()
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+            app, android.Manifest.permission.ACCESS_FINE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!granted) return "Нет доступа к местоположению. Разрешите его в настройках телефона: Приложения → Штурман → Разрешения."
+        val lm = app.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
+        val on = runCatching { lm?.isLocationEnabled ?: true }.getOrDefault(true)
+        if (!on) return "Геолокация выключена. Включите её в шторке телефона или в настройках (Местоположение)."
+        return "Нет сигнала GPS: выйдите на открытое место и подождите"
+    }
+
     fun downloadDataIfNeeded() {
         if (roadData.isReady()) {
             _state.update { it.copy(dataReady = true, dataError = null) }
@@ -324,7 +337,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         val from = fresh ?: lastKnownPosition(getApplication())
         if (from == null) {
             ThemeSounds.play(ThemeSound.ERROR)
-            _state.update { it.copy(routeError = "Нет сигнала GPS: выйдите на открытое место и подождите") }
+            _state.update { it.copy(routeError = gpsProblemText()) }
             return
         }
         _state.update { it.copy(routeLoading = true, routeError = null) }
@@ -443,6 +456,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         val position = RoutePosition(0, 0.0)
         ThemeSounds.play(ThemeSound.NAV)
         _state.update { it.copy(navigating = true, position = position, turn = nextTurn(route, position)) }
+        lowResourcesNotice()
     }
 
     /** Заранее находит на маршруте лежачие полицейские, ремонт и камеры. */
@@ -537,6 +551,22 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Короткое сообщение на экране; через несколько секунд пропадает само. */
+    /** Перед поездкой предупреждает о севшей батарее или почти полной памяти; ничего не блокирует. */
+    private fun lowResourcesNotice() {
+        runCatching {
+            val app = getApplication<Application>()
+            val bm = app.getSystemService(android.content.Context.BATTERY_SERVICE) as android.os.BatteryManager
+            val pct = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            val charging = bm.isCharging
+            if (pct in 1..14 && !charging) {
+                showNotice("Батарея $pct%. Подключите зарядку, навигация быстро её тратит")
+                return
+            }
+            val free = android.os.StatFs(app.filesDir.path).availableBytes
+            if (free < 100L * 1024 * 1024) showNotice("Мало памяти в телефоне: освободите место")
+        }
+    }
+
     private fun showNotice(text: String) {
         _state.update { it.copy(notice = text) }
         viewModelScope.launch {
