@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
                 // Следим за входом и выходом: приложение работает только после входа через Google
                 DisposableEffect(Unit) {
                     val auth = FirebaseAuth.getInstance()
-                    val listener = FirebaseAuth.AuthStateListener { user = it.currentUser?.toInfo() }
+                    val listener = FirebaseAuth.AuthStateListener { user = it.currentUser?.toInfo(); ru.shturman.Errors.setUser(it.currentUser?.uid) }
                     auth.addAuthStateListener(listener)
                     onDispose { auth.removeAuthStateListener(listener) }
                 }

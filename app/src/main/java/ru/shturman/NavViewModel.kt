@@ -262,6 +262,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 roadData.download { p -> _state.update { it.copy(dataProgress = p) } }
                 _state.update { it.copy(dataReady = true) }
             } catch (e: Exception) {
+                ru.shturman.Errors.log("roaddata", e)
                 _state.update { it.copy(dataError = "Не удалось скачать дорожные данные: ${e.message ?: e.javaClass.simpleName}") }
             }
         }
@@ -362,6 +363,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             } catch (e: Exception) {
+                ru.shturman.Errors.log("route", e)
                 ThemeSounds.play(ThemeSound.ERROR)
                 _state.update {
                     it.copy(
@@ -765,6 +767,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             val message = try {
                 sharedSync.sync()
             } catch (e: Exception) {
+                ru.shturman.Errors.log("sync", e)
                 "Не вышло: ${e.message?.take(120) ?: e.javaClass.simpleName}"
             }
             if (!message.startsWith("Не вышло")) ThemeSounds.play(ThemeSound.SYNC) else ThemeSounds.play(ThemeSound.ERROR)
