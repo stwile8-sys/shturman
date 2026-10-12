@@ -87,6 +87,7 @@ fun DarkMap(
     var hasPermission by remember { mutableStateOf(hasLocationPermission(context)) }
     var routeShown by remember { mutableStateOf(false) }
     val currentOnFix by rememberUpdatedState(onFix)
+    val currentNavigating by rememberUpdatedState(navigating)
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -172,7 +173,30 @@ fun DarkMap(
             }
         }
         tracker.start()
-        onDispose { tracker.stop() }
+
+        // Если во время поездки камеру сдвинули пальцем, через 8 секунд она сама возвращается к стрелке
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val back = Runnable {
+            val lc = m.locationComponent
+            if (currentNavigating && lc.isLocationComponentActivated && lc.cameraMode == CameraMode.NONE) {
+                lc.setCameraMode(CameraMode.TRACKING_GPS, 600L, FOLLOW_ZOOM, null, FOLLOW_TILT, null)
+            }
+        }
+        val trackListener = object : org.maplibre.android.location.OnCameraTrackingChangedListener {
+            override fun onCameraTrackingDismissed() {
+                if (currentNavigating) {
+                    handler.removeCallbacks(back)
+                    handler.postDelayed(back, 8000L)
+                }
+            }
+            override fun onCameraTrackingChanged(currentMode: Int) {}
+        }
+        runCatching { m.locationComponent.addOnCameraTrackingChangedListener(trackListener) }
+        onDispose {
+            tracker.stop()
+            handler.removeCallbacks(back)
+            runCatching { m.locationComponent.removeOnCameraTrackingChangedListener(trackListener) }
+        }
     }
 
     // Линия маршрута и точка назначения на карте
