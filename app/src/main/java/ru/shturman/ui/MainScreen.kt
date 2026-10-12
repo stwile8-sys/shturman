@@ -173,18 +173,19 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             }
         }
 
-        // Ближайший поворот
-        val turn = s.turn
-        if (s.navigating && turn != null) {
-            TurnCard(
+        // Раллийный дорожник: форма дороги впереди
+        if (s.navigating) {
+            val turn = s.turn
+            val firstNote = s.notes.firstOrNull()
+            // Название улицы берём у ближайшего манёвра, если он рядом с первым изгибом
+            val street = if (turn != null && (firstNote == null || kotlin.math.abs(turn.distanceM - firstNote.distanceM) < 80.0)) turn.street else ""
+            PaceCard(
+                notes = s.notes,
+                street = street,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
-                    .padding(12.dp),
-                severity = turn.severity,
-                isLeft = turn.isLeft,
-                distance = formatDistance(turn.distanceM),
-                street = turn.street
+                    .padding(12.dp)
             )
         }
 

@@ -137,7 +137,7 @@ fun RallyPacenote(
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .size(22.dp)
+                .size(boxSize * 0.38f)
                 .clip(CircleShape)
                 .background(signColor(severity)),
             contentAlignment = Alignment.Center
@@ -147,7 +147,7 @@ fun RallyPacenote(
                 color = ShColors.Background,
                 fontFamily = NumberFont,
                 fontWeight = FontWeight.Bold,
-                fontSize = 13.sp
+                fontSize = (boxSize.value * 0.22f).sp
             )
         }
     }

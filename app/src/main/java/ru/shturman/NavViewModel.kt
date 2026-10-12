@@ -88,6 +88,7 @@ data class NavState(
     val navigating: Boolean = false,
     val position: RoutePosition? = null,
     val turn: NextTurn? = null,
+    val notes: List<ru.shturman.routing.PaceNote> = emptyList(),
 
     /** Ограничение скорости на участке, где мы сейчас едем, км/ч (если оно известно). */
     val limitKmh: Int? = null,
@@ -472,6 +473,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         _state.update {
             it.copy(
                 position = position, turn = nextTurn(route, position), limitKmh = limit,
+                notes = runCatching { ru.shturman.routing.paceNotes(route, position.traveledM) }.getOrDefault(emptyList()),
                 hazard = hazards.first, cameraAhead = hazards.second
             )
         }
@@ -754,7 +756,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 destination = null, options = emptyList(), selected = 0, routeError = null,
                 routeLoading = false, navigating = false, position = null, turn = null,
                 departOffsetMin = 0, limitKmh = null, weather = null,
-                departAdvice = null, seasonNote = null, hazard = null, cameraAhead = null
+                departAdvice = null, seasonNote = null, hazard = null, cameraAhead = null, notes = emptyList()
             )
         }
     }

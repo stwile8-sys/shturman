@@ -88,6 +88,7 @@ fun DarkMap(
     var routeShown by remember { mutableStateOf(false) }
     val currentOnFix by rememberUpdatedState(onFix)
     val currentNavigating by rememberUpdatedState(navigating)
+    val currentRoute by rememberUpdatedState(route)
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -158,10 +159,22 @@ fun DarkMap(
         enableLocation(context, m, st)
 
         val bearing = BearingFilter()
+        var lastTrimAt = 0L
         trail.setFrom(trail.currentPos(), LatLon(0.0, 0.0), false)
         val tracker = GpsTracker(context) { raw ->
             val here = LatLon(raw.latitude, raw.longitude)
             val snap = currentOnFix(here, raw.speed)
+
+            // Пройденная часть маршрута исчезает за стрелкой: линия рисуется только от стрелки вперёд
+            val nowMs = System.currentTimeMillis()
+            val r = currentRoute
+            if (snap != null && currentNavigating && r != null && nowMs - lastTrimAt > 400L) {
+                lastTrimAt = nowMs
+                val rest = ArrayList<LatLon>(maxOf(r.size - snap.index, 1))
+                rest.add(snap.point)
+                for (j in snap.index + 1 until r.size) rest.add(r[j])
+                st.getSourceAs<GeoJsonSource>("route")?.setGeoJson(lineGeoJson(rest))
+            }
 
             val shown = Location(raw)
             if (snap != null) {
