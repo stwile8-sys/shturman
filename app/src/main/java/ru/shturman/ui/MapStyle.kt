@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import org.maplibre.android.style.layers.PropertyFactory
 
 /**
  * Свой тёмный стиль 3D-карты. Данные: OpenStreetMap через бесплатные тайлы OpenFreeMap.
@@ -60,27 +61,26 @@ object MapStyle {
 
     /** Перекрашивает карту: тёмная обычная или светлая розово-лавандовая для режима принцессы. */
     fun applyTheme(style: org.maplibre.android.maps.Style, princess: Boolean) {
-        val pf = org.maplibre.android.style.layers.PropertyFactory
         for (t in TINTS) {
             val layer = style.getLayer(t.id) ?: continue
             val c = if (princess) t.princess else t.normal
             val halo = if (princess) "#FFF4FA" else "#0A0C10"
             val stroke = if (princess) "#FFF4FA" else "#0A0C10"
             when (t.kind) {
-                "bg" -> layer.setProperties(pf.backgroundColor(c))
-                "fill" -> layer.setProperties(pf.fillColor(c))
-                "line" -> layer.setProperties(pf.lineColor(c))
-                "ext" -> layer.setProperties(pf.fillExtrusionColor(c))
-                "text" -> layer.setProperties(pf.textColor(c), pf.textHaloColor(halo))
-                "dot" -> layer.setProperties(pf.circleColor(c), pf.circleStrokeColor(stroke))
+                "bg" -> layer.setProperties(PropertyFactory.backgroundColor(c))
+                "fill" -> layer.setProperties(PropertyFactory.fillColor(c))
+                "line" -> layer.setProperties(PropertyFactory.lineColor(c))
+                "ext" -> layer.setProperties(PropertyFactory.fillExtrusionColor(c))
+                "text" -> layer.setProperties(PropertyFactory.textColor(c), PropertyFactory.textHaloColor(halo))
+                "dot" -> layer.setProperties(PropertyFactory.circleColor(c), PropertyFactory.circleStrokeColor(stroke))
             }
         }
-        style.getLayer("route-line")?.setProperties(pf.lineColor(if (princess) "#F2709F" else "#3DDCFF"))
+        style.getLayer("route-line")?.setProperties(PropertyFactory.lineColor(if (princess) "#F2709F" else "#3DDCFF"))
         style.addImage(ONEWAY_IMAGE, onewayBitmap(princess))
         val vis = org.maplibre.android.style.layers.Property.VISIBLE
         val none = org.maplibre.android.style.layers.Property.NONE
-        style.getLayer("trail-smoke")?.setProperties(pf.visibility(if (princess) none else vis))
-        style.getLayer("trail-hearts")?.setProperties(pf.visibility(if (princess) vis else none))
+        style.getLayer("trail-smoke")?.setProperties(PropertyFactory.visibility(if (princess) none else vis))
+        style.getLayer("trail-hearts")?.setProperties(PropertyFactory.visibility(if (princess) vis else none))
     }
 
     /** Стрелка-шеврон, смотрит вправо. Вдоль дороги Карта сама поворачивает её по направлению движения. */
