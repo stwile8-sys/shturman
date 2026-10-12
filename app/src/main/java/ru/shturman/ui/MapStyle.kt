@@ -162,14 +162,6 @@ object MapStyle {
                   "text-font": ["Noto Sans Regular"], "text-size": 15 },
       "paint": { "text-color": "#8A9099", "text-halo-color": "#0A0C10", "text-halo-width": 1.5 } },
 
-    { "id": "danger-dots", "type": "circle", "source": "danger", "minzoom": 11,
-      "paint": { "circle-radius": 10, "circle-color": "#FF8A00", "circle-opacity": 0.8,
-                 "circle-stroke-color": "#FFD9A8", "circle-stroke-width": 2 } },
-
-    { "id": "works-dots", "type": "circle", "source": "works", "minzoom": 11,
-      "paint": { "circle-radius": 6, "circle-color": "#FF5A3C",
-                 "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1.5 } },
-
     { "id": "bump-dots", "type": "circle", "source": "bumps", "minzoom": 14,
       "paint": { "circle-radius": 4, "circle-color": "#E8D44D",
                  "circle-stroke-color": "#0A0C10", "circle-stroke-width": 1.5 } },
