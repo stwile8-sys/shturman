@@ -147,7 +147,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             members = s.members,
             satellite = s.satellite,
             themeId = s.theme,
-            onFix = { here, speed, accuracy, course -> vm.onFix(here, speed, accuracy, course) }
+            onFix = { here, speed, accuracy, course, altitude -> vm.onFix(here, speed, accuracy, course, altitude) }
         )
 
         Column(
@@ -185,6 +185,19 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 )
             }
         }
+
+        // Мелкие показания в правом нижнем углу: компас, высота, GPS, батарея, сеть, погода
+        HudCorner(
+            hud = s.hud,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 12.dp, bottom = when {
+                    s.navigating -> 112.dp
+                    s.options.isNotEmpty() -> 300.dp
+                    else -> 24.dp
+                } + 64.dp)
+        )
 
         // Раллийный дорожник: форма дороги впереди
         if (s.navigating) {

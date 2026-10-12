@@ -78,7 +78,7 @@ fun DarkMap(
     members: List<CaravanMember> = emptyList(),
     satellite: Boolean = false,
     themeId: Int = 0,
-    onFix: (LatLon, Float, Float, Float) -> Snap? = { _, _, _, _ -> null }
+    onFix: (LatLon, Float, Float, Float, Float) -> Snap? = { _, _, _, _, _ -> null }
 ) {
     val context = LocalContext.current
 
@@ -137,6 +137,16 @@ fun DarkMap(
         MapView(context).apply {
             getMapAsync { m ->
                 map = m
+                // Долгое нажатие на карту копирует координаты точки
+                m.addOnMapLongClickListener { p ->
+                    runCatching {
+                        val text = String.format(java.util.Locale.US, "%.6f, %.6f", p.latitude, p.longitude)
+                        val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("Координаты", text))
+                        android.widget.Toast.makeText(context, "Координаты скопированы: $text", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                    true
+                }
                 m.setStyle(
                     Style.Builder()
                         .fromJson(MapStyle.JSON)
@@ -181,7 +191,7 @@ fun DarkMap(
         trail.setFrom(trail.currentPos(), LatLon(0.0, 0.0), false)
         val tracker = GpsTracker(context) { raw ->
             val here = LatLon(raw.latitude, raw.longitude)
-            val snap = currentOnFix(here, raw.speed, if (raw.hasAccuracy()) raw.accuracy else 0f, if (raw.hasBearing()) raw.bearing else -1f)
+            val snap = currentOnFix(here, raw.speed, if (raw.hasAccuracy()) raw.accuracy else 0f, if (raw.hasBearing()) raw.bearing else -1f, if (raw.hasAltitude()) raw.altitude.toFloat() else Float.NaN)
 
             // Пройденная часть маршрута исчезает за стрелкой: линия рисуется только от стрелки вперёд
             val nowMs = System.currentTimeMillis()

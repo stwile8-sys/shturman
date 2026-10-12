@@ -18,13 +18,14 @@ import ru.shturman.routing.DeviationDetector
 import ru.shturman.routing.DeviationEvent
 import ru.shturman.routing.DeviationLevel
 import ru.shturman.routing.OsmPoints
-import ru.shturman.routing.OverspeedBuzz
 import ru.shturman.ui.themes.ThemeSound
 import ru.shturman.ui.themes.ThemeSounds
 import ru.shturman.routing.VoiceCommand
 import ru.shturman.routing.VoiceListener
 import ru.shturman.routing.alongRoute
 import ru.shturman.routing.friendlyNetError
+import ru.shturman.routing.withRetry
+import kotlinx.coroutines.tasks.await
 import ru.shturman.routing.fuelLiters
 import ru.shturman.routing.parseVoiceCommand
 import ru.shturman.routing.seasonEffect
@@ -72,6 +73,18 @@ private fun loadPlace(app: Application, kind: String): Place? = runCatching {
 class CameraAhead(val distanceM: Double, val place: String)
 
 /** Всё, что показывает экран: состояние данных, поиск, маршрут и поездка. */
+/** Мелкие показания в углу карты. */
+data class Hud(
+    val heading: Int = -1,
+    val altitudeM: Int? = null,
+    val accuracyM: Int = -1,
+    val batteryPct: Int = -1,
+    val charging: Boolean = false,
+    val online: Boolean = true,
+    val weather: Weather? = null,
+    val greeting: String? = null
+)
+
 data class NavState(
     val dataReady: Boolean = false,
     val dataProgress: Float = 0f,
@@ -115,6 +128,7 @@ data class NavState(
     val notice: String? = null,
     /** Чувствительность отклонения: 0 — низкая, 1 — средняя, 2 — высокая. */
     val devLevel: Int = 1,
+    val hud: Hud = Hud(),
     val turnVibro: Boolean = true,
     val overspeedSound: Boolean = true,
     val nightVoice: Boolean = true,
@@ -163,7 +177,6 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private var cameraList: List<Camera> = emptyList()
     private val bumpRepo = OsmPoints.bumps(app)
     private val worksRepo = OsmPoints.roadworks(app)
-    private val buzz = OverspeedBuzz()
     private var routeBumps: List<Pair<Double, Int>> = emptyList()
     private var routeWorks: List<Pair<Double, Int>> = emptyList()
     private var routeCams: List<Pair<Double, Int>> = emptyList()
@@ -188,6 +201,9 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private val sharedSync = SharedSync(app, speedStore)
     private val voice = Voice(app)
     private val settings = app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+    private val tripLog = ru.shturman.stats.TripLog(app.getSharedPreferences("trips", android.content.Context.MODE_PRIVATE))
+    private var tripStartMs = 0L
+    private var tripMaxKmh = 0
     private var spokenLevel = -1
     private var lastTurnDistance = Double.MAX_VALUE
     private var rerouting = false
@@ -215,6 +231,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     init {
         voice.onStatus = { m -> _state.update { it.copy(voiceStatus = m) } }
         downloadDataIfNeeded()
+        startHudLoop()
+        showGreeting()
         ShColors.themeId = ru.shturman.ui.themes.Themes.load(settings)
         voice.princess = ShColors.themeId == 1
         ThemeSounds.enabled = settings.getBoolean("theme_sounds", true)
@@ -462,6 +480,14 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         ru.shturman.service.NavService.onCancel = { clearRoute() }
         ru.shturman.service.NavService.start(getApplication(), "Штурман: поездка", "Маршрут запущен")
         startGpsWatch()
+        tripStartMs = System.currentTimeMillis()
+        tripMaxKmh = 0
+        if (tripLog.serviceDue()) {
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(7_000)
+                showNotice("Пора на техобслуживание: пробег с прошлого ТО достиг ${tripLog.serviceIntervalKm} км")
+            }
+        }
     }
 
     /** Заранее находит на маршруте лежачие полицейские, ремонт и камеры. */
@@ -481,17 +507,25 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private var lastFix: LatLon? = null
     private var lastFixAt = 0L
 
-    fun onFix(here: LatLon, speedMps: Float = 0f, accuracyM: Float = 0f, courseDeg: Float = -1f): Snap? {
+    fun onFix(here: LatLon, speedMps: Float = 0f, accuracyM: Float = 0f, courseDeg: Float = -1f, altitudeM: Float = Float.NaN): Snap? {
         lastFix = here
         lastFixAt = System.currentTimeMillis()
         val s = _state.value
         val kmh = (speedMps * 3.6f).toInt()
         if (kmh != s.speedKmh) _state.update { it.copy(speedKmh = kmh) }
+        updateHud(courseDeg, altitudeM, accuracyM)
         // Запоминаем, как быстро здесь едут: всегда в поездке, а вне её только на скорости
         if (s.navigating || speedMps > 3f) {
             recorder.add(here.lat, here.lon, speedMps.toDouble(), System.currentTimeMillis())
         }
         if (s.navigating) stopRecorder.add(here, speedMps.toDouble(), System.currentTimeMillis())
+        if (s.navigating && kmh > tripMaxKmh && kmh < 300) tripMaxKmh = kmh
+        if (s.navigating) {
+            if (speedMps > 1.5f) {
+                lastMovingAt = System.currentTimeMillis()
+                if (navPaused) resumeNav()
+            }
+        }
         detectHardBraking(here, speedMps)
         caravan.sendPosition(here, selfOff)
         val route = s.route ?: return null
@@ -630,12 +664,44 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
 
+    private var lastMovingAt = System.currentTimeMillis()
+    private var navPaused = false
+    private var lowBatteryWarned = false
+
+    /** Простой больше 5 минут: отпускаем блокировку процессора, чтобы не тратить батарею. */
+    private fun pauseNav() {
+        navPaused = true
+        ru.shturman.service.NavService.setWake(getApplication(), false)
+        ru.shturman.service.NavService.update(getApplication(), "Штурман · пауза", "Стоите больше 5 минут. Тронетесь, и навигация продолжится")
+        showNotice("Навигация на паузе: стоим больше 5 минут")
+    }
+
+    private fun resumeNav() {
+        navPaused = false
+        ru.shturman.service.NavService.setWake(getApplication(), true)
+    }
+
+    /** Батарея меньше 15% во время поездки: один раз предупреждаем. */
+    private fun checkBatteryDuringTrip() {
+        runCatching {
+            val bm = getApplication<Application>().getSystemService(android.content.Context.BATTERY_SERVICE) as android.os.BatteryManager
+            val pct = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            if (pct in 1..14 && !bm.isCharging) {
+                if (!lowBatteryWarned) {
+                    lowBatteryWarned = true
+                    showNotice("Батарея $pct%. Подключите зарядку")
+                }
+            } else if (pct > 20) lowBatteryWarned = false
+        }
+    }
+
     private var lastNotifAt = 0L
     private var gpsWatch: kotlinx.coroutines.Job? = null
     private var gpsLostShown = false
 
     /** Текст постоянного уведомления: скорость, ближайший поворот и сколько осталось ехать. Не чаще раза в 2 секунды. */
     private fun updateNavNotification(kmh: Int, turn: NextTurn?, leftM: Double) {
+        if (navPaused) return
         val now = System.currentTimeMillis()
         if (now - lastNotifAt < 2_000L) return
         lastNotifAt = now
@@ -653,11 +719,14 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     /** Если положение не приходит больше 30 секунд, предупреждает и пишет это в уведомлении. */
     private fun startGpsWatch() {
         gpsWatch?.cancel()
+        lastMovingAt = System.currentTimeMillis(); navPaused = false
         lastFixAt = maxOf(lastFixAt, System.currentTimeMillis())
         gpsWatch = viewModelScope.launch {
             while (true) {
                 kotlinx.coroutines.delay(5_000)
                 if (!_state.value.navigating) break
+                checkBatteryDuringTrip()
+                if (!navPaused && System.currentTimeMillis() - lastMovingAt > 5 * 60_000L) pauseNav()
                 if (System.currentTimeMillis() - lastFixAt > 30_000L && !gpsLostShown) {
                     gpsLostShown = true
                     showNotice("Потерян сигнал GPS")
@@ -772,19 +841,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
-        var camera: CameraAhead? = null
-        if (false) {
-            routeCams.firstOrNull { it.first > traveled }?.let { (at, idx) ->
-                val d = at - traveled
-                if (d <= 600.0) {
-                    val place = cameraList.getOrNull(idx)?.place ?: ""
-                    camera = CameraAhead(d, place)
-                    if (st.voiceOn && spoken.add("cam$idx")) {
-                        voice.say(when (place) { "bridge" -> "Впереди камера на мосту"; "tunnel" -> "Впереди камера в тоннеле"; else -> "Впереди камера" }, flush = false)
-                    }
-                }
-            }
-        }
+        // Камеры на карте и голосом отключены по решению владельца; они учитываются только в варианте маршрута «Без камер»
+        val camera: CameraAhead? = null
         return hazard to camera
     }
 
@@ -811,7 +869,6 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     fun setSatellite(on: Boolean) { putBool("satellite", on); _state.update { it.copy(satellite = on) } }
     fun setOverspeedSound(on: Boolean) {
         putBool("overspeed", on)
-        if (!on) buzz.stop()
         _state.update { it.copy(overspeedSound = on) }
     }
     fun setNightVoice(on: Boolean) { putBool("night_voice", on); voice.nightMode = on; _state.update { it.copy(nightVoice = on) } }
@@ -848,6 +905,183 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setConsumption(v: Float) { settings.edit().putFloat("consumption", v).apply(); _state.update { it.copy(consumption = v) } }
     fun setFuelPrice(v: Float) { settings.edit().putFloat("fuel_price", v).apply(); _state.update { it.copy(fuelPrice = v) } }
+
+    // ---------- поездки и статистика ----------
+
+    /** Записывает поездку в журнал и показывает итог в уведомлении. Совсем короткие (до 300 м) не записываются. */
+    private fun finishTrip() {
+        val s = _state.value
+        if (!s.navigating || tripStartMs == 0L) return
+        val traveled = s.position?.traveledM ?: 0.0
+        if (traveled < 300.0) { tripStartMs = 0L; return }
+        val dur = ((System.currentTimeMillis() - tripStartMs) / 1000).coerceAtLeast(1)
+        val km = traveled / 1000.0
+        val cost = Math.round(fuelLiters(traveled, dur.toDouble(), s.consumption.toDouble()) * s.fuelPrice).toInt()
+        val avg = ru.shturman.stats.TripMath.avgKmh(km, dur)
+        runCatching {
+            tripLog.add(ru.shturman.stats.Trip(tripStartMs, km, dur, tripMaxKmh, avg, cost))
+            ru.shturman.service.NavService.notifyTripEnd(
+                getApplication(),
+                "${ru.shturman.ui.formatKm(traveled)} км · ${ru.shturman.ui.formatDuration(dur.toDouble())} · средняя $avg км/ч · макс. $tripMaxKmh · $cost ₽"
+            )
+        }.onFailure { ru.shturman.Errors.log("finishTrip", it) }
+        tripStartMs = 0L
+    }
+
+    /** Сводка для настроек: сегодня, неделя, месяц, последняя поездка, пробег. */
+    fun statsText(): String {
+        val now = System.currentTimeMillis()
+        val trips = tripLog.trips()
+        val day = ru.shturman.stats.TripMath.DAY_MS
+        val cal = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0)
+        }
+        val today = cal.timeInMillis
+        fun km(from: Long) = String.format(java.util.Locale.US, "%.1f", ru.shturman.stats.TripMath.km(trips, from)).replace('.', ',')
+        val last = trips.lastOrNull()
+        return buildString {
+            append("Сегодня: ${km(today)} км\n")
+            append("За неделю: ${ru.shturman.stats.TripMath.count(trips, now - 7 * day)} поездок, ${km(now - 7 * day)} км\n")
+            append("За месяц: ${ru.shturman.stats.TripMath.cost(trips, now - 30 * day)} ₽ бензина\n")
+            if (last != null) append("Последняя: ${String.format(java.util.Locale.US, "%.1f", last.km).replace('.', ',')} км, средняя ${last.avgKmh}, макс. ${last.maxKmh} км/ч, ${last.costRub} ₽\n")
+            append("Общий пробег в приложении: ${tripLog.odometerKm.toInt()} км")
+        }
+    }
+
+    fun exportText(): String =
+        ru.shturman.stats.TripMath.csv(tripLog.trips()) + "\n" + ru.shturman.stats.TripMath.refuelCsv(tripLog.refuels())
+
+    fun clearTrips() = tripLog.clearTrips()
+    fun refuelsText(): String = tripLog.refuels().takeLast(3).reversed().joinToString("\n") {
+        "${java.text.SimpleDateFormat("dd.MM", java.util.Locale.US).format(java.util.Date(it.atMs))} ${it.place}: ${String.format(java.util.Locale.US, "%.1f", it.liters)} л по ${String.format(java.util.Locale.US, "%.1f", it.pricePerLiter)} ₽"
+    }
+    fun addRefuel(place: String, liters: Double, price: Double) {
+        if (liters <= 0 || price <= 0) return
+        tripLog.addRefuel(ru.shturman.stats.Refuel(System.currentTimeMillis(), place.trim().take(40), liters, price))
+    }
+    var serviceIntervalKm: Int
+        get() = tripLog.serviceIntervalKm
+        set(v) { tripLog.serviceIntervalKm = v }
+    fun markServiceDone() = tripLog.markServiceDone()
+
+    // ---------- показания в углу карты ----------
+
+    private var lastHudAt = 0L
+    private var lastWeatherAt = 0L
+
+    private fun updateHud(courseDeg: Float, altitudeM: Float, accuracyM: Float) {
+        val now = System.currentTimeMillis()
+        if (now - lastHudAt < 1_000L) return
+        lastHudAt = now
+        _state.update {
+            val h = it.hud
+            it.copy(
+                hud = h.copy(
+                    heading = if (courseDeg >= 0f) courseDeg.toInt() else h.heading,
+                    altitudeM = if (altitudeM.isNaN()) h.altitudeM else altitudeM.toInt(),
+                    accuracyM = accuracyM.toInt()
+                )
+            )
+        }
+    }
+
+    /** Раз в 30 секунд: батарея и сеть; раз в 30 минут: погода рядом. */
+    private fun startHudLoop() {
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            while (true) {
+                runCatching {
+                    val bm = app.getSystemService(android.content.Context.BATTERY_SERVICE) as android.os.BatteryManager
+                    val cm = app.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                    val online = cm.getNetworkCapabilities(cm.activeNetwork)
+                        ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+                    _state.update {
+                        it.copy(hud = it.hud.copy(
+                            batteryPct = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY),
+                            charging = bm.isCharging, online = online
+                        ))
+                    }
+                }
+                val here = lastFix
+                val now = System.currentTimeMillis()
+                if (here != null && now - lastWeatherAt > 30 * 60_000L) {
+                    lastWeatherAt = now
+                    val w = runCatching { fetchWeather(here, now) }.getOrNull()
+                    if (w != null) _state.update { it.copy(hud = it.hud.copy(weather = w)) }
+                }
+                kotlinx.coroutines.delay(30_000)
+            }
+        }
+    }
+
+    /** Приветствие по времени суток на несколько секунд после запуска. */
+    private fun showGreeting() {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val hello = when (hour) {
+            in 5..11 -> "Доброе утро"
+            in 12..17 -> "Добрый день"
+            in 18..22 -> "Добрый вечер"
+            else -> "Доброй ночи"
+        }
+        val first = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.displayName?.substringBefore(' ')
+        val text = if (first.isNullOrBlank()) hello else "$hello, $first"
+        _state.update { it.copy(hud = it.hud.copy(greeting = text)) }
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(8_000)
+            _state.update { it.copy(hud = it.hud.copy(greeting = null)) }
+        }
+    }
+
+    /** Ссылка на моё положение для отправки другим людям. */
+    fun locationLink(): String? {
+        val p = lastFix ?: lastKnownPosition(getApplication()) ?: return null
+        return String.format(java.util.Locale.US, "https://maps.google.com/?q=%.6f,%.6f", p.lat, p.lon)
+    }
+
+    // ---------- резервная копия настроек ----------
+
+    /** Сохраняет настройки в аккаунт (Firestore), зашифровав на телефоне. Возвращает короткий итог для показа. */
+    suspend fun backupSettings(): String {
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return "Нужен вход в аккаунт"
+        return try {
+            val json = org.json.JSONObject()
+            for ((k, v) in settings.all) {
+                if (k.startsWith("map_") || v == null) continue
+                json.put(k, v)
+            }
+            val blob = ru.shturman.Crypto.encrypt(json.toString())
+            withRetry { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("backups").document(uid)
+                .set(mapOf("data" to blob, "at" to System.currentTimeMillis())).await() }
+            ru.shturman.service.NavService.notifyInfo(getApplication(), "Резервная копия сохранена", "Настройки записаны в ваш аккаунт")
+            "Копия сохранена"
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
+        } catch (e: Exception) { ru.shturman.Errors.log("backup", e); friendlyNetError(e) }
+    }
+
+    /** Восстанавливает настройки из копии. После восстановления приложение лучше перезапустить. */
+    suspend fun restoreSettings(): String {
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return "Нужен вход в аккаунт"
+        return try {
+            val doc = withRetry { com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("backups").document(uid).get().await() }
+            val blob = doc.getString("data") ?: return "Копии пока нет"
+            val text = ru.shturman.Crypto.decrypt(blob)
+            if (text.isBlank()) return "Копию не удалось прочитать на этом телефоне"
+            val json = org.json.JSONObject(text)
+            val ed = settings.edit()
+            for (k in json.keys()) {
+                when (val v = json.get(k)) {
+                    is Boolean -> ed.putBoolean(k, v)
+                    is Int -> ed.putInt(k, v)
+                    is Long -> ed.putLong(k, v)
+                    is Double -> ed.putFloat(k, v.toFloat())
+                    is String -> ed.putString(k, v)
+                }
+            }
+            ed.apply()
+            "Настройки восстановлены. Перезапустите приложение"
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
+        } catch (e: Exception) { ru.shturman.Errors.log("restore", e); friendlyNetError(e) }
+    }
 
     // ---------- данные ----------
 
@@ -1014,7 +1248,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearRoute() {
-        buzz.stop()
+        finishTrip()
         stopNavService()
         _state.update {
             it.copy(
@@ -1029,7 +1263,6 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         stopNavService()
         ru.shturman.service.NavService.onCancel = null
-        buzz.release()
         listener.stop()
         caravan.leave()
         voice.shutdown()

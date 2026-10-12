@@ -47,6 +47,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import ru.shturman.NavState
 import ru.shturman.NavViewModel
 import ru.shturman.auth.UserInfo
@@ -255,6 +256,166 @@ fun SettingsSheet(
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
             ) { Text("Отправить отчёт разработчику", style = ShText.Small) }
+
+            Section("Уведомления и автозапуск")
+            val ctxN = androidx.compose.ui.platform.LocalContext.current
+            var nTrip by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.tripNotice(ctxN)) }
+            var nQuiet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.quietHours(ctxN)) }
+            var nBt by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.btAutostart(ctxN)) }
+            var nBtStop by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.btAutostop(ctxN)) }
+            var nCharge by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.chargeAutostart(ctxN)) }
+            var btName by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.btName(ctxN)) }
+            var btList by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<Pair<String, String>>?>(null) }
+            SwitchRow("Итог поездки", "Уведомление со статистикой, когда поездка закончилась.", nTrip) { nTrip = it; ru.shturman.service.AutoPrefs.set(ctxN, "notif_trip", it) }
+            SwitchRow("Тихие часы", "С 23:00 до 7:00 необязательные уведомления не показываются.", nQuiet) { nQuiet = it; ru.shturman.service.AutoPrefs.set(ctxN, "quiet_hours", it) }
+            fun loadBonded() {
+                btList = runCatching {
+                    @Suppress("MissingPermission")
+                    (ctxN.getSystemService(android.content.Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager)
+                        .adapter?.bondedDevices?.map { (it.name ?: it.address) to it.address } ?: emptyList()
+                }.getOrDefault(emptyList())
+            }
+            val btPerm = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+            ) { ok -> if (ok) loadBonded() }
+            SwitchRow("Автозапуск при подключении к авто", "Когда телефон подключается к выбранному Bluetooth авто, придёт предложение открыть Штурман.", nBt) { nBt = it; ru.shturman.service.AutoPrefs.set(ctxN, "bt_autostart", it) }
+            SwitchRow("Остановка маршрута при отключении", "Когда выбранное Bluetooth авто отключается, маршрут отменяется.", nBtStop) { nBtStop = it; ru.shturman.service.AutoPrefs.set(ctxN, "bt_autostop", it) }
+            Text(text = "Bluetooth авто: ${btName ?: "не выбрано"}", color = ShColors.TextSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = {
+                    if (android.os.Build.VERSION.SDK_INT >= 31 &&
+                        androidx.core.content.ContextCompat.checkSelfPermission(ctxN, android.Manifest.permission.BLUETOOTH_CONNECT) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) btPerm.launch(android.Manifest.permission.BLUETOOTH_CONNECT) else loadBonded()
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Выбрать Bluetooth авто", style = ShText.Small) }
+            btList?.let { list ->
+                if (list.isEmpty()) Text("Нет спаренных устройств. Сначала подключите телефон к авто в настройках Bluetooth.", color = ShColors.TextSecondary, fontSize = 13.sp)
+                list.forEach { (name, addr) ->
+                    TextButton(
+                        onClick = { ru.shturman.service.AutoPrefs.setAddress(ctxN, addr, name); btName = name; btList = null },
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) { Text(name, color = ShColors.Accent, style = ShText.Small) }
+                }
+            }
+            SwitchRow("Автозапуск при подключении зарядки", "Придёт предложение открыть Штурман, когда подключается зарядка.", nCharge) { nCharge = it; ru.shturman.service.AutoPrefs.set(ctxN, "charge_autostart", it) }
+
+            Section("Резервная копия и положение")
+            var backupMsg by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            val backupScope = androidx.compose.runtime.rememberCoroutineScope()
+            val ctxB = androidx.compose.ui.platform.LocalContext.current
+            if (backupMsg.isNotBlank()) Text(text = backupMsg, color = ShColors.TextSecondary, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = { backupMsg = "Сохраняю…"; backupScope.launch { backupMsg = vm.backupSettings() } },
+                    modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+                ) { Text("Сохранить копию", style = ShText.Small) }
+                Button(
+                    onClick = { backupMsg = "Восстанавливаю…"; backupScope.launch { backupMsg = vm.restoreSettings() } },
+                    modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+                ) { Text("Восстановить", style = ShText.Small) }
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    val link = vm.locationLink()
+                    if (link == null) backupMsg = "Положение пока не определено" else runCatching {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, "Я здесь: $link")
+                        }
+                        ctxB.startActivity(android.content.Intent.createChooser(send, "Поделиться местоположением").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Поделиться местоположением", style = ShText.Small) }
+
+            Section("Статистика поездок")
+            var statsText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(vm.statsText()) }
+            Text(text = statsText, color = ShColors.TextSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            val ctxShare = androidx.compose.ui.platform.LocalContext.current
+            Button(
+                onClick = {
+                    runCatching {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Поездки Штурман (CSV)")
+                            putExtra(android.content.Intent.EXTRA_TEXT, vm.exportText())
+                        }
+                        ctxShare.startActivity(android.content.Intent.createChooser(send, "Экспорт поездок").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Экспорт поездок и заправок (CSV)", style = ShText.Small) }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = { vm.clearTrips(); statsText = vm.statsText() },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Очистить историю поездок", style = ShText.Small) }
+
+            Section("Дневник заправок")
+            var refuelList by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(vm.refuelsText()) }
+            if (refuelList.isNotBlank()) Text(text = refuelList, color = ShColors.TextSecondary, fontSize = 13.sp)
+            var rfPlace by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            var rfLiters by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            var rfPrice by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            Spacer(Modifier.height(6.dp))
+            TextField(
+                value = rfPlace, onValueChange = { rfPlace = it.take(40) }, label = { Text("Где заправились", fontSize = 12.sp) },
+                singleLine = true, shape = RoundedCornerShape(14.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = ShColors.SearchField, unfocusedContainerColor = ShColors.SearchField,
+                    focusedTextColor = ShColors.TextPrimary, unfocusedTextColor = ShColors.TextPrimary,
+                    focusedLabelColor = ShColors.TextSecondary, unfocusedLabelColor = ShColors.TextSecondary,
+                    cursorColor = ShColors.Accent, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                NumberField("Литры", rfLiters, Modifier.weight(1f)) { rfLiters = it }
+                NumberField("Цена за литр", rfPrice, Modifier.weight(1f)) { rfPrice = it }
+            }
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = {
+                    val l = rfLiters.replace(',', '.').toDoubleOrNull()
+                    val p = rfPrice.replace(',', '.').toDoubleOrNull()
+                    if (l != null && p != null) {
+                        vm.addRefuel(rfPlace, l, p)
+                        refuelList = vm.refuelsText(); rfLiters = ""; rfPrice = ""; rfPlace = ""
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Записать заправку", style = ShText.Small) }
+
+            Section("Техобслуживание")
+            var svcKm by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(vm.serviceIntervalKm.takeIf { it > 0 }?.toString() ?: "") }
+            Text(text = "Напомню перед поездкой, когда пробег с прошлого ТО достигнет этого числа. Пусто — не напоминать.", color = ShColors.TextSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            NumberField("Интервал ТО, км", svcKm, Modifier.fillMaxWidth(), integer = true) {
+                svcKm = it.filter { c -> c.isDigit() }.take(6)
+                vm.serviceIntervalKm = svcKm.toIntOrNull() ?: 0
+            }
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = { vm.markServiceDone() },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("ТО сделано сегодня", style = ShText.Small) }
 
             Section("Данные")
             var cacheText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }

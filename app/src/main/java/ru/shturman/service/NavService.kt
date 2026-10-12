@@ -20,6 +20,11 @@ import androidx.core.app.ServiceCompat
 class NavService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onDestroy() {
+        setWake(this, false)
+        super.onDestroy()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val title = intent?.getStringExtra(EXTRA_TITLE) ?: "Штурман"
         val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Навигация"
@@ -30,6 +35,7 @@ class NavService : Service() {
             } else {
                 startForeground(ID, n)
             }
+            setWake(this, true)
         } catch (e: Exception) {
             ru.shturman.Errors.log("navService", e)
             stopSelf()
@@ -47,6 +53,22 @@ class NavService : Service() {
         /** Что делать по кнопке «Отмена маршрута»; ставит экран. */
         @Volatile var onCancel: (() -> Unit)? = null
         private var lastText = ""
+        private var wake: android.os.PowerManager.WakeLock? = null
+
+        /** Не даёт процессору уснуть во время поездки, чтобы GPS не отключался. На паузе отпускается. */
+        @Synchronized
+        fun setWake(ctx: Context, on: Boolean) {
+            runCatching {
+                if (on) {
+                    if (wake?.isHeld == true) return
+                    val pm = ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                    wake = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "shturman:nav").also { it.acquire(6 * 60 * 60 * 1000L) }
+                } else {
+                    wake?.let { if (it.isHeld) it.release() }
+                    wake = null
+                }
+            }
+        }
 
         private fun ensureChannel(ctx: Context) {
             if (Build.VERSION.SDK_INT >= 26) {
@@ -99,6 +121,32 @@ class NavService : Service() {
             runCatching {
                 val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 nm.notify(ID, build(ctx, title, text))
+            }
+        }
+
+        /** Итог поездки отдельным уведомлением (без звука). Если уведомления запрещены, ничего не происходит. */
+        fun notifyTripEnd(ctx: Context, text: String) {
+            if (!AutoPrefs.tripNotice(ctx) || AutoPrefs.isQuietNow(ctx)) return
+            runCatching {
+                ensureChannel(ctx)
+                val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, CHANNEL) else Notification.Builder(ctx)
+                nm.notify(
+                    4002,
+                    b.setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentTitle("Поездка завершена")
+                        .setContentText(text).setStyle(Notification.BigTextStyle().bigText(text)).setAutoCancel(true).build()
+                )
+            }
+        }
+
+        /** Короткое информационное уведомление (резервная копия и т.п.). В тихие часы не показывается. */
+        fun notifyInfo(ctx: Context, title: String, text: String) {
+            if (AutoPrefs.isQuietNow(ctx)) return
+            runCatching {
+                ensureChannel(ctx)
+                val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, CHANNEL) else Notification.Builder(ctx)
+                nm.notify(4004, b.setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentTitle(title).setContentText(text).setAutoCancel(true).build())
             }
         }
 
