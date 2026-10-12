@@ -67,3 +67,11 @@ class QuietHoursTest {
         assertTrue(q(23)); assertTrue(q(0)); assertTrue(q(6)); assertFalse(q(7)); assertFalse(q(22)); assertFalse(q(12))
     }
 }
+
+class CompassTest {
+    @Test fun sides() {
+        assertEquals("С", ru.shturman.ui.compassSide(0)); assertEquals("С", ru.shturman.ui.compassSide(359))
+        assertEquals("В", ru.shturman.ui.compassSide(90)); assertEquals("Ю", ru.shturman.ui.compassSide(180))
+        assertEquals("З", ru.shturman.ui.compassSide(270)); assertEquals("СВ", ru.shturman.ui.compassSide(45))
+    }
+}

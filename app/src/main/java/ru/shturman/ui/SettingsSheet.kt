@@ -47,6 +47,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import ru.shturman.NavState
 import ru.shturman.NavViewModel
 import ru.shturman.auth.UserInfo
@@ -301,6 +302,38 @@ fun SettingsSheet(
                 }
             }
             SwitchRow("Автозапуск при подключении зарядки", "Придёт предложение открыть Штурман, когда подключается зарядка.", nCharge) { nCharge = it; ru.shturman.service.AutoPrefs.set(ctxN, "charge_autostart", it) }
+
+            Section("Резервная копия и положение")
+            var backupMsg by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            val backupScope = androidx.compose.runtime.rememberCoroutineScope()
+            val ctxB = androidx.compose.ui.platform.LocalContext.current
+            if (backupMsg.isNotBlank()) Text(text = backupMsg, color = ShColors.TextSecondary, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = { backupMsg = "Сохраняю…"; backupScope.launch { backupMsg = vm.backupSettings() } },
+                    modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+                ) { Text("Сохранить копию", style = ShText.Small) }
+                Button(
+                    onClick = { backupMsg = "Восстанавливаю…"; backupScope.launch { backupMsg = vm.restoreSettings() } },
+                    modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+                ) { Text("Восстановить", style = ShText.Small) }
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    val link = vm.locationLink()
+                    if (link == null) backupMsg = "Положение пока не определено" else runCatching {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, "Я здесь: $link")
+                        }
+                        ctxB.startActivity(android.content.Intent.createChooser(send, "Поделиться местоположением").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Поделиться местоположением", style = ShText.Small) }
 
             Section("Статистика поездок")
             var statsText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(vm.statsText()) }

@@ -139,6 +139,17 @@ class NavService : Service() {
             }
         }
 
+        /** Короткое информационное уведомление (резервная копия и т.п.). В тихие часы не показывается. */
+        fun notifyInfo(ctx: Context, title: String, text: String) {
+            if (AutoPrefs.isQuietNow(ctx)) return
+            runCatching {
+                ensureChannel(ctx)
+                val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, CHANNEL) else Notification.Builder(ctx)
+                nm.notify(4004, b.setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentTitle(title).setContentText(text).setAutoCancel(true).build())
+            }
+        }
+
         fun stop(ctx: Context) {
             runCatching { ctx.stopService(Intent(ctx, NavService::class.java)) }
         }
