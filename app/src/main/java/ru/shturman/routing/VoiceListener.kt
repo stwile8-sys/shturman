@@ -13,7 +13,8 @@ class VoiceListener(
     private val onText: (String) -> Unit,
     private val onState: (Boolean) -> Unit,
     private val onPartial: (String) -> Unit = {},
-    private val onProblem: (String) -> Unit = {}
+    private val onProblem: (String) -> Unit = {},
+    private val onFallback: () -> Unit = {}
 ) {
     private val app = context.applicationContext
     private var recognizer: SpeechRecognizer? = null
@@ -22,7 +23,7 @@ class VoiceListener(
 
     fun start() {
         if (!available()) {
-            onProblem("На телефоне нет службы распознавания речи (нужно приложение Google или голосовой ввод)")
+            onFallback()
             return
         }
         stop()
@@ -36,6 +37,7 @@ class VoiceListener(
             override fun onEndOfSpeech() {}
             override fun onError(error: Int) {
                 onState(false)
+                if (error == SpeechRecognizer.ERROR_CLIENT) { onFallback(); return }
                 onProblem(when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Ничего не услышала, попробуйте ещё раз"
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Нет разрешения на микрофон"

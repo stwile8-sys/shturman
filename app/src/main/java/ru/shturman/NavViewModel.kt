@@ -136,7 +136,8 @@ data class NavState(
     // Голосовое управление
     val listening: Boolean = false,
     val voiceMessage: String? = null,
-    val heardText: String? = null
+    val heardText: String? = null,
+    val voiceFallbackKey: Int = 0
 ) {
     val route: RouteOption? get() = options.getOrNull(selected)
 }
@@ -167,7 +168,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         onText = { text -> handleVoice(text) },
         onState = { on -> _state.update { it.copy(listening = on) } },
         onPartial = { t -> _state.update { it.copy(heardText = t) } },
-        onProblem = { m -> _state.update { it.copy(voiceMessage = m) } }
+        onProblem = { m -> _state.update { it.copy(voiceMessage = m) } },
+        onFallback = { _state.update { it.copy(voiceFallbackKey = it.voiceFallbackKey + 1) } }
     )
     private val speedStore = SpeedStore(app)
     private val recorder = SpeedRecorder(speedStore)
@@ -543,7 +545,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         var camera: CameraAhead? = null
-        if (st.radarOn) {
+        if (false) {
             routeCams.firstOrNull { it.first > traveled }?.let { (at, idx) ->
                 val d = at - traveled
                 if (d <= 600.0) {
@@ -658,6 +660,11 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     fun listen() {
         _state.update { it.copy(voiceMessage = null, heardText = null) }
         listener.start()
+    }
+
+    /** Результат системного окна распознавания речи (запасной путь, если встроенная служба не отвечает). */
+    fun onSystemVoiceResult(text: String?) {
+        if (text.isNullOrBlank()) _state.update { it.copy(voiceMessage = "Ничего не услышала, попробуйте ещё раз") } else handleVoice(text)
     }
 
     private fun reply(text: String) {

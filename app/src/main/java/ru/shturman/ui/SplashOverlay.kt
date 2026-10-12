@@ -41,7 +41,7 @@ fun SplashOverlay(onFinished: () -> Unit) {
     val fade = remember { Animatable(1f) }
 
     LaunchedEffect(Unit) {
-        progress.animateTo(1f, tween(2300, easing = CubicBezierEasing(0.22f, 0.8f, 0.3f, 1f)))
+        progress.animateTo(1f, tween(2900, easing = CubicBezierEasing(0.22f, 0.8f, 0.3f, 1f)))
         fade.animateTo(0f, tween(350))
         onFinished()
     }
@@ -60,6 +60,31 @@ fun SplashOverlay(onFinished: () -> Unit) {
             val cyan = Color(0xFF3DDCFF)
             val orange = Color(0xFFFF8A00)
 
+            // звёзды, мерцающие на фоне
+            for (i in 0 until 46) {
+                val sx = ((i * 7919) % 1000) / 1000f * size.width
+                val sy = ((i * 104729) % 1000) / 1000f * size.height
+                val tw = (0.5f + 0.5f * sin(p * 22f + i)).coerceIn(0f, 1f)
+                drawCircle(Color.White.copy(alpha = 0.12f + 0.4f * tw * min(1f, p * 2f)), radius = 1.5f + (i % 3), center = Offset(sx, sy))
+            }
+            // расходящиеся пульсирующие кольца
+            for (k in 0 until 3) {
+                val t = (p * 1.7f - k * 0.22f).coerceIn(0f, 1f)
+                if (t > 0f && t < 1f) {
+                    drawCircle(cyan.copy(alpha = (1f - t) * 0.35f), radius = r * (1.3f + 1.4f * t), center = c, style = Stroke(width = r * 0.025f))
+                }
+            }
+            // радарный луч, который крутится и гаснет
+            if (p < 0.9f) {
+                drawArc(
+                    color = cyan.copy(alpha = 0.16f * (1f - p)),
+                    startAngle = p * 900f,
+                    sweepAngle = 55f,
+                    useCenter = true,
+                    topLeft = Offset(c.x - r * 1.25f, c.y - r * 1.25f),
+                    size = Size(r * 2.5f, r * 2.5f)
+                )
+            }
             // внешнее тёмное кольцо и голубое кольцо, которое рисуется по дуге
             drawCircle(Color(0xFF1E242C).copy(alpha = p), radius = r * 1.27f, center = c, style = Stroke(width = r * 0.09f))
             drawArc(

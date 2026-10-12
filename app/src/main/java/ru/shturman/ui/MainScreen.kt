@@ -94,6 +94,19 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) vm.listen()
     }
+    val sysVoice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        vm.onSystemVoiceResult(r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull())
+    }
+    androidx.compose.runtime.LaunchedEffect(s.voiceFallbackKey) {
+        if (s.voiceFallbackKey > 0) {
+            val i = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
+                putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Скажите команду")
+            }
+            runCatching { sysVoice.launch(i) }.onFailure { vm.onSystemVoiceResult(null) }
+        }
+    }
     val onMic = {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             vm.listen()
@@ -224,19 +237,6 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             ) {
                 pills.forEach { (text, color, click) -> StatusPill(text = text, color = color, onClick = click) }
             }
-        }
-
-        // Радар-круг: камера впереди на маршруте
-        val cam = s.cameraAhead
-        if (s.navigating && cam != null) {
-            RadarCircle(
-                distanceM = cam.distanceM,
-                place = cam.place,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(end = 12.dp, bottom = 180.dp)
-            )
         }
 
         // Знак ограничения скорости
