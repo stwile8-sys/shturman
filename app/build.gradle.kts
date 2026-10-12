@@ -14,8 +14,11 @@ android {
         applicationId = "ru.shturmani"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        // Номер сборки приходит из GitHub Actions (-PbuildNumber=...): по нему приложение узнаёт, что вышла новая версия
+        val build = (project.findProperty("buildNumber") as String?)?.toIntOrNull() ?: 1
+        versionCode = build
+        versionName = "0.1.$build"
+        buildConfigField("int", "BUILD_NUMBER", build.toString())
     }
 
     // Постоянный ключ подписи: нужен, чтобы вход через Google узнавал приложение при каждой сборке
@@ -40,6 +43,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

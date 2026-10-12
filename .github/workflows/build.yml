@@ -40,7 +40,7 @@ jobs:
       - name: Build debug APK
         run: |
           set -o pipefail
-          gradle :app:assembleDebug --console=plain 2>&1 | tee "$RUNNER_TEMP/build.log"
+          gradle :app:assembleDebug -PbuildNumber=${{ github.run_number }} --console=plain 2>&1 | tee "$RUNNER_TEMP/build.log"
 
       - name: Save error report (only when the build fails)
         if: failure()

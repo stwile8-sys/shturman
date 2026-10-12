@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     if (showSplash) ru.shturman.ui.themes.ThemeSplash(onPlaySound = { welcome?.play() }, onFinished = { welcome?.stop(); showSplash = false })
+                    ru.shturman.ui.UpdatePrompt(enabled = current != null && !showSplash)
                 }
             }
         }
