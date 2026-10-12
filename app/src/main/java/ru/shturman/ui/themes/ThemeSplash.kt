@@ -97,7 +97,6 @@ fun ThemeSplash(onPlaySound: () -> Unit, onFinished: () -> Unit) {
                 7 -> drawDrift(t, peak)
             }
         }
-        SplashTitle(th, t, peak)
     }
 }
 
@@ -384,7 +383,7 @@ private fun DrawScope.drawNight(t: Float, peak: Float) {
 private fun DrawScope.drawStreet(t: Float, peak: Float) {
     val shakeAmt = if (t in peak..(peak + 450f)) (1f - lin(t, peak, peak + 450f)) * 12f else 0f
     translate(sin(t / 14f) * shakeAmt, cos(t / 17f) * shakeAmt) {
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF120403), Color(0xFF2A0C06))))
+        drawRect(Brush.verticalGradient(listOf(Color(0xFF050505), Color(0xFF16120A))))
         // два луча качаются
         for (s in 0..1) {
             val sx = if (s == 0) size.width * 0.12f else size.width * 0.88f
@@ -394,11 +393,11 @@ private fun DrawScope.drawStreet(t: Float, peak: Float) {
                 moveTo(sx - 10f, 0f); lineTo(sx + 10f, 0f)
                 lineTo(tipX + size.width * 0.18f, size.height * 0.95f); lineTo(tipX - size.width * 0.18f, size.height * 0.95f); close()
             }
-            drawPath(beam, Brush.verticalGradient(listOf(Color(0xFFFF2A10).copy(alpha = 0.34f), Color(0xFFFF2A10).copy(alpha = 0.04f))))
+            drawPath(beam, Brush.verticalGradient(listOf(Color(0xFFFFB000).copy(alpha = 0.32f), Color(0xFFFFB000).copy(alpha = 0.04f))))
         }
         // вспышки
         val f = ((t % 520f) / 520f)
-        if (t < 2400f && f < 0.12f) drawRect(Color(0xFFFF3A20).copy(alpha = 0.22f * (1f - f / 0.12f)))
+        if (t < 2400f && f < 0.12f) drawRect(Color(0xFFFFB000).copy(alpha = 0.20f * (1f - f / 0.12f)))
         // толпа бежит по нижнему краю
         for (row in 0..1) {
             val rnd = Random(21 + row)

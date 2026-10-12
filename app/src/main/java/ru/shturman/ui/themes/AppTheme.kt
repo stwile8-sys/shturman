@@ -141,15 +141,15 @@ object Themes {
             routeMs = 1000, routeJerky = false, vibrate = false,
             splashMs = 7800, splashPeakMs = 2250, splashRes = R.raw.splash_t5
         ),
-        // 6. STREET UNDERGROUND — подпольные гонки
+        // 6. STREET UNDERGROUND — палитра в духе Need for Speed: Most Wanted (2005): чёрный, янтарь, полицейский красный
         ThemeSpec(
-            id = 5, name = "Street Underground", vibe = "Подпольные гонки, красный свет, пыль",
-            bg = Color(0xFF1A0A08), panel = Color(0xFF2A1208), accent = Color(0xFFFF3A20), second = Color(0xFFFF8A00),
-            third = Color(0xFFFFD400), danger = Color(0xFFFF0000), text = Color(0xFFFFEDE6), textSec = Color(0xFFC49A8A),
-            divider = Color(0xFF4A2414), search = Color(0xFF331A0E), iconTint = Color(0xFFFF8A00), flash = Color(0xFFFF3A20),
-            signs = listOf(Color(0xFFFF0000), Color(0xFFFF3A20), Color(0xFFFF8A00), Color(0xFFFFD400), Color(0xFFFFE9A0)),
+            id = 5, name = "Street Underground", vibe = "Чёрный асфальт, янтарный свет, погоня (палитра NFS Most Wanted)",
+            bg = Color(0xFF0A0A0B), panel = Color(0xFF17171A), accent = Color(0xFFFFB000), second = Color(0xFFD42A1C),
+            third = Color(0xFFE8E4D8), danger = Color(0xFFFF2A1A), text = Color(0xFFF4F0E6), textSec = Color(0xFFA8A296),
+            divider = Color(0xFF2E2E32), search = Color(0xFF212125), iconTint = Color(0xFFFFB000), flash = Color(0xFFFFB000),
+            signs = listOf(Color(0xFFD42A1C), Color(0xFFFF6A00), Color(0xFFFFB000), Color(0xFFFFE08A), Color(0xFFE8E4D8)),
             numFont = FontFamily(Font(R.font.bebas_neue)), textFont = vf(R.font.oswald, 500), letterSp = 0.5f,
-            btn = BtnKind.CONCRETE, btnRadius = 3, btnW = 50, btnH = 50, panelRadius = 4, borderW = 1.5f, border = Color(0xFF6A2E18),
+            btn = BtnKind.CONCRETE, btnRadius = 3, btnW = 50, btnH = 50, panelRadius = 4, borderW = 1.5f, border = Color(0xFF7A5A12),
             enter = EnterKind.DROP, enterMs = 250, digit = DigitKind.BOARD, pressMs = 120, pressScale = 0.95f, transMs = 200,
             routeMs = 900, routeJerky = true, vibrate = true,
             splashMs = 3300, splashPeakMs = 500, splashRes = R.raw.splash_t6
