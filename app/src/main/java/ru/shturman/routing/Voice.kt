@@ -42,7 +42,6 @@ class Voice(context: Context) {
             if (status == TextToSpeech.SUCCESS && engine != null) {
                 val result = engine.setLanguage(Locale("ru", "RU"))
                 ready = result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED
-                if (!ready) onStatus?.invoke("Нет русского голоса: установите его в настройках телефона (Язык и ввод → Синтез речи)")
                 engine.setAudioAttributes(attrs())
                 pickFemaleVoice(engine)
                 engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -89,9 +88,15 @@ class Voice(context: Context) {
      * Говорит фразу. flush = true прерывает то, что говорится сейчас (поворот важнее), false ставит в очередь.
      */
     fun say(text: String, flush: Boolean = true) {
+        // Сначала готовые записи: один и тот же голос для всех подсказок, синтезатор телефона не нужен
+        val clip = VoiceClips.map[text.trimEnd('.', '!', ' ')]
+        if (clip != null) {
+            playClip(clip, flush)
+            return
+        }
         val engine = tts ?: return
         if (!ready) {
-            onStatus?.invoke("Нет русского голоса: установите его в настройках телефона (Язык и ввод → Синтез речи)")
+            onStatus?.invoke("Для этой фразы нет записи и нет голоса в телефоне")
             return
         }
         lastText = text
@@ -103,6 +108,50 @@ class Voice(context: Context) {
         }
         requestFocus()
         engine.speak(text, if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD, params, "shturman")
+    }
+
+    private val queue = ArrayDeque<Int>()
+    private var player: android.media.MediaPlayer? = null
+
+    private fun playClip(resId: Int, flush: Boolean) {
+        if (flush) {
+            queue.clear()
+            runCatching { player?.release() }
+            player = null
+        }
+        queue.addLast(resId)
+        if (player == null) playNext()
+    }
+
+    private fun playNext() {
+        val id = queue.removeFirstOrNull()
+        if (id == null) {
+            releaseFocus()
+            return
+        }
+        requestFocus()
+        val mp = runCatching { android.media.MediaPlayer.create(app, id, attrs(), audio.generateAudioSessionId()) }.getOrNull()
+        if (mp == null) {
+            onStatus?.invoke("Не удалось проиграть запись голоса")
+            player = null
+            playNext()
+            return
+        }
+        player = mp
+        val v = if (isNight()) 0.45f else 1.0f
+        mp.setVolume(v, v)
+        mp.setOnCompletionListener { done ->
+            runCatching { done.release() }
+            if (player === done) player = null
+            playNext()
+        }
+        mp.setOnErrorListener { bad, _, _ ->
+            runCatching { bad.release() }
+            if (player === bad) player = null
+            playNext()
+            true
+        }
+        mp.start()
     }
 
     private fun requestFocus() {
@@ -122,11 +171,16 @@ class Voice(context: Context) {
 
     fun shutdown() {
         releaseFocus()
+        queue.clear()
+        runCatching { player?.release() }
         runCatching { tts?.stop(); tts?.shutdown() }
     }
 }
 
-/** Фраза для подсказки о повороте. level: 0 — заранее, 1 — близко, 2 — прямо сейчас. */
+/**
+ * Фраза для подсказки о повороте. level: 0 — заранее, 1 — близко, 2 — прямо сейчас.
+ * Текст точно совпадает с готовыми записями (VoiceClips): названия улиц в записи не входят.
+ */
 fun turnPhrase(level: Int, distanceM: Double, isLeft: Boolean, severity: Int, street: String, short: Boolean = false): String {
     val side = if (isLeft) "налево" else "направо"
     val how = when {
@@ -134,20 +188,10 @@ fun turnPhrase(level: Int, distanceM: Double, isLeft: Boolean, severity: Int, st
         severity >= 5 -> "плавно $side"
         else -> side
     }
-    if (short) {
-        // Ночью: без лишних слов
-        return when (level) {
-            2 -> how.replaceFirstChar { it.uppercase() }
-            else -> "$how, ${roundMeters(distanceM, if (level == 1) 50 else 100)}"
-        }
-    }
     return when (level) {
         2 -> how.replaceFirstChar { it.uppercase() }
-        1 -> "Через ${roundMeters(distanceM, 50)} ${meterWord(roundMeters(distanceM, 50))}, $how"
-        else -> {
-            val m = roundMeters(distanceM, 100)
-            "Через $m ${meterWord(m)}, $how" + if (street.isNotBlank()) ", на $street" else ""
-        }
+        1 -> "Через ${roundMeters(distanceM, 50).coerceIn(50, 600)} метров, $how"
+        else -> "Через ${roundMeters(distanceM, 100).coerceIn(50, 600)} метров, $how"
     }
 }
 

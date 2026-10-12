@@ -724,7 +724,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     /** Кнопка «Проверить голос» в настройках. */
     fun testVoice() {
         _state.update { it.copy(voiceStatus = "Говорю…") }
-        voice.say("Проверка голоса. Через двести метров, направо.")
+        voice.say("Через 200 метров, направо")
     }
 
     fun setVoiceOn(on: Boolean) {
