@@ -335,7 +335,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 val litersOf = { o: RouteOption -> fuelLiters(o.lengthM, o.timeSec, s.consumption.toDouble()) }
                 val minFuel = adjusted.minByOrNull(litersOf)
                 val labeled = adjusted.map { o ->
-                    if (o === minFuel && o !== fastest && litersOf(o) < litersOf(fastest!!) * 0.98 && !o.label.contains("Экономия")) {
+                    if (o === minFuel && o !== fastest && litersOf(o) < litersOf(fastest!!) * 0.98) {
                         RouteOption(o.timeSec, o.lengthM, o.points, o.maneuvers, if (o.label.isEmpty()) "Экономия бензина" else o.label + " + экономия")
                     } else o
                 }.sortedBy { it.timeSec }

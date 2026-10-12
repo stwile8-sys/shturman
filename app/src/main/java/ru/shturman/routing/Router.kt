@@ -141,7 +141,7 @@ class Router(private val roadData: RoadData) {
                 .put("use_tolls", 0.0)
                 .put("maneuver_penalty", 30)
                 .put("use_living_streets", 0.0)
-            addIfNew(runCatching { parse(call(eco, emptyList()), "Экономия бензина").firstOrNull() }.getOrNull())
+            addIfNew(runCatching { parse(call(eco, emptyList()), "Ровный ход").firstOrNull() }.getOrNull())
 
             RouteResult(result, timeAware)
         }
