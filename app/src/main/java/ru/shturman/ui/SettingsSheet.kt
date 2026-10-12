@@ -115,6 +115,13 @@ fun SettingsSheet(
 
             Section("Голос и звуки")
             SwitchRow("Голосовые подсказки", "Говорит о поворотах голосом телефона. Нужен русский голос в настройках речи Android.", s.voiceOn, vm::setVoiceOn)
+            Button(
+                onClick = vm::testVoice,
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Проверить голос", style = ShText.Small) }
+            s.voiceStatus?.let { Text(text = it, color = ShColors.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
             SwitchRow("Ночной режим голоса", "С 22:00 до 6:00 голос тише, а фразы короче.", s.nightVoice, vm::setNightVoice)
             SwitchRow("Звук при превышении", "Мягкое «вжжж», громче по мере превышения скорости.", s.overspeedSound, vm::setOverspeedSound)
 
@@ -219,7 +226,7 @@ fun SettingsSheet(
                 onClick = {
                     val sum = "маршрутов: ${s.options.size}, навигация: ${s.navigating}, данные готовы: ${s.dataReady}" +
                         ", ошибка данных: ${s.dataError}, синхр.: ${s.syncMessage}, караван: ${s.caravanMessage}" +
-                        ", голос: ${s.voiceMessage}, услышано: ${s.heardText}, аккаунт: ${user.email}"
+                        ", голос: ${s.voiceMessage}, состояние голоса: ${s.voiceStatus}, услышано: ${s.heardText}, аккаунт: ${user.email}"
                     ru.shturman.Report.send(ctx, sum)
                 },
                 modifier = Modifier.fillMaxWidth().height(44.dp),

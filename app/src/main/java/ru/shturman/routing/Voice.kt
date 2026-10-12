@@ -24,6 +24,10 @@ class Voice(context: Context) {
     private var focus: AudioFocusRequest? = null
 
     var princess = false
+    /** Сообщение о состоянии голоса: ошибка или «всё хорошо». Показывается в настройках. */
+    var onStatus: ((String) -> Unit)? = null
+    private var lastText: String? = null
+    private var retried = false
     var nightMode = true
 
     /** Сейчас ночь по часам телефона. */
@@ -38,6 +42,7 @@ class Voice(context: Context) {
             if (status == TextToSpeech.SUCCESS && engine != null) {
                 val result = engine.setLanguage(Locale("ru", "RU"))
                 ready = result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED
+                if (!ready) onStatus?.invoke("Нет русского голоса: установите его в настройках телефона (Язык и ввод → Синтез речи)")
                 engine.setAudioAttributes(attrs())
                 pickFemaleVoice(engine)
                 engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -45,13 +50,26 @@ class Voice(context: Context) {
                     override fun onDone(utteranceId: String?) { releaseFocus() }
                     @Deprecated("Нужен для старых версий Android")
                     override fun onError(utteranceId: String?) { releaseFocus() }
+                    override fun onError(utteranceId: String?, errorCode: Int) {
+                        releaseFocus()
+                        // Выбранный голос не сработал (например, ему нужен интернет): берём голос по умолчанию и повторяем
+                        val text = lastText
+                        if (!retried && text != null) {
+                            retried = true
+                            runCatching { engine.voice = engine.defaultVoice }
+                            onStatus?.invoke("Голос не сработал (код $errorCode), пробую другой")
+                            engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "shturman-retry")
+                        } else {
+                            onStatus?.invoke("Ошибка синтезатора речи (код $errorCode)")
+                        }
+                    }
                 })
             }
         }
     }
 
     private fun attrs() = AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+        .setUsage(AudioAttributes.USAGE_MEDIA)
         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
         .build()
 
@@ -72,7 +90,12 @@ class Voice(context: Context) {
      */
     fun say(text: String, flush: Boolean = true) {
         val engine = tts ?: return
-        if (!ready) return
+        if (!ready) {
+            onStatus?.invoke("Нет русского голоса: установите его в настройках телефона (Язык и ввод → Синтез речи)")
+            return
+        }
+        lastText = text
+        retried = false
         engine.setPitch(if (princess) 1.3f else 1.12f)
         engine.setSpeechRate(if (princess) 0.95f else 1.1f)
         val params = Bundle().apply {

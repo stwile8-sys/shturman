@@ -137,6 +137,7 @@ data class NavState(
     // Голосовое управление
     val listening: Boolean = false,
     val voiceMessage: String? = null,
+    val voiceStatus: String? = null,
     val heardText: String? = null,
     val voiceFallbackKey: Int = 0
 ) {
@@ -202,6 +203,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<NavState> = _state
 
     init {
+        voice.onStatus = { m -> _state.update { it.copy(voiceStatus = m) } }
         downloadDataIfNeeded()
         ShColors.princess = settings.getBoolean("princess", false)
         voice.princess = ShColors.princess
@@ -717,6 +719,12 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             .put("lat", place.position.lat).put("lon", place.position.lon)
         settings.edit().putString("fav_$kind", o.toString()).apply()
         _state.update { if (kind == "home") it.copy(home = place) else it.copy(work = place) }
+    }
+
+    /** Кнопка «Проверить голос» в настройках. */
+    fun testVoice() {
+        _state.update { it.copy(voiceStatus = "Говорю…") }
+        voice.say("Проверка голоса. Через двести метров, направо.")
     }
 
     fun setVoiceOn(on: Boolean) {
