@@ -115,6 +115,7 @@ data class NavState(
     val notice: String? = null,
     /** Чувствительность отклонения: 0 — низкая, 1 — средняя, 2 — высокая. */
     val devLevel: Int = 1,
+    val turnVibro: Boolean = true,
     val overspeedSound: Boolean = true,
     val nightVoice: Boolean = true,
     val radarOn: Boolean = true,
@@ -198,6 +199,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         satellite = settings.getBoolean("satellite", false),
         theme = ru.shturman.ui.themes.Themes.load(settings),
         devLevel = settings.getInt("dev_level", 1).coerceIn(0, 2),
+        turnVibro = settings.getBoolean("turn_vibro", true),
         overspeedSound = settings.getBoolean("overspeed", true),
         nightVoice = settings.getBoolean("night_voice", true),
         radarOn = settings.getBoolean("radar", true),
@@ -514,6 +516,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             locateOnRoute(route, here, fromIndex)
         }
         announceTurn(nextTurn(route, position))
+        vibrateForTurn(nextTurn(route, position)?.distanceM)
         val limit = limits.firstOrNull { position.traveledM >= it.startM && position.traveledM < it.endM }?.kmh
         if (s.overspeedSound && limit != null) ThemeSounds.speeding(kmh - limit)
         val hazards = checkHazards(position.traveledM, s)
@@ -603,6 +606,29 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             if (free < 100L * 1024 * 1024) showNotice("Мало памяти в телефоне: освободите место")
         }
     }
+
+    private var vibeLevel = -1
+
+    /** Вибро-отклик: за 300 м лёгкий, за 150 м средний, за 50 м сильный. Каждый раз один раз на поворот. */
+    private fun vibrateForTurn(distM: Double?) {
+        if (distM == null || !_state.value.turnVibro) return
+        val level = when {
+            distM <= 50.0 -> 2
+            distM <= 150.0 -> 1
+            distM <= 300.0 -> 0
+            else -> -1
+        }
+        if (level < 0) { vibeLevel = -1; return }
+        if (level <= vibeLevel) return
+        vibeLevel = level
+        runCatching {
+            @Suppress("DEPRECATION")
+            val v = getApplication<Application>().getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            val ms = longArrayOf(40L, 90L, 180L)[level]
+            if (v?.hasVibrator() == true) v.vibrate(android.os.VibrationEffect.createOneShot(ms, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+        }
+    }
+
 
     private var lastNotifAt = 0L
     private var gpsWatch: kotlinx.coroutines.Job? = null
@@ -789,6 +815,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(overspeedSound = on) }
     }
     fun setNightVoice(on: Boolean) { putBool("night_voice", on); voice.nightMode = on; _state.update { it.copy(nightVoice = on) } }
+    fun setTurnVibro(on: Boolean) { putBool("turn_vibro", on); _state.update { it.copy(turnVibro = on) } }
     fun setRadar(on: Boolean) { putBool("radar", on); _state.update { it.copy(radarOn = on) } }
 
     /** Тема оформления: цвета, шрифты, формы, анимации и звуки. Функции приложения те же. Голос навигатора не меняется. */
@@ -821,6 +848,43 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setConsumption(v: Float) { settings.edit().putFloat("consumption", v).apply(); _state.update { it.copy(consumption = v) } }
     fun setFuelPrice(v: Float) { settings.edit().putFloat("fuel_price", v).apply(); _state.update { it.copy(fuelPrice = v) } }
+
+    // ---------- данные ----------
+
+    /** Размер временных файлов (кэш карты и загрузок), байты. */
+    fun cacheSizeBytes(): Long = runCatching {
+        fun size(f: java.io.File): Long = if (f.isDirectory) (f.listFiles()?.sumOf { size(it) } ?: 0L) else f.length()
+        size(getApplication<Application>().cacheDir)
+    }.getOrDefault(0L)
+
+    /** Удаляет временные файлы. Дорожные данные и настройки не трогает. */
+    fun clearCache(): Long {
+        val before = cacheSizeBytes()
+        runCatching {
+            getApplication<Application>().cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+        }
+        return before - cacheSizeBytes()
+    }
+
+    /** Возвращает числовые настройки и переключатели к заводским. Дом, работа и тема остаются. */
+    fun resetSettings() {
+        settings.edit()
+            .remove("voice").remove("fullscreen").remove("satellite").remove("overspeed").remove("night_voice")
+            .remove("radar").remove("card_percent").remove("card_distance").remove("card_eta")
+            .remove("card_remaining").remove("card_fuel").remove("consumption").remove("fuel_price")
+            .remove("dev_level").remove("theme_sounds").remove("turn_vibro")
+            .apply()
+        ThemeSounds.enabled = true
+        deviation.level = DeviationLevel.MEDIUM
+        voice.nightMode = true
+        _state.update {
+            it.copy(
+                voiceOn = true, fullscreen = false, satellite = false, overspeedSound = true, nightVoice = true,
+                radarOn = true, cardPercent = true, cardDistance = true, cardEta = true, cardRemaining = false,
+                cardFuel = false, consumption = 8.0f, fuelPrice = 60.0f, devLevel = 1, turnVibro = true
+            )
+        }
+    }
 
     // ---------- караван ----------
 
