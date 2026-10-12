@@ -164,11 +164,6 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 description = "Куда едем?",
                 onClick = { showSearch = true }
             )
-            MapButton(
-                icon = ImageVector.vectorResource(R.drawable.ic_mic),
-                description = "Голосовая команда",
-                onClick = { onMic() }
-            )
             if (s.destination != null) {
                 MapButton(
                     icon = Icons.Filled.Close,
