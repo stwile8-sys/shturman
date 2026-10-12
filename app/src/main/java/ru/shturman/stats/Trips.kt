@@ -80,11 +80,11 @@ object TripMath {
 
 /** Хранилище поездок и заправок в настройках телефона. */
 class TripLog(private val prefs: SharedPreferences) {
-    fun trips(): List<Trip> = (prefs.getString("trips", "") ?: "").lines().mapNotNull { TripMath.decode(it) }
+    fun trips(): List<Trip> = ru.shturman.Crypto.decrypt(prefs.getString("trips", "") ?: "").lines().mapNotNull { TripMath.decode(it) }
 
     fun add(t: Trip, nowMs: Long = System.currentTimeMillis()) {
         val all = TripMath.trim(trips() + t, nowMs)
-        prefs.edit().putString("trips", all.joinToString("\n") { TripMath.encode(it) })
+        prefs.edit().putString("trips", ru.shturman.Crypto.encrypt(all.joinToString("\n") { TripMath.encode(it) }))
             .putFloat("odometer", (prefs.getFloat("odometer", 0f) + t.km).toFloat()).apply()
     }
 
@@ -92,11 +92,11 @@ class TripLog(private val prefs: SharedPreferences) {
 
     val odometerKm: Double get() = prefs.getFloat("odometer", 0f).toDouble()
 
-    fun refuels(): List<Refuel> = (prefs.getString("refuels", "") ?: "").lines().mapNotNull { TripMath.decodeRefuel(it) }
+    fun refuels(): List<Refuel> = ru.shturman.Crypto.decrypt(prefs.getString("refuels", "") ?: "").lines().mapNotNull { TripMath.decodeRefuel(it) }
 
     fun addRefuel(r: Refuel) {
         val all = (refuels() + r).takeLast(200)
-        prefs.edit().putString("refuels", all.joinToString("\n") { TripMath.encode(it) }).apply()
+        prefs.edit().putString("refuels", ru.shturman.Crypto.encrypt(all.joinToString("\n") { TripMath.encode(it) })).apply()
     }
 
     var serviceIntervalKm: Int

@@ -60,3 +60,10 @@ class TripsTest {
         assertTrue(TripMath.serviceDue(15000.0, 5000.0, 10000))
     }
 }
+
+class QuietHoursTest {
+    @Test fun quietBoundaries() {
+        val q = ru.shturman.service.AutoPrefs::isQuietHour
+        assertTrue(q(23)); assertTrue(q(0)); assertTrue(q(6)); assertFalse(q(7)); assertFalse(q(22)); assertFalse(q(12))
+    }
+}

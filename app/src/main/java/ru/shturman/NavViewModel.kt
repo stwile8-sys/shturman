@@ -504,6 +504,12 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (s.navigating) stopRecorder.add(here, speedMps.toDouble(), System.currentTimeMillis())
         if (s.navigating && kmh > tripMaxKmh && kmh < 300) tripMaxKmh = kmh
+        if (s.navigating) {
+            if (speedMps > 1.5f) {
+                lastMovingAt = System.currentTimeMillis()
+                if (navPaused) resumeNav()
+            }
+        }
         detectHardBraking(here, speedMps)
         caravan.sendPosition(here, selfOff)
         val route = s.route ?: return null
@@ -642,12 +648,44 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
 
+    private var lastMovingAt = System.currentTimeMillis()
+    private var navPaused = false
+    private var lowBatteryWarned = false
+
+    /** Простой больше 5 минут: отпускаем блокировку процессора, чтобы не тратить батарею. */
+    private fun pauseNav() {
+        navPaused = true
+        ru.shturman.service.NavService.setWake(getApplication(), false)
+        ru.shturman.service.NavService.update(getApplication(), "Штурман · пауза", "Стоите больше 5 минут. Тронетесь, и навигация продолжится")
+        showNotice("Навигация на паузе: стоим больше 5 минут")
+    }
+
+    private fun resumeNav() {
+        navPaused = false
+        ru.shturman.service.NavService.setWake(getApplication(), true)
+    }
+
+    /** Батарея меньше 15% во время поездки: один раз предупреждаем. */
+    private fun checkBatteryDuringTrip() {
+        runCatching {
+            val bm = getApplication<Application>().getSystemService(android.content.Context.BATTERY_SERVICE) as android.os.BatteryManager
+            val pct = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            if (pct in 1..14 && !bm.isCharging) {
+                if (!lowBatteryWarned) {
+                    lowBatteryWarned = true
+                    showNotice("Батарея $pct%. Подключите зарядку")
+                }
+            } else if (pct > 20) lowBatteryWarned = false
+        }
+    }
+
     private var lastNotifAt = 0L
     private var gpsWatch: kotlinx.coroutines.Job? = null
     private var gpsLostShown = false
 
     /** Текст постоянного уведомления: скорость, ближайший поворот и сколько осталось ехать. Не чаще раза в 2 секунды. */
     private fun updateNavNotification(kmh: Int, turn: NextTurn?, leftM: Double) {
+        if (navPaused) return
         val now = System.currentTimeMillis()
         if (now - lastNotifAt < 2_000L) return
         lastNotifAt = now
@@ -665,11 +703,14 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     /** Если положение не приходит больше 30 секунд, предупреждает и пишет это в уведомлении. */
     private fun startGpsWatch() {
         gpsWatch?.cancel()
+        lastMovingAt = System.currentTimeMillis(); navPaused = false
         lastFixAt = maxOf(lastFixAt, System.currentTimeMillis())
         gpsWatch = viewModelScope.launch {
             while (true) {
                 kotlinx.coroutines.delay(5_000)
                 if (!_state.value.navigating) break
+                checkBatteryDuringTrip()
+                if (!navPaused && System.currentTimeMillis() - lastMovingAt > 5 * 60_000L) pauseNav()
                 if (System.currentTimeMillis() - lastFixAt > 30_000L && !gpsLostShown) {
                     gpsLostShown = true
                     showNotice("Потерян сигнал GPS")

@@ -256,6 +256,52 @@ fun SettingsSheet(
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
             ) { Text("Отправить отчёт разработчику", style = ShText.Small) }
 
+            Section("Уведомления и автозапуск")
+            val ctxN = androidx.compose.ui.platform.LocalContext.current
+            var nTrip by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.tripNotice(ctxN)) }
+            var nQuiet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.quietHours(ctxN)) }
+            var nBt by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.btAutostart(ctxN)) }
+            var nBtStop by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.btAutostop(ctxN)) }
+            var nCharge by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.chargeAutostart(ctxN)) }
+            var btName by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.service.AutoPrefs.btName(ctxN)) }
+            var btList by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<Pair<String, String>>?>(null) }
+            SwitchRow("Итог поездки", "Уведомление со статистикой, когда поездка закончилась.", nTrip) { nTrip = it; ru.shturman.service.AutoPrefs.set(ctxN, "notif_trip", it) }
+            SwitchRow("Тихие часы", "С 23:00 до 7:00 необязательные уведомления не показываются.", nQuiet) { nQuiet = it; ru.shturman.service.AutoPrefs.set(ctxN, "quiet_hours", it) }
+            fun loadBonded() {
+                btList = runCatching {
+                    @Suppress("MissingPermission")
+                    (ctxN.getSystemService(android.content.Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager)
+                        .adapter?.bondedDevices?.map { (it.name ?: it.address) to it.address } ?: emptyList()
+                }.getOrDefault(emptyList())
+            }
+            val btPerm = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+            ) { ok -> if (ok) loadBonded() }
+            SwitchRow("Автозапуск при подключении к авто", "Когда телефон подключается к выбранному Bluetooth авто, придёт предложение открыть Штурман.", nBt) { nBt = it; ru.shturman.service.AutoPrefs.set(ctxN, "bt_autostart", it) }
+            SwitchRow("Остановка маршрута при отключении", "Когда выбранное Bluetooth авто отключается, маршрут отменяется.", nBtStop) { nBtStop = it; ru.shturman.service.AutoPrefs.set(ctxN, "bt_autostop", it) }
+            Text(text = "Bluetooth авто: ${btName ?: "не выбрано"}", color = ShColors.TextSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = {
+                    if (android.os.Build.VERSION.SDK_INT >= 31 &&
+                        androidx.core.content.ContextCompat.checkSelfPermission(ctxN, android.Manifest.permission.BLUETOOTH_CONNECT) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) btPerm.launch(android.Manifest.permission.BLUETOOTH_CONNECT) else loadBonded()
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Выбрать Bluetooth авто", style = ShText.Small) }
+            btList?.let { list ->
+                if (list.isEmpty()) Text("Нет спаренных устройств. Сначала подключите телефон к авто в настройках Bluetooth.", color = ShColors.TextSecondary, fontSize = 13.sp)
+                list.forEach { (name, addr) ->
+                    TextButton(
+                        onClick = { ru.shturman.service.AutoPrefs.setAddress(ctxN, addr, name); btName = name; btList = null },
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) { Text(name, color = ShColors.Accent, style = ShText.Small) }
+                }
+            }
+            SwitchRow("Автозапуск при подключении зарядки", "Придёт предложение открыть Штурман, когда подключается зарядка.", nCharge) { nCharge = it; ru.shturman.service.AutoPrefs.set(ctxN, "charge_autostart", it) }
+
             Section("Статистика поездок")
             var statsText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(vm.statsText()) }
             Text(text = statsText, color = ShColors.TextSecondary, fontSize = 13.sp)

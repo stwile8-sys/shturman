@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         )
+        ru.shturman.work.Background.schedule(applicationContext)
         // Приветствие голосом только при свежем запуске, не при повороте экрана
         welcome = ru.shturman.routing.Welcome(this, ru.shturman.ui.theme.ShColors.T.splashRes)
         setContent {
