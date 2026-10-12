@@ -6,7 +6,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.tasks.await
 
 /** Участник каравана на карте. */
-class CaravanMember(val uid: String, val name: String, val position: LatLon, val leader: Boolean)
+class CaravanMember(val uid: String, val name: String, val position: LatLon, val leader: Boolean, val off: Boolean = false)
 
 /** Куда едет ведущий. */
 class CaravanDest(val title: String, val position: LatLon)
@@ -63,7 +63,7 @@ class Caravan(
                     val lat = d.getDouble("lat") ?: return@mapNotNull null
                     val lon = d.getDouble("lon") ?: return@mapNotNull null
                     if (now - (d.getLong("updated") ?: 0L) > 120_000L) return@mapNotNull null
-                    CaravanMember(d.id, d.getString("name") ?: "Участник", LatLon(lat, lon), d.getBoolean("leader") == true)
+                    CaravanMember(d.id, d.getString("name") ?: "Участник", LatLon(lat, lon), d.getBoolean("leader") == true, d.getBoolean("off") == true)
                 } ?: emptyList()
                 onMembers(list)
             }
@@ -75,7 +75,7 @@ class Caravan(
     }
 
     /** Отправляет своё положение (не чаще раза в 3 секунды). */
-    fun sendPosition(here: LatLon) {
+    fun sendPosition(here: LatLon, off: Boolean = false) {
         val c = code ?: return
         val me = user ?: return
         val now = System.currentTimeMillis()
@@ -84,7 +84,7 @@ class Caravan(
         db.collection("caravans").document(c).collection("members").document(me.uid).set(
             mapOf(
                 "name" to (me.displayName?.substringBefore(' ') ?: "Участник"),
-                "lat" to here.lat, "lon" to here.lon, "leader" to leader, "updated" to now
+                "lat" to here.lat, "lon" to here.lon, "leader" to leader, "off" to off, "updated" to now
             )
         )
     }
