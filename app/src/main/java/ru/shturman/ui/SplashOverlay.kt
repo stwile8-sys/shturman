@@ -134,6 +134,35 @@ fun SplashOverlay(onFinished: () -> Unit) {
                 drawPath(tail, Color(0xFF2A2F38).copy(alpha = min(1f, p * 3f)))
             }
             drawCircle(Color(0xFF0A0C10), radius = r * 0.065f, center = c)
+
+            // дорога в перспективе: оранжевая разметка летит к зрителю, фары-огоньки уходят вдаль
+            run {
+                val horizon = size.height * 0.68f
+                val roadA = (p * 2.2f).coerceIn(0f, 1f)
+                val cx = size.width / 2
+                val half = size.width * 0.5f
+                val edge = Path().apply {
+                    moveTo(cx - half * 0.06f, horizon); lineTo(cx + half * 0.06f, horizon)
+                    lineTo(cx + half * 1.1f, size.height); lineTo(cx - half * 1.1f, size.height); close()
+                }
+                drawPath(edge, Color(0xFF12161C).copy(alpha = roadA))
+                drawLine(cyan.copy(alpha = 0.5f * roadA), Offset(cx - half * 0.06f, horizon), Offset(cx - half * 1.1f, size.height), strokeWidth = 3f)
+                drawLine(cyan.copy(alpha = 0.5f * roadA), Offset(cx + half * 0.06f, horizon), Offset(cx + half * 1.1f, size.height), strokeWidth = 3f)
+                val phase = (p * 5f) % 1f
+                for (i in 0 until 7) {
+                    val t0 = ((i + phase) / 7f)
+                    val t1 = t0 + 0.06f
+                    val y0 = horizon + (size.height - horizon) * t0 * t0
+                    val y1 = horizon + (size.height - horizon) * min(1f, t1) * min(1f, t1)
+                    val w0 = 2f + 16f * t0 * t0
+                    val w1 = 2f + 16f * min(1f, t1) * min(1f, t1)
+                    val dash = Path().apply {
+                        moveTo(cx - w0, y0); lineTo(cx + w0, y0); lineTo(cx + w1, y1); lineTo(cx - w1, y1); close()
+                    }
+                    drawPath(dash, orange.copy(alpha = roadA * (0.25f + 0.75f * t0)))
+                }
+                drawCircle(orange.copy(alpha = 0.18f * roadA), radius = size.width * 0.35f, center = Offset(cx, horizon))
+            }
         }
         Text(
             text = "ШТУРМАН",

@@ -117,7 +117,6 @@ fun SettingsSheet(
             SwitchRow("Голосовые подсказки", "Говорит о поворотах голосом телефона. Нужен русский голос в настройках речи Android.", s.voiceOn, vm::setVoiceOn)
             SwitchRow("Ночной режим голоса", "С 22:00 до 6:00 голос тише, а фразы короче.", s.nightVoice, vm::setNightVoice)
             SwitchRow("Звук при превышении", "Мягкое «вжжж», громче по мере превышения скорости.", s.overspeedSound, vm::setOverspeedSound)
-            SwitchRow("Радар-круг камер", "Показывает камеру впереди на маршруте: обычную, на мосту или в тоннеле.", s.radarOn, vm::setRadar)
 
             Section("Экран")
             SwitchRow("Полноэкранный режим", "Скрывает системные панели Android. Вернуть их можно свайпом от края.", s.fullscreen, vm::setFullscreen)
