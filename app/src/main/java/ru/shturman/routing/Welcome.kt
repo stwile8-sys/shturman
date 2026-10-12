@@ -26,6 +26,11 @@ class Welcome(context: Context) {
         runCatching { mp?.start() }
     }
 
+    /** Пропуск заставки касанием: звук обрывается вместе с ней. */
+    fun stop() {
+        runCatching { mp?.let { if (it.isPlaying) it.pause() } }
+    }
+
     fun release() {
         runCatching { mp?.release() }
         mp = null

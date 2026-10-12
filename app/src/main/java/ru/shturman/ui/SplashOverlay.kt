@@ -42,8 +42,8 @@ private const val SKY_START = 2200f         // из чёрного проявл�
 private const val SOUND_AT = 2900f          // начало появления самолёта и звук
 private const val REVEAL_END = 6000f        // самолёт полностью проявился (под длину звука)
 private const val TITLE_START = 5000f
-private const val FADE_START = 7600f
-private const val TOTAL = 8000f
+private const val FADE_START = 8300f
+private const val TOTAL = 8700f
 
 private fun ease(x: Float): Float {
     val t = x.coerceIn(0f, 1f)

@@ -102,7 +102,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
-                    if (showSplash) SplashOverlay(onPlaySound = { welcome?.play() }, onFinished = { showSplash = false })
+                    if (showSplash) SplashOverlay(onPlaySound = { welcome?.play() }, onFinished = { welcome?.stop(); showSplash = false })
                 }
             }
         }
