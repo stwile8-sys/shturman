@@ -297,7 +297,9 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             _state.update { it.copy(routeError = "Дорожные данные ещё загружаются, ${(s.dataProgress * 100).toInt()}%") }
             return
         }
-        val from = lastKnownPosition(getApplication())
+        // Берём свежее положение из своего приёма GPS; системный «последний известный» адрес может быть старым
+        val fresh = lastFix?.takeIf { System.currentTimeMillis() - lastFixAt < 30_000L }
+        val from = fresh ?: lastKnownPosition(getApplication())
         if (from == null) {
             _state.update { it.copy(routeError = "Нет сигнала GPS: выйдите на открытое место и подождите") }
             return
@@ -430,7 +432,12 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
      * обновляет пройденный путь и ближайший поворот и возвращает точку, где рисовать стрелку.
      * Если телефон ушёл от маршрута дальше SNAP_MAX_M, стрелка остаётся на настоящем GPS-положении.
      */
+    private var lastFix: LatLon? = null
+    private var lastFixAt = 0L
+
     fun onFix(here: LatLon, speedMps: Float = 0f): Snap? {
+        lastFix = here
+        lastFixAt = System.currentTimeMillis()
         val s = _state.value
         val kmh = (speedMps * 3.6f).toInt()
         if (kmh != s.speedKmh) _state.update { it.copy(speedKmh = kmh) }

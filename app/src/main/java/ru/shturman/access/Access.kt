@@ -49,21 +49,26 @@ object Access {
     suspend fun check(context: Context): AccessState {
         val user = FirebaseAuth.getInstance().currentUser ?: return AccessState.Failed("Нет входа в аккаунт")
         if (user.email == ADMIN_EMAIL) return AccessState.Granted
+        val cache = context.getSharedPreferences("access", Context.MODE_PRIVATE)
+        val cacheKey = "ok_" + user.uid
         return try {
             val doc = db.collection("users").document(user.uid).get().await()
-            if (!doc.exists()) return AccessState.NeedCode
+            if (!doc.exists()) { cache.edit().remove(cacheKey).apply(); return AccessState.NeedCode }
             val bound = doc.getString("deviceId") ?: ""
             val mine = deviceId(context)
             when {
                 bound.isEmpty() -> {
                     // Владелец сбросил привязку: закрепляем за этим устройством
                     db.collection("users").document(user.uid).update("deviceId", mine).await()
+                    cache.edit().putString(cacheKey, mine).apply()
                     AccessState.Granted
                 }
-                bound == mine -> AccessState.Granted
-                else -> AccessState.Blocked("Доступ привязан к другому устройству. Если вы сменили телефон, напишите тому, кто выдал код.")
+                bound == mine -> { cache.edit().putString(cacheKey, mine).apply(); AccessState.Granted }
+                else -> { cache.edit().remove(cacheKey).apply(); AccessState.Blocked("Доступ привязан к другому устройству. Если вы сменили телефон, напишите тому, кто выдал код.") }
             }
         } catch (e: Exception) {
+            // Нет связи: если этот телефон уже был подтверждён раньше, пускаем без интернета
+            if (cache.getString(cacheKey, null) == deviceId(context)) return AccessState.Granted
             AccessState.Failed("Не удалось проверить доступ: ${message(e)}")
         }
     }

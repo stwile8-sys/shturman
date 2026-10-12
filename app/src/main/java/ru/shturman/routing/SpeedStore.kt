@@ -314,7 +314,11 @@ class StopSpot(val position: LatLon, val bucket: Int, val waitSec: Double)
  * Замечает остановки: стоял не меньше 3 секунд, потом поехал. Дольше 5 минут не считаем:
  * это уже парковка или разговор, а не светофор.
  */
+/** Запись в базу идёт в отдельном потоке, чтобы не тормозить карту. */
+private val dbWriter = java.util.concurrent.Executors.newSingleThreadExecutor()
+
 class StopRecorder(private val store: SpeedStore) {
+    private var moved = false
     private var stoppedAt = 0L
     private var lat = 0.0
     private var lon = 0.0
@@ -326,15 +330,21 @@ class StopRecorder(private val store: SpeedStore) {
                 lat = here.lat
                 lon = here.lon
             }
-        } else if (speedMps > 2.0 && stoppedAt != 0L) {
-            val wait = (nowMs - stoppedAt) / 1000.0
-            if (wait in 3.0..300.0) store.recordStop(lat, lon, wait, stoppedAt)
+        } else if (speedMps > 2.0) {
+            if (stoppedAt != 0L && moved) {
+                // Стоянку в самом начале пути (пока ещё не поехали) не считаем светофором
+                val wait = (nowMs - stoppedAt) / 1000.0
+                val la = lat; val lo = lon; val st = stoppedAt
+                if (wait in 3.0..300.0) dbWriter.execute { runCatching { store.recordStop(la, lo, wait, st) } }
+            }
             stoppedAt = 0L
+            moved = true
         }
     }
 
     fun reset() {
         stoppedAt = 0L
+        moved = false
     }
 }
 
@@ -359,7 +369,10 @@ class SpeedRecorder(private val store: SpeedStore) {
     fun flush() {
         val k = cell
         // Меньше трёх измерений — это краешек квадрата, не считаем
-        if (k != null && count >= 3) store.record(k, sum / count, at)
+        if (k != null && count >= 3) {
+            val avg = sum / count; val t = at
+            dbWriter.execute { runCatching { store.record(k, avg, t) } }
+        }
         cell = null
         sum = 0.0
         count = 0
