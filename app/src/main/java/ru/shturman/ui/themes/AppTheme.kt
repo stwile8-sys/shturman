@@ -139,7 +139,7 @@ object Themes {
             btn = BtnKind.SLIM, btnRadius = 26, btnW = 54, btnH = 40, panelRadius = 22, borderW = 1.2f, border = Color(0xAA00D9FF),
             enter = EnterKind.EMERGE, enterMs = 350, digit = DigitKind.BLUR, pressMs = 150, pressScale = 1f, transMs = 300,
             routeMs = 1000, routeJerky = false, vibrate = false,
-            splashMs = 6800, splashPeakMs = 2250, splashRes = R.raw.splash_t5
+            splashMs = 7800, splashPeakMs = 2250, splashRes = R.raw.splash_t5
         ),
         // 6. STREET UNDERGROUND — подпольные гонки
         ThemeSpec(

@@ -349,9 +349,9 @@ private fun DrawScope.drawNight(t: Float, peak: Float) {
     drawRect(Brush.verticalGradient(listOf(Color(0xFF02040C), Color(0xFF0A1A3A))))
     val cx = size.width / 2
     val base = size.height * 0.98f
-    val grow = span(t, 200f, 1600f)
+    val grow = span(t, 200f, 2200f)
     val strength = 0.6f + 0.4f * span(t, peak - 400f, peak)
-    val fade = 1f - span(t, 5200f, 6600f) * 0.7f
+    val fade = 1f - span(t, 6200f, 7700f) * 0.7f
     for (k in 0 until 5) {
         val fl = 1f + 0.06f * sin(t / (35f + k * 7f) + k)
         val hh = size.height * (0.78f - 0.10f * k) * grow * fl * strength
