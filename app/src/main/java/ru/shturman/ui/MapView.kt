@@ -97,6 +97,20 @@ fun DarkMap(
             result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
     }
 
+    // Уведомление о поездке (Android 13+): просим один раз, отказ не мешает работе
+    val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(hasPermission) {
+        if (hasPermission && android.os.Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            val prefs = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("notif_asked", false)) {
+                prefs.edit().putBoolean("notif_asked", true).apply()
+                runCatching { notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         if (!hasPermission) {
             permissionLauncher.launch(

@@ -170,7 +170,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private var prevSpeed = 0f
     private var prevSpeedAt = 0L
     private val caravan = Caravan(
-        onMembers = { m -> _state.update { it.copy(members = m) } },
+        onMembers = { m -> onCaravanMembers(m) },
         onDest = { d -> _state.update { it.copy(leaderDest = d) } }
     )
     private val listener = VoiceListener(
@@ -457,6 +457,9 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         ThemeSounds.play(ThemeSound.NAV)
         _state.update { it.copy(navigating = true, position = position, turn = nextTurn(route, position)) }
         lowResourcesNotice()
+        ru.shturman.service.NavService.onCancel = { clearRoute() }
+        ru.shturman.service.NavService.start(getApplication(), "Штурман: поездка", "Маршрут запущен")
+        startGpsWatch()
     }
 
     /** Заранее находит на маршруте лежачие полицейские, ремонт и камеры. */
@@ -488,7 +491,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (s.navigating) stopRecorder.add(here, speedMps.toDouble(), System.currentTimeMillis())
         detectHardBraking(here, speedMps)
-        caravan.sendPosition(here)
+        caravan.sendPosition(here, selfOff)
         val route = s.route ?: return null
         if (!s.navigating) return null
 
@@ -522,8 +525,11 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
 
+        updateNavNotification(kmh, nextTurn(route, position), route.totalM - position.traveledM)
+
         // Съезд с маршрута, разворот, пропущенный поворот, движение назад: решает детектор (routing/Deviation.kt)
         if (snap != null) lastTurnDistOnRoute = nextTurn(route, position)?.distanceM ?: Double.MAX_VALUE
+        if (snap != null) selfOff = false
         val event = deviation.update(
             System.currentTimeMillis(), closest?.offsetM ?: Double.MAX_VALUE, accuracyM, speedMps,
             courseDeg, closest?.bearing ?: -1.0, lastTurnDistOnRoute
@@ -535,7 +541,35 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private val deviation = DeviationDetector(DeviationLevel.of(settings.getInt("dev_level", 1)))
     private var lastTurnDistOnRoute = Double.MAX_VALUE
 
+    /** Я сейчас вне маршрута (видно остальным в караване). */
+    private var selfOff = false
+    private val offNotified = HashSet<String>()
+
+    /** Ведущий узнаёт, что кто-то из каравана отклонился от маршрута. */
+    private fun onCaravanMembers(m: List<ru.shturman.routing.CaravanMember>) {
+        _state.update { it.copy(members = m) }
+        if (!caravan.isLeader) return
+        val offNow = m.filter { it.off }
+        offNotified.retainAll(offNow.map { it.uid }.toSet())
+        for (member in offNow) {
+            if (offNotified.add(member.uid)) {
+                showNotice("${member.name} отклонился от маршрута")
+                if (_state.value.voiceOn) voice.say("Один из участников каравана съехал с маршрута", flush = false)
+            }
+        }
+    }
+
     private fun onDeviation(event: DeviationEvent, here: LatLon) {
+        if (event == DeviationEvent.OFF_ROUTE || event == DeviationEvent.U_TURN || event == DeviationEvent.MISSED_TURN) {
+            selfOff = true
+            // В караване ведомый не пересчитывает маршрут, если ведущий тоже съехал: ждём, куда поедет ведущий
+            if (caravan.currentCode != null && !caravan.isLeader &&
+                _state.value.members.any { it.leader && it.off }
+            ) {
+                showNotice("Ведущий свернул, ждём его")
+                return
+            }
+        }
         when (event) {
             DeviationEvent.NONE -> Unit
             DeviationEvent.OFF_ROUTE -> reroute(here, "Перестраиваю маршрут")
@@ -545,8 +579,11 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 showNotice("Вы едете в обратную сторону")
                 if (_state.value.voiceOn) voice.say("Вы едете в обратную сторону", flush = false)
             }
-            DeviationEvent.STOPPED_OFF ->
+            DeviationEvent.STOPPED_OFF -> {
+                val phrase = "Мы стоим не на маршруте. Тронетесь, и я перестрою маршрут"
                 showNotice("Стоим вне маршрута. Тронетесь, и маршрут перестроится, либо отмените его крестиком")
+                if (_state.value.voiceOn) voice.say(phrase, flush = false)
+            }
         }
     }
 
@@ -566,6 +603,50 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             if (free < 100L * 1024 * 1024) showNotice("Мало памяти в телефоне: освободите место")
         }
     }
+
+    private var lastNotifAt = 0L
+    private var gpsWatch: kotlinx.coroutines.Job? = null
+    private var gpsLostShown = false
+
+    /** Текст постоянного уведомления: скорость, ближайший поворот и сколько осталось ехать. Не чаще раза в 2 секунды. */
+    private fun updateNavNotification(kmh: Int, turn: NextTurn?, leftM: Double) {
+        val now = System.currentTimeMillis()
+        if (now - lastNotifAt < 2_000L) return
+        lastNotifAt = now
+        gpsLostShown = false
+        val title = "Штурман · $kmh км/ч"
+        val left = ru.shturman.ui.formatDistance(leftM.coerceAtLeast(0.0))
+        val text = if (turn != null) {
+            val side = if (turn.isLeft) "налево" else "направо"
+            val street = if (turn.street.isNotBlank()) ", ${turn.street}" else ""
+            "Через ${ru.shturman.ui.formatDistance(turn.distanceM)}: $side$street · осталось $left"
+        } else "Осталось $left"
+        ru.shturman.service.NavService.update(getApplication(), title, text)
+    }
+
+    /** Если положение не приходит больше 30 секунд, предупреждает и пишет это в уведомлении. */
+    private fun startGpsWatch() {
+        gpsWatch?.cancel()
+        lastFixAt = maxOf(lastFixAt, System.currentTimeMillis())
+        gpsWatch = viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(5_000)
+                if (!_state.value.navigating) break
+                if (System.currentTimeMillis() - lastFixAt > 30_000L && !gpsLostShown) {
+                    gpsLostShown = true
+                    showNotice("Потерян сигнал GPS")
+                    if (_state.value.voiceOn) voice.say("Потерян сигнал GPS", flush = false)
+                    ru.shturman.service.NavService.update(getApplication(), "Штурман · нет сигнала GPS", "Выедите на открытое место")
+                }
+            }
+        }
+    }
+
+    private fun stopNavService() {
+        gpsWatch?.cancel(); gpsWatch = null
+        ru.shturman.service.NavService.stop(getApplication())
+    }
+
 
     private fun showNotice(text: String) {
         _state.update { it.copy(notice = text) }
@@ -870,6 +951,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearRoute() {
         buzz.stop()
+        stopNavService()
         _state.update {
             it.copy(
                 destination = null, options = emptyList(), selected = 0, routeError = null,
@@ -881,6 +963,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        stopNavService()
+        ru.shturman.service.NavService.onCancel = null
         buzz.release()
         listener.stop()
         caravan.leave()
