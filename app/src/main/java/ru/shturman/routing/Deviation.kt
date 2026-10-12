@@ -26,7 +26,7 @@ class DeviationDetector(var level: DeviationLevel = DeviationLevel.MEDIUM) {
     private var uturnSince = -1L
     private var stillSince = -1L
     private var reverseSince = -1L
-    private var lastReverseAt = 0L
+    private var lastReverseAt = Long.MIN_VALUE / 2
     private var uturnFired = false
     private var stoppedFired = false
 
