@@ -188,6 +188,9 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private val sharedSync = SharedSync(app, speedStore)
     private val voice = Voice(app)
     private val settings = app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+    private val tripLog = ru.shturman.stats.TripLog(app.getSharedPreferences("trips", android.content.Context.MODE_PRIVATE))
+    private var tripStartMs = 0L
+    private var tripMaxKmh = 0
     private var spokenLevel = -1
     private var lastTurnDistance = Double.MAX_VALUE
     private var rerouting = false
@@ -462,6 +465,14 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         ru.shturman.service.NavService.onCancel = { clearRoute() }
         ru.shturman.service.NavService.start(getApplication(), "Штурман: поездка", "Маршрут запущен")
         startGpsWatch()
+        tripStartMs = System.currentTimeMillis()
+        tripMaxKmh = 0
+        if (tripLog.serviceDue()) {
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(7_000)
+                showNotice("Пора на техобслуживание: пробег с прошлого ТО достиг ${tripLog.serviceIntervalKm} км")
+            }
+        }
     }
 
     /** Заранее находит на маршруте лежачие полицейские, ремонт и камеры. */
@@ -492,6 +503,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             recorder.add(here.lat, here.lon, speedMps.toDouble(), System.currentTimeMillis())
         }
         if (s.navigating) stopRecorder.add(here, speedMps.toDouble(), System.currentTimeMillis())
+        if (s.navigating && kmh > tripMaxKmh && kmh < 300) tripMaxKmh = kmh
         detectHardBraking(here, speedMps)
         caravan.sendPosition(here, selfOff)
         val route = s.route ?: return null
@@ -849,6 +861,64 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     fun setConsumption(v: Float) { settings.edit().putFloat("consumption", v).apply(); _state.update { it.copy(consumption = v) } }
     fun setFuelPrice(v: Float) { settings.edit().putFloat("fuel_price", v).apply(); _state.update { it.copy(fuelPrice = v) } }
 
+    // ---------- поездки и статистика ----------
+
+    /** Записывает поездку в журнал и показывает итог в уведомлении. Совсем короткие (до 300 м) не записываются. */
+    private fun finishTrip() {
+        val s = _state.value
+        if (!s.navigating || tripStartMs == 0L) return
+        val traveled = s.position?.traveledM ?: 0.0
+        if (traveled < 300.0) { tripStartMs = 0L; return }
+        val dur = ((System.currentTimeMillis() - tripStartMs) / 1000).coerceAtLeast(1)
+        val km = traveled / 1000.0
+        val cost = Math.round(fuelLiters(traveled, dur.toDouble(), s.consumption.toDouble()) * s.fuelPrice).toInt()
+        val avg = ru.shturman.stats.TripMath.avgKmh(km, dur)
+        runCatching {
+            tripLog.add(ru.shturman.stats.Trip(tripStartMs, km, dur, tripMaxKmh, avg, cost))
+            ru.shturman.service.NavService.notifyTripEnd(
+                getApplication(),
+                "${ru.shturman.ui.formatKm(traveled)} км · ${ru.shturman.ui.formatDuration(dur.toDouble())} · средняя $avg км/ч · макс. $tripMaxKmh · $cost ₽"
+            )
+        }.onFailure { ru.shturman.Errors.log("finishTrip", it) }
+        tripStartMs = 0L
+    }
+
+    /** Сводка для настроек: сегодня, неделя, месяц, последняя поездка, пробег. */
+    fun statsText(): String {
+        val now = System.currentTimeMillis()
+        val trips = tripLog.trips()
+        val day = ru.shturman.stats.TripMath.DAY_MS
+        val cal = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0)
+        }
+        val today = cal.timeInMillis
+        fun km(from: Long) = String.format(java.util.Locale.US, "%.1f", ru.shturman.stats.TripMath.km(trips, from)).replace('.', ',')
+        val last = trips.lastOrNull()
+        return buildString {
+            append("Сегодня: ${km(today)} км\n")
+            append("За неделю: ${ru.shturman.stats.TripMath.count(trips, now - 7 * day)} поездок, ${km(now - 7 * day)} км\n")
+            append("За месяц: ${ru.shturman.stats.TripMath.cost(trips, now - 30 * day)} ₽ бензина\n")
+            if (last != null) append("Последняя: ${String.format(java.util.Locale.US, "%.1f", last.km).replace('.', ',')} км, средняя ${last.avgKmh}, макс. ${last.maxKmh} км/ч, ${last.costRub} ₽\n")
+            append("Общий пробег в приложении: ${tripLog.odometerKm.toInt()} км")
+        }
+    }
+
+    fun exportText(): String =
+        ru.shturman.stats.TripMath.csv(tripLog.trips()) + "\n" + ru.shturman.stats.TripMath.refuelCsv(tripLog.refuels())
+
+    fun clearTrips() = tripLog.clearTrips()
+    fun refuelsText(): String = tripLog.refuels().takeLast(3).reversed().joinToString("\n") {
+        "${java.text.SimpleDateFormat("dd.MM", java.util.Locale.US).format(java.util.Date(it.atMs))} ${it.place}: ${String.format(java.util.Locale.US, "%.1f", it.liters)} л по ${String.format(java.util.Locale.US, "%.1f", it.pricePerLiter)} ₽"
+    }
+    fun addRefuel(place: String, liters: Double, price: Double) {
+        if (liters <= 0 || price <= 0) return
+        tripLog.addRefuel(ru.shturman.stats.Refuel(System.currentTimeMillis(), place.trim().take(40), liters, price))
+    }
+    var serviceIntervalKm: Int
+        get() = tripLog.serviceIntervalKm
+        set(v) { tripLog.serviceIntervalKm = v }
+    fun markServiceDone() = tripLog.markServiceDone()
+
     // ---------- данные ----------
 
     /** Размер временных файлов (кэш карты и загрузок), байты. */
@@ -1015,6 +1085,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearRoute() {
         buzz.stop()
+        finishTrip()
         stopNavService()
         _state.update {
             it.copy(

@@ -256,6 +256,88 @@ fun SettingsSheet(
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
             ) { Text("Отправить отчёт разработчику", style = ShText.Small) }
 
+            Section("Статистика поездок")
+            var statsText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(vm.statsText()) }
+            Text(text = statsText, color = ShColors.TextSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            val ctxShare = androidx.compose.ui.platform.LocalContext.current
+            Button(
+                onClick = {
+                    runCatching {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Поездки Штурман (CSV)")
+                            putExtra(android.content.Intent.EXTRA_TEXT, vm.exportText())
+                        }
+                        ctxShare.startActivity(android.content.Intent.createChooser(send, "Экспорт поездок").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Экспорт поездок и заправок (CSV)", style = ShText.Small) }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = { vm.clearTrips(); statsText = vm.statsText() },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Очистить историю поездок", style = ShText.Small) }
+
+            Section("Дневник заправок")
+            var refuelList by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(vm.refuelsText()) }
+            if (refuelList.isNotBlank()) Text(text = refuelList, color = ShColors.TextSecondary, fontSize = 13.sp)
+            var rfPlace by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            var rfLiters by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            var rfPrice by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            Spacer(Modifier.height(6.dp))
+            TextField(
+                value = rfPlace, onValueChange = { rfPlace = it.take(40) }, label = { Text("Где заправились", fontSize = 12.sp) },
+                singleLine = true, shape = RoundedCornerShape(14.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = ShColors.SearchField, unfocusedContainerColor = ShColors.SearchField,
+                    focusedTextColor = ShColors.TextPrimary, unfocusedTextColor = ShColors.TextPrimary,
+                    focusedLabelColor = ShColors.TextSecondary, unfocusedLabelColor = ShColors.TextSecondary,
+                    cursorColor = ShColors.Accent, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                NumberField("Литры", rfLiters, Modifier.weight(1f)) { rfLiters = it }
+                NumberField("Цена за литр", rfPrice, Modifier.weight(1f)) { rfPrice = it }
+            }
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = {
+                    val l = rfLiters.replace(',', '.').toDoubleOrNull()
+                    val p = rfPrice.replace(',', '.').toDoubleOrNull()
+                    if (l != null && p != null) {
+                        vm.addRefuel(rfPlace, l, p)
+                        refuelList = vm.refuelsText(); rfLiters = ""; rfPrice = ""; rfPlace = ""
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Записать заправку", style = ShText.Small) }
+
+            Section("Техобслуживание")
+            var svcKm by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(vm.serviceIntervalKm.takeIf { it > 0 }?.toString() ?: "") }
+            Text(text = "Напомню перед поездкой, когда пробег с прошлого ТО достигнет этого числа. Пусто — не напоминать.", color = ShColors.TextSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            NumberField("Интервал ТО, км", svcKm, Modifier.fillMaxWidth(), integer = true) {
+                svcKm = it.filter { c -> c.isDigit() }.take(6)
+                vm.serviceIntervalKm = svcKm.toIntOrNull() ?: 0
+            }
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = { vm.markServiceDone() },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("ТО сделано сегодня", style = ShText.Small) }
+
             Section("Данные")
             var cacheText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
             var resetArmed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }

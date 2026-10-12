@@ -102,6 +102,20 @@ class NavService : Service() {
             }
         }
 
+        /** Итог поездки отдельным уведомлением (без звука). Если уведомления запрещены, ничего не происходит. */
+        fun notifyTripEnd(ctx: Context, text: String) {
+            runCatching {
+                ensureChannel(ctx)
+                val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, CHANNEL) else Notification.Builder(ctx)
+                nm.notify(
+                    4002,
+                    b.setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentTitle("Поездка завершена")
+                        .setContentText(text).setStyle(Notification.BigTextStyle().bigText(text)).setAutoCancel(true).build()
+                )
+            }
+        }
+
         fun stop(ctx: Context) {
             runCatching { ctx.stopService(Intent(ctx, NavService::class.java)) }
         }
