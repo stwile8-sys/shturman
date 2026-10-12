@@ -109,6 +109,16 @@ fun DarkMap(
 
     val mapView = remember {
         MapLibre.getInstance(context)
+        // Больше места под кэш карты: уже виденные места показываются и при плохой связи
+        runCatching {
+            org.maplibre.android.offline.OfflineManager.getInstance(context).setMaximumAmbientCacheSize(
+                300L * 1024 * 1024,
+                object : org.maplibre.android.offline.OfflineManager.FileSourceCallback {
+                    override fun onSuccess() {}
+                    override fun onError(message: String) {}
+                }
+            )
+        }
         MapView(context).apply {
             getMapAsync { m ->
                 map = m
