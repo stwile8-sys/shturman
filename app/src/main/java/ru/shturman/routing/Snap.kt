@@ -24,12 +24,12 @@ private const val METERS_PER_DEGREE = 111_320.0
  * чтобы стрелка не прыгала назад и не перескакивала на встречный участок.
  * null — если маршрут пустой.
  */
-fun snapToRoute(route: RouteOption, here: LatLon, fromIndex: Int): Snap? {
+fun snapToRoute(route: RouteOption, here: LatLon, fromIndex: Int, window: Int = 150): Snap? {
     val pts = route.points
     if (pts.size < 2) return null
     val last = pts.size - 2
     val start = (fromIndex - 3).coerceIn(0, last)
-    val end = (fromIndex + 150).coerceIn(start, last)
+    val end = (fromIndex + window).coerceIn(start, last)
     val k = cos(Math.toRadians(here.lat))
 
     var best: Snap? = null

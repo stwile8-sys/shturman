@@ -31,11 +31,37 @@ class GpsTracker(
     private var lastGpsAt = 0L
     private var fusedWorks = false
     private var fallbackOn = false
+    private var lastAcceptedAt = 0L
+    private val handler = Handler(Looper.getMainLooper())
+    private var stopped = false
+
+    /** Если положения перестали приходить, перезапускает приём: так стрелка не «замирает» в дороге. */
+    private val watchdog = object : Runnable {
+        override fun run() {
+            if (stopped) return
+            if (SystemClock.elapsedRealtime() - lastAcceptedAt > 6000L) {
+                Diag.restarts++
+                lastAcceptedAt = SystemClock.elapsedRealtime()
+                fusedWorks = false
+                runCatching { fused.removeLocationUpdates(fusedCallback) }
+                runCatching { manager.removeUpdates(listener) }
+                fallbackOn = false
+                begin()
+                startFallback()
+            }
+            handler.postDelayed(this, 3000L)
+        }
+    }
 
     private fun accept(raw: Location) {
         // Бывают положения с пустыми (NaN) координатами: такие просто пропускаем
         if (!raw.latitude.isFinite() || !raw.longitude.isFinite()) return
         if (raw.hasAccuracy() && raw.accuracy > MAX_ACCURACY_M) return
+        lastAcceptedAt = SystemClock.elapsedRealtime()
+        Diag.fixCount++
+        Diag.lastFixAt = System.currentTimeMillis()
+        Diag.lastAccuracy = if (raw.hasAccuracy()) raw.accuracy else -1f
+        Diag.lastProvider = raw.provider ?: ""
         onFix(kalman.filter(raw))
     }
 
@@ -68,6 +94,18 @@ class GpsTracker(
 
     @SuppressLint("MissingPermission")
     fun start() {
+        stopped = false
+        lastAcceptedAt = SystemClock.elapsedRealtime()
+        begin()
+        handler.postDelayed(watchdog, 4000L)
+        val last = manager.getProviders(true)
+            .mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
+            .maxByOrNull { it.time }
+        if (last != null && System.currentTimeMillis() - last.time < 120_000L) accept(last)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun begin() {
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500L)
             .setMinUpdateIntervalMillis(250L)
             .setWaitForAccurateLocation(false)
@@ -78,11 +116,6 @@ class GpsTracker(
         }.onFailure { startFallback() }
         // Если служба Google молчит, через 4 секунды включаем обычный GPS
         Handler(Looper.getMainLooper()).postDelayed({ if (!fusedWorks) startFallback() }, 4000L)
-
-        val last = manager.getProviders(true)
-            .mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
-            .maxByOrNull { it.time }
-        if (last != null && System.currentTimeMillis() - last.time < 120_000L) accept(last)
     }
 
     @SuppressLint("MissingPermission")
@@ -99,6 +132,8 @@ class GpsTracker(
     }
 
     fun stop() {
+        stopped = true
+        handler.removeCallbacks(watchdog)
         runCatching { fused.removeLocationUpdates(fusedCallback) }
         runCatching { manager.removeUpdates(listener) }
     }

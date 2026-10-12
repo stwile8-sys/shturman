@@ -34,6 +34,7 @@ import ru.shturman.ui.theme.ShturmanTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // навигатор: экран не гаснет
         ru.shturman.ui.theme.ShColors.princess = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("princess", false)
         // Если приложение вылетит, причина сохранится и покажется при следующем запуске
         val crashFile = File(filesDir, "crash.txt")

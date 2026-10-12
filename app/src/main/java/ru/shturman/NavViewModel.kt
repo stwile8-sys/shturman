@@ -445,7 +445,14 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         if (!s.navigating) return null
 
         val fromIndex = s.position?.index ?: 0
-        val snap = snapToRoute(route, here, fromIndex)?.takeIf { it.offsetM <= SNAP_MAX_M }
+        var snap = snapToRoute(route, here, fromIndex)?.takeIf { it.offsetM <= SNAP_MAX_M }
+        if (snap == null) {
+            // Не нашли рядом с прошлым местом: ищем дальше вперёд по всему маршруту, чтобы не застрять
+            snap = snapToRoute(route, here, fromIndex, window = route.points.size)?.takeIf { it.offsetM <= SNAP_MAX_M }
+            if (snap == null) ru.shturman.routing.Diag.snapMisses++
+        }
+        ru.shturman.routing.Diag.snapOffset = snap?.offsetM ?: -1.0
+        ru.shturman.routing.Diag.snapIndex = snap?.index ?: -1
         val position = if (snap != null) {
             RoutePosition(snap.index, snap.traveledM)
         } else {
