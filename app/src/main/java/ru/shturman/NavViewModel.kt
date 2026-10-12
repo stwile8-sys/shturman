@@ -283,10 +283,10 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(
             app, android.Manifest.permission.ACCESS_FINE_LOCATION
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (!granted) return "Нет доступа к местоположению. Разрешите его в настройках телефона: Приложения → Штурман → Разрешения."
+        if (!granted) return "Нет доступа к местоположению. Нажмите здесь, чтобы открыть настройки приложения и разрешить его."
         val lm = app.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
         val on = runCatching { lm?.isLocationEnabled ?: true }.getOrDefault(true)
-        if (!on) return "Геолокация выключена. Включите её в шторке телефона или в настройках (Местоположение)."
+        if (!on) return "Геолокация выключена. Нажмите здесь, чтобы открыть настройки и включить её."
         return "Нет сигнала GPS: выйдите на открытое место и подождите"
     }
 
