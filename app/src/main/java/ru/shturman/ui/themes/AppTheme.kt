@@ -100,7 +100,7 @@ object Themes {
             btn = BtnKind.ROUND, btnRadius = 20, btnW = 50, btnH = 50, panelRadius = 28, borderW = 1.2f, border = Color(0x99FF69B4),
             enter = EnterKind.FLOAT, enterMs = 400, digit = DigitKind.ROLL, pressMs = 200, pressScale = 1.05f, transMs = 400,
             routeMs = 1500, routeJerky = false, vibrate = false,
-            splashMs = 3200, splashPeakMs = 750, splashRes = R.raw.splash_t2
+            splashMs = 5000, splashPeakMs = 750, splashRes = R.raw.splash_t2
         ),
         // 3. NASCAR — ночной стадион
         ThemeSpec(
@@ -113,7 +113,7 @@ object Themes {
             btn = BtnKind.STRIPES, btnRadius = 4, btnW = 50, btnH = 50, panelRadius = 6, borderW = 2f, border = Color(0xFF000000),
             enter = EnterKind.SIDE_FAST, enterMs = 200, digit = DigitKind.FLY, pressMs = 100, pressScale = 0.96f, transMs = 150,
             routeMs = 800, routeJerky = true, vibrate = false,
-            splashMs = 8600, splashPeakMs = 2250, splashRes = R.raw.splash_t3
+            splashMs = 5600, splashPeakMs = 2250, splashRes = R.raw.splash_t3
         ),
         // 4. GT RACING — дневная гонка, карбон
         ThemeSpec(
@@ -126,7 +126,7 @@ object Themes {
             btn = BtnKind.CARBON, btnRadius = 4, btnW = 50, btnH = 50, panelRadius = 4, borderW = 1.5f, border = Color(0xFFE60019),
             enter = EnterKind.STICK_DOWN, enterMs = 250, digit = DigitKind.PRINT, pressMs = 150, pressScale = 1f, transMs = 200,
             routeMs = 1000, routeJerky = false, vibrate = false,
-            splashMs = 3850, splashPeakMs = 1250, splashRes = R.raw.splash_t4
+            splashMs = 3200, splashPeakMs = 750, splashRes = R.raw.splash_t4
         ),
         // 5. NIGHT RIDER — синее пламя
         ThemeSpec(
@@ -178,7 +178,7 @@ object Themes {
             btn = BtnKind.SOFT, btnRadius = 10, btnW = 50, btnH = 50, panelRadius = 18, borderW = 1f, border = Color(0x884A6FFF),
             enter = EnterKind.FOG, enterMs = 400, digit = DigitKind.HAZE, pressMs = 200, pressScale = 1f, transMs = 400,
             routeMs = 1300, routeJerky = false, vibrate = false,
-            splashMs = 5000, splashPeakMs = 750, splashRes = R.raw.splash_t8
+            splashMs = 3850, splashPeakMs = 1250, splashRes = R.raw.splash_t8
         )
     )
 

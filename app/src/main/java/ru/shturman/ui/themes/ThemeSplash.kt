@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -102,81 +103,56 @@ fun ThemeSplash(onPlaySound: () -> Unit, onFinished: () -> Unit) {
 
 @Composable
 private fun SplashTitle(th: ThemeSpec, t: Float, peak: Float) {
-    when (th.id) {
-        1 -> {
-            val a = span(t, peak - 250f, peak + 450f)
-            Text(
-                text = "Штурман", color = Color(0xFFFFE3F2).copy(alpha = a),
-                style = TextStyle(
-                    fontFamily = th.numFont, fontWeight = FontWeight.Bold, fontSize = 46.sp,
-                    shadow = Shadow(th.accent, Offset.Zero, 28f)
-                ),
-                modifier = Modifier.graphicsLayer { scaleX = 0.7f + 0.3f * a; scaleY = 0.7f + 0.3f * a }
-            )
-        }
-        2 -> {
-            val a = span(t, 700f, 1300f)
-            val flash = 1f - lin(t, peak, peak + 400f)
-            Text(
-                text = "ШТУРМАН", color = Color.White.copy(alpha = a),
-                style = TextStyle(
-                    fontFamily = th.numFont, fontSize = 68.sp, letterSpacing = 6.sp,
-                    shadow = Shadow(Color.White.copy(alpha = 0.6f * (0.3f + flash)), Offset.Zero, 30f)
-                )
-            )
-        }
-        3 -> {
-            val a = span(t, 1000f, 1500f)
-            Text(
-                text = "ШТУРМАН", color = Color.White.copy(alpha = a),
-                style = TextStyle(fontFamily = th.numFont, fontSize = 52.sp, letterSpacing = 3.sp),
-                modifier = Modifier.graphicsLayer {
-                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
-                    scaleY = 0.2f + 0.8f * a
-                }
-            )
-        }
-        4 -> {
-            val a = span(t, peak - 350f, peak + 250f)
-            val glow = 1f - lin(t, peak, peak + 900f)
-            Text(
-                text = "ШТУРМАН", color = Color(0xFFD8F6FF).copy(alpha = a),
-                style = TextStyle(
-                    fontFamily = th.numFont, fontWeight = FontWeight.Bold, fontSize = 32.sp, letterSpacing = 8.sp,
-                    shadow = Shadow(th.accent.copy(alpha = 0.4f + 0.6f * glow), Offset.Zero, 20f + 40f * glow)
-                )
-            )
-        }
-        5 -> {
-            val hit = span(t, 250f, peak + 60f)
-            val shake = if (t in peak..(peak + 450f)) sin(t / 18f) * 10f * (1f - lin(t, peak, peak + 450f)) else 0f
-            Text(
-                text = "ШТУРМАН", color = th.accent.copy(alpha = hit),
-                style = TextStyle(fontFamily = th.numFont, fontSize = 78.sp, letterSpacing = 3.sp, shadow = Shadow(Color.Black, Offset(4f, 4f), 6f)),
-                modifier = Modifier.graphicsLayer {
-                    val s = 2.4f - 1.4f * hit
-                    scaleX = s; scaleY = s; translationX = shake
-                }
-            )
-        }
-        6 -> {
-            val a = span(t, 1200f, 2400f)
-            Text(
-                text = "ШТУРМАН", color = Color(0xFFFFF1E4).copy(alpha = a),
-                style = TextStyle(fontFamily = th.numFont, fontSize = 68.sp, letterSpacing = 3.sp, shadow = Shadow(Color(0xFF3A1F08), Offset(3f, 3f), 5f))
-            )
-        }
-        7 -> {
-            val a = span(t, 1900f, 3000f)
-            Text(
-                text = "Штурман", color = Color(0xFFEAF0FF).copy(alpha = a),
-                style = TextStyle(
-                    fontFamily = th.numFont, fontSize = 40.sp, letterSpacing = 10.sp,
-                    shadow = Shadow(th.accent, Offset.Zero, 24f)
-                )
-            )
-        }
+    // Вместо надписи на всех заставках показывается логотип. Появляется в свой момент и по-своему для каждой темы.
+    val start = when (th.id) {
+        1 -> peak - 250f
+        2 -> 3300f
+        3 -> 600f
+        4 -> peak - 350f
+        5 -> 250f
+        6 -> 1200f
+        else -> 1900f
     }
+    val a = when (th.id) {
+        1 -> span(t, start, start + 700f)
+        2 -> span(t, start, start + 600f)
+        3 -> span(t, start, start + 450f)
+        4 -> span(t, start, start + 600f)
+        5 -> span(t, start, peak + 60f)
+        6 -> span(t, start, start + 1200f)
+        else -> span(t, start, start + 1100f)
+    }
+    if (a <= 0f) return
+    val swing = sin((t - start) / 110f) * 26f * (1f - lin(t, start, start + 1500f))
+    val shake = if (th.id == 5 && t in peak..(peak + 450f)) sin(t / 18f) * 10f * (1f - lin(t, peak, peak + 450f)) else 0f
+    val glow = when (th.id) {
+        1 -> th.accent
+        4 -> th.accent
+        7 -> th.accent
+        5 -> th.accent
+        else -> Color.White
+    }
+    LogoMark(
+        size = 170.dp,
+        needleDeg = swing,
+        modifier = Modifier
+            .drawBehind {
+                drawCircle(
+                    Brush.radialGradient(listOf(glow.copy(alpha = 0.55f * a), Color.Transparent), center, this.size.minDimension * 0.9f),
+                    radius = this.size.minDimension * 0.9f, center = center
+                )
+            }
+            .graphicsLayer {
+                this.alpha = a
+                when (th.id) {
+                    1 -> { val s = 0.7f + 0.3f * a; scaleX = s; scaleY = s }
+                    3 -> { transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f); scaleY = 0.2f + 0.8f * a }
+                    5 -> { val s = 2.4f - 1.4f * a; scaleX = s; scaleY = s; translationX = shake }
+                    7 -> { val s = 1.08f - 0.08f * a; scaleX = s; scaleY = s }
+                    else -> Unit
+                }
+            }
+    )
 }
 
 // ---------- общие рисунки ----------
@@ -201,8 +177,8 @@ private fun DrawScope.drawPrincess(t: Float, peak: Float) {
     val rnd = Random(3)
     val reach = min(size.width, size.height) * 0.62f
     for (i in 0 until 30) {
-        val delayMs = i * 38f
-        val p = lin(t, 100f + delayMs, 1700f + delayMs)
+        val delayMs = i * 70f
+        val p = lin(t, 100f + delayMs, 2600f + delayMs)
         if (p <= 0f || p >= 1f) { rnd.nextFloat(); rnd.nextFloat(); continue }
         val ang = i * (2f * PI.toFloat() / 30f) + rnd.nextFloat() * 0.35f
         val dist = reach * (0.35f + rnd.nextFloat() * 0.65f) * ease(p)
@@ -212,39 +188,119 @@ private fun DrawScope.drawPrincess(t: Float, peak: Float) {
     }
 }
 
-// ---------- 3. NASCAR: прожектор и машина по нижней кромке ----------
+// ---------- 3. NASCAR: ночной стадион, прожекторы, трасса, машины проносятся ----------
 private fun DrawScope.drawNascar(t: Float, peak: Float) {
-    drawRect(Color(0xFF0A0A0A))
-    val on = when {
-        t < 150f -> 0f
-        t < 280f -> 0.6f
-        t < 380f -> 0.1f
-        t < 800f -> ease((t - 380f) / 420f)
-        else -> 1f
+    val w = size.width
+    val h = size.height
+    val horizon = h * 0.52f
+    drawRect(Brush.verticalGradient(listOf(Color(0xFF020308), Color(0xFF0B0E1C), Color(0xFF05060A)), 0f, h))
+
+    // трибуны: огоньки и вспышки фотокамер
+    val rnd = Random(77)
+    for (i in 0 until 70) {
+        val x = rnd.nextFloat() * w
+        val y = horizon - rnd.nextFloat() * h * 0.20f
+        val ph = rnd.nextFloat() * 6.28f
+        val tw = 0.35f + 0.65f * (0.5f + 0.5f * sin(t / (180f + rnd.nextFloat() * 300f) + ph))
+        val col = if (i % 5 == 0) Color(0xFFFFE9A0) else if (i % 7 == 0) Color(0xFF8FB4FF) else Color.White
+        drawCircle(col.copy(alpha = 0.22f * tw * span(t, 300f, 1200f)), 1.5f + rnd.nextFloat() * 2f, Offset(x, y))
     }
-    val top = Offset(size.width / 2, 0f)
-    val cone = Path().apply {
-        moveTo(top.x - 14f, 0f); lineTo(top.x + 14f, 0f)
-        lineTo(size.width * 0.92f, size.height * 0.86f); lineTo(size.width * 0.08f, size.height * 0.86f); close()
-    }
-    drawPath(cone, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.55f * on), Color.White.copy(alpha = 0.10f * on)), 0f, size.height * 0.86f))
-    drawOval(Color.White.copy(alpha = 0.18f * on), Offset(size.width * 0.08f, size.height * 0.80f), Size(size.width * 0.84f, size.height * 0.10f))
-    // Полосы NASCAR по нижней кромке
-    val bh = size.height * 0.012f
-    drawRect(Color.White, Offset(0f, size.height - bh * 3), Size(size.width, bh))
-    drawRect(Color(0xFFE60019), Offset(0f, size.height - bh * 2), Size(size.width, bh))
-    drawRect(Color(0xFF1E4FBF), Offset(0f, size.height - bh), Size(size.width, bh))
-    // Машина
-    val carW = size.width * 0.34f
-    val p = lin(t, 1500f, 7600f)
-    val x = -carW + (size.width + carW * 2f) * p
-    val y = size.height - bh * 3 - size.height * 0.035f
-    if (p > 0f && p < 1f) {
-        for (k in 1..5) {
-            drawCircle(Color.White.copy(alpha = 0.10f * (1f - k / 6f)), radius = carW * (0.05f + 0.025f * k), center = Offset(x - carW * 0.12f * k, y - carW * 0.03f))
+
+    // прожекторы включаются по очереди
+    for (i in 0 until 5) {
+        val on0 = 400f + i * 170f
+        val flick = if (t < on0 + 260f) (if (((t - on0) / 55f).toInt() % 2 == 0) 0.4f else 1f) else 1f
+        val on = (if (t < on0) 0f else 1f) * flick
+        if (on <= 0f) continue
+        val x = w * (0.10f + 0.20f * i)
+        val beam = Path().apply {
+            moveTo(x - 10f, h * 0.02f); lineTo(x + 10f, h * 0.02f)
+            lineTo(x + w * 0.20f * (if (i < 2) 1f else if (i > 2) -1f else 0.2f), horizon); lineTo(x - w * 0.12f * (if (i > 2) -1f else 1f), horizon); close()
         }
-        carSilhouette(x, y, carW)
+        drawPath(beam, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.20f * on), Color.Transparent), h * 0.02f, horizon))
+        drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.7f * on), Color.Transparent), Offset(x, h * 0.03f), w * 0.16f), w * 0.16f, Offset(x, h * 0.03f))
+        for (k in 0 until 6) drawCircle(Color.White.copy(alpha = on), 3.5f, Offset(x - 12f + (k % 3) * 12f, h * 0.02f + (k / 3) * 10f))
     }
+
+    // трасса в перспективе
+    val speed = when {
+        t < 1000f -> 0.2f
+        t < peak -> 0.2f + 1.6f * ease((t - 1000f) / (peak - 1000f))
+        else -> 1.8f - 1.4f * ease((t - peak) / 2600f)
+    }
+    val scroll = nascarScroll(t, peak)
+    val cx = w / 2
+    val road = Path().apply {
+        moveTo(cx - w * 0.04f, horizon); lineTo(cx + w * 0.04f, horizon)
+        lineTo(w * 1.1f, h); lineTo(-w * 0.1f, h); close()
+    }
+    drawRect(Color(0xFF07090C), Offset(0f, horizon), Size(w, h - horizon))
+    drawPath(road, Color(0xFF16181E))
+    val n = 16
+    for (i in 0 until n) {
+        val z0 = ((i + scroll) % n) / n
+        val z1 = z0 + 0.55f / n
+        fun yAt(z: Float) = horizon + (h - horizon) * z * z
+        fun halfW(z: Float) = w * 0.04f + w * 0.56f * z
+        val y0 = yAt(z0); val y1 = yAt(z1)
+        val c0 = if (i % 2 == 0) Color(0xFFE60019) else Color.White
+        for (side in intArrayOf(-1, 1)) {
+            val q = Path().apply {
+                moveTo(cx + side * halfW(z0), y0); lineTo(cx + side * (halfW(z0) + w * 0.03f * (0.3f + z0)), y0)
+                lineTo(cx + side * (halfW(z1) + w * 0.03f * (0.3f + z1)), y1); lineTo(cx + side * halfW(z1), y1); close()
+            }
+            drawPath(q, c0)
+        }
+        val dash = Path().apply {
+            moveTo(cx - w * 0.006f * (0.2f + z0 * 3f), y0); lineTo(cx + w * 0.006f * (0.2f + z0 * 3f), y0)
+            lineTo(cx + w * 0.006f * (0.2f + z1 * 3f), y1); lineTo(cx - w * 0.006f * (0.2f + z1 * 3f), y1); close()
+        }
+        drawPath(dash, Color.White.copy(alpha = 0.8f))
+    }
+    // свет на асфальте
+    drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f * span(t, 400f, 1400f)), Color.Transparent), horizon, h * 0.8f), Offset(0f, horizon), Size(w, h * 0.3f))
+
+    // машина проносится справа налево на пике звука, ещё одна чуть позже
+    fun pass(from: Float, to: Float, y: Float, cw: Float) {
+        val p = lin(t, from, to)
+        if (p <= 0f || p >= 1f) return
+        val x = w + cw - (w + cw * 2f) * ease(p)
+        for (k in 1..7) drawCircle(Color.White.copy(alpha = 0.13f * (1f - k / 8f)), cw * (0.05f + 0.03f * k), Offset(x + cw * (0.55f + 0.11f * k), y - cw * 0.04f))
+        for (k in 0 until 4) drawLine(Color.White.copy(alpha = 0.25f * (1f - p)), Offset(x + cw, y - cw * (0.03f + 0.05f * k)), Offset(x + cw * (1.6f + 0.2f * k), y - cw * (0.03f + 0.05f * k)), strokeWidth = 3f)
+        carSilhouette(x, y, cw)
+    }
+    pass(peak - 500f, peak + 700f, h * 0.84f, w * 0.52f)
+    pass(peak + 900f, peak + 2000f, h * 0.70f, w * 0.30f)
+    // вспышка при первом проезде
+    val fl = 1f - lin(t, peak, peak + 350f)
+    if (t >= peak && fl > 0f) drawRect(Color.White.copy(alpha = 0.16f * fl))
+    // луч на логотип
+    val spot = span(t, 3200f, 3700f)
+    if (spot > 0f) {
+        val cone = Path().apply { moveTo(cx - 12f, 0f); lineTo(cx + 12f, 0f); lineTo(cx + w * 0.30f, h * 0.62f); lineTo(cx - w * 0.30f, h * 0.62f); close() }
+        drawPath(cone, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.28f * spot), Color.White.copy(alpha = 0.05f * spot)), 0f, h * 0.62f))
+    }
+    // полосы NASCAR по нижней кромке
+    val bh = h * 0.012f
+    drawRect(Color.White, Offset(0f, h - bh * 3), Size(w, bh))
+    drawRect(Color(0xFFE60019), Offset(0f, h - bh * 2), Size(w, bh))
+    drawRect(Color(0xFF1E4FBF), Offset(0f, h - bh), Size(w, bh))
+}
+
+/** Положение разметки трассы по времени: чем быстрее едем, тем быстрее она бежит (интеграл скорости). */
+private fun nascarScroll(t: Float, peak: Float): Float {
+    var s = 0f
+    var x = 0f
+    while (x < t) {
+        val sp = when {
+            x < 1000f -> 0.2f
+            x < peak -> 0.2f + 1.6f * ease((x - 1000f) / (peak - 1000f))
+            else -> 1.8f - 1.4f * ease((x - peak) / 2600f)
+        }
+        s += sp * 0.012f
+        x += 16f
+    }
+    return s
 }
 
 private fun DrawScope.carSilhouette(x: Float, y: Float, w: Float) {
@@ -256,6 +312,7 @@ private fun DrawScope.carSilhouette(x: Float, y: Float, w: Float) {
     }
     drawPath(body, Color(0xFF050505))
     drawPath(body, Color(0xFFE60019), style = Stroke(width = 2.5f))
+    drawRect(Color(0xFF1E4FBF), Offset(x + w * 0.1f, y - h * 0.32f), Size(w * 0.8f, h * 0.10f))
     drawCircle(Color(0xFF050505), w * 0.07f, Offset(x + w * 0.2f, y))
     drawCircle(Color(0xFF050505), w * 0.07f, Offset(x + w * 0.8f, y))
     drawCircle(Color.White.copy(alpha = 0.7f), w * 0.07f, Offset(x + w * 0.2f, y), style = Stroke(2f))
@@ -272,10 +329,10 @@ private fun DrawScope.drawGt(t: Float, peak: Float) {
     }
     val cy = size.height / 2
     val bandH = size.height * 0.032f
-    val settle = span(t, 900f, 1350f)
+    val settle = span(t, 650f, 1000f)
     for (i in 0 until 5) {
-        val start = i * 110f
-        val p = span(t, start, start + 700f)
+        val start = i * 70f
+        val p = span(t, start, start + 500f)
         val startY = cy + (i - 2) * size.height * 0.075f
         val y = startY + (cy + (i - 2) * bandH * 1.5f - startY) * settle
         val len = size.width * (0.55f + 0.1f * (i % 3))
@@ -285,9 +342,6 @@ private fun DrawScope.drawGt(t: Float, peak: Float) {
     }
     val flash = 1f - lin(t, peak, peak + 300f)
     if (t >= peak && flash > 0f) drawRect(Color.White.copy(alpha = 0.18f * flash))
-    // Стикер-подложка под названием
-    val a = span(t, 1000f, 1450f)
-    drawRect(Color(0xFFE60019).copy(alpha = 0.9f * a), Offset(size.width * 0.17f, cy - size.height * 0.04f), Size(size.width * 0.66f * a, size.height * 0.08f))
 }
 
 // ---------- 5. Night Rider: струя синего пламени ----------
@@ -408,8 +462,8 @@ private fun DrawScope.drawDrift(t: Float, peak: Float) {
     drawPath(road, Color(0xFF4A6FFF).copy(alpha = 0.35f * span(t, 0f, 1500f)), style = Stroke(width = size.width * 0.05f))
     drawPath(road, Color.White.copy(alpha = 0.25f * span(t, 0f, 1500f)), style = Stroke(width = 2f))
     // туман
-    val inward = span(t, 0f, 1200f)
-    val outward = span(t, 1400f, 3000f)
+    val inward = span(t, 0f, 800f)
+    val outward = span(t, 900f, 2300f)
     val k = inward * (1f - outward)
     val centers = listOf(
         Offset(0f, size.height * 0.5f), Offset(size.width, size.height * 0.5f),
@@ -426,7 +480,7 @@ private fun DrawScope.drawDrift(t: Float, peak: Float) {
         )
     }
     // огни машины
-    val lights = span(t, 1800f, 2600f)
+    val lights = span(t, 1500f, 2200f)
     drawCircle(Color(0xFFB4FF00).copy(alpha = 0.7f * lights), 5f, Offset(size.width * 0.5f - 12f, size.height * 0.62f))
     drawCircle(Color(0xFFB4FF00).copy(alpha = 0.7f * lights), 5f, Offset(size.width * 0.5f + 12f, size.height * 0.62f))
 }
