@@ -72,6 +72,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
     var showSearch by remember { mutableStateOf(false) }
     var showAdmin by remember { mutableStateOf(false) }
     var showMusic by remember { mutableStateOf(false) }
+    var showRadar by remember { mutableStateOf(false) }
     var recenterKey by remember { mutableStateOf(0) }
     var startKey by remember { mutableStateOf(0) }
     val context = LocalContext.current
@@ -169,6 +170,11 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 icon = ImageVector.vectorResource(R.drawable.ic_music),
                 description = "Музыка",
                 onClick = { showMusic = true }
+            )
+            MapButton(
+                icon = ImageVector.vectorResource(R.drawable.ic_radar),
+                description = "Антирадар",
+                onClick = { showRadar = true }
             )
             if (s.destination != null) {
                 MapButton(
@@ -354,6 +360,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
 
         if (showAdmin) AdminCodesScreen(onClose = { showAdmin = false })
         if (showMusic) MusicSheet(onDismiss = { showMusic = false })
+        if (showRadar) AntiRadarSheet(onDismiss = { showRadar = false })
 
         StartOverlay(trigger = startKey)
     }
