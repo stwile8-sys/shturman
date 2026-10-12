@@ -14,8 +14,11 @@ data class Place(val title: String, val subtitle: String, val position: LatLon)
 /** Поиск адресов: бесплатный сервис Photon на данных OpenStreetMap (с подсказками по мере набора). */
 object Geocoder {
 
-    suspend fun search(query: String): List<Place> = withContext(Dispatchers.IO) {
-        val q = URLEncoder.encode(query, "UTF-8")
+    suspend fun search(query: String): List<Place> = withRetry { searchOnce(query) }
+
+    private suspend fun searchOnce(query: String): List<Place> = withContext(Dispatchers.IO) {
+        // Слишком длинные строки и спецсимволы не нужны сервису: режем и кодируем
+        val q = URLEncoder.encode(query.trim().take(150), "UTF-8")
         // Результаты рядом с Псковом поднимаются выше
         val url = URL("https://photon.komoot.io/api/?q=$q&limit=8&lat=57.8136&lon=28.3496")
 

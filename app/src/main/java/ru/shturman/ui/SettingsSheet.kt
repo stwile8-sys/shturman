@@ -3,6 +3,7 @@ package ru.shturman.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -126,6 +127,24 @@ fun SettingsSheet(
             s.voiceStatus?.let { Text(text = it, color = ShColors.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
             SwitchRow("Ночной режим голоса", "С 22:00 до 6:00 голос тише, а фразы короче.", s.nightVoice, vm::setNightVoice)
             SwitchRow("Звук при превышении", "Мягкое «вжжж», громче по мере превышения скорости.", s.overspeedSound, vm::setOverspeedSound)
+
+            Section("Съезд с маршрута")
+            Text(text = "Чувствительность: как быстро навигатор решает, что вы свернули, и строит новый путь.", color = ShColors.TextSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                listOf("Низкая", "Средняя", "Высокая").forEachIndexed { i, label ->
+                    val on = s.devLevel == i
+                    Button(
+                        onClick = { vm.setDevLevel(i) },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (on) ShColors.Accent else ShColors.SearchField,
+                            contentColor = if (on) ShColors.Background else ShColors.TextPrimary
+                        )
+                    ) { Text(label, style = ShText.Small) }
+                }
+            }
 
             Section("Экран")
             SwitchRow("Полноэкранный режим", "Скрывает системные панели Android. Вернуть их можно свайпом от края.", s.fullscreen, vm::setFullscreen)

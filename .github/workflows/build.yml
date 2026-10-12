@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
@@ -40,7 +40,7 @@ jobs:
       - name: Build debug APK
         run: |
           set -o pipefail
-          gradle :app:assembleDebug -PbuildNumber=${{ github.run_number }} --console=plain 2>&1 | tee "$RUNNER_TEMP/build.log"
+          gradle :app:testDebugUnitTest :app:assembleDebug -PbuildNumber=${{ github.run_number }} --console=plain 2>&1 | tee "$RUNNER_TEMP/build.log"
 
       - name: Save error report (only when the build fails)
         if: failure()
@@ -58,6 +58,7 @@ jobs:
           git push -f origin buildlog
 
       - name: Publish APK to Releases
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}

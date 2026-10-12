@@ -78,7 +78,7 @@ fun DarkMap(
     members: List<CaravanMember> = emptyList(),
     satellite: Boolean = false,
     themeId: Int = 0,
-    onFix: (LatLon, Float) -> Snap? = { _, _ -> null }
+    onFix: (LatLon, Float, Float, Float) -> Snap? = { _, _, _, _ -> null }
 ) {
     val context = LocalContext.current
 
@@ -163,7 +163,7 @@ fun DarkMap(
         trail.setFrom(trail.currentPos(), LatLon(0.0, 0.0), false)
         val tracker = GpsTracker(context) { raw ->
             val here = LatLon(raw.latitude, raw.longitude)
-            val snap = currentOnFix(here, raw.speed)
+            val snap = currentOnFix(here, raw.speed, if (raw.hasAccuracy()) raw.accuracy else 0f, if (raw.hasBearing()) raw.bearing else -1f)
 
             // Пройденная часть маршрута исчезает за стрелкой: линия рисуется только от стрелки вперёд
             val nowMs = System.currentTimeMillis()

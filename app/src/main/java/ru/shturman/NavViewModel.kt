@@ -14,6 +14,9 @@ import ru.shturman.routing.Cameras
 import ru.shturman.routing.Caravan
 import ru.shturman.routing.CaravanDest
 import ru.shturman.routing.CaravanMember
+import ru.shturman.routing.DeviationDetector
+import ru.shturman.routing.DeviationEvent
+import ru.shturman.routing.DeviationLevel
 import ru.shturman.routing.OsmPoints
 import ru.shturman.routing.OverspeedBuzz
 import ru.shturman.ui.themes.ThemeSound
@@ -21,6 +24,7 @@ import ru.shturman.ui.themes.ThemeSounds
 import ru.shturman.routing.VoiceCommand
 import ru.shturman.routing.VoiceListener
 import ru.shturman.routing.alongRoute
+import ru.shturman.routing.friendlyNetError
 import ru.shturman.routing.fuelLiters
 import ru.shturman.routing.parseVoiceCommand
 import ru.shturman.routing.seasonEffect
@@ -56,8 +60,6 @@ private data class Quad(val a: List<Camera>, val b: List<LatLon>, val c: List<La
 private const val SNAP_MAX_M = 40.0
 
 /** Столько подряд положений вдали от маршрута нужно, чтобы решить, что мы свернули, и построить новый путь. */
-private const val OFF_ROUTE_FIXES = 4
-private const val REROUTE_PAUSE_MS = 15_000L
 
 private fun loadPlace(app: Application, kind: String): Place? = runCatching {
     val text = app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getString("fav_$kind", null)
@@ -109,6 +111,10 @@ data class NavState(
     val fullscreen: Boolean = false,
     val satellite: Boolean = false,
     val theme: Int = 0,
+    /** Короткое сообщение о маршруте («Перестраиваю маршрут»), пропадает само. */
+    val notice: String? = null,
+    /** Чувствительность отклонения: 0 — низкая, 1 — средняя, 2 — высокая. */
+    val devLevel: Int = 1,
     val overspeedSound: Boolean = true,
     val nightVoice: Boolean = true,
     val radarOn: Boolean = true,
@@ -183,7 +189,6 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private val settings = app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
     private var spokenLevel = -1
     private var lastTurnDistance = Double.MAX_VALUE
-    private var offRouteCount = 0
     private var rerouting = false
     private var lastRerouteAt = 0L
 
@@ -192,6 +197,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         fullscreen = settings.getBoolean("fullscreen", false),
         satellite = settings.getBoolean("satellite", false),
         theme = ru.shturman.ui.themes.Themes.load(settings),
+        devLevel = settings.getInt("dev_level", 1).coerceIn(0, 2),
         overspeedSound = settings.getBoolean("overspeed", true),
         nightVoice = settings.getBoolean("night_voice", true),
         radarOn = settings.getBoolean("radar", true),
@@ -263,10 +269,12 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update { it.copy(dataReady = true) }
             } catch (e: Exception) {
                 ru.shturman.Errors.log("roaddata", e)
-                _state.update { it.copy(dataError = "Не удалось скачать дорожные данные: ${e.message ?: e.javaClass.simpleName}") }
+                _state.update { it.copy(dataError = "Не удалось скачать дорожные данные. ${friendlyNetError(e)}") }
             }
         }
     }
+
+    private var searchJob: kotlinx.coroutines.Job? = null
 
     fun search(query: String) {
         if (query.trim().length < 3) {
@@ -274,12 +282,17 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         _state.update { it.copy(searching = true, searchError = null) }
-        viewModelScope.launch {
+        // Старый запрос отменяем: ответ на прежний текст не должен затереть новый
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
             try {
                 val found = Geocoder.search(query)
                 _state.update { it.copy(results = found, searching = false) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _state.update { it.copy(searching = false, searchError = "Поиск не сработал: ${e.message ?: "нет интернета"}") }
+                ru.shturman.Errors.log("search", e)
+                _state.update { it.copy(searching = false, searchError = friendlyNetError(e)) }
             }
         }
     }
@@ -369,7 +382,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                     it.copy(
                         routeLoading = false,
                         options = emptyList(),
-                        routeError = "Не удалось построить маршрут: ${e.message ?: e.javaClass.simpleName}"
+                        routeError = "Не удалось построить маршрут. Попробуйте другую точку назначения или повторите чуть позже."
                     )
                 }
             }
@@ -419,7 +432,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startNavigation() {
         val route = _state.value.route ?: return
-        offRouteCount = 0
+        deviation.reset()
+        lastTurnDistOnRoute = Double.MAX_VALUE
         spokenLevel = -1
         lastTurnDistance = Double.MAX_VALUE
         stopRecorder.reset()
@@ -448,7 +462,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private var lastFix: LatLon? = null
     private var lastFixAt = 0L
 
-    fun onFix(here: LatLon, speedMps: Float = 0f): Snap? {
+    fun onFix(here: LatLon, speedMps: Float = 0f, accuracyM: Float = 0f, courseDeg: Float = -1f): Snap? {
         lastFix = here
         lastFixAt = System.currentTimeMillis()
         val s = _state.value
@@ -465,10 +479,14 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         if (!s.navigating) return null
 
         val fromIndex = s.position?.index ?: 0
-        var snap = snapToRoute(route, here, fromIndex)?.takeIf { it.offsetM <= SNAP_MAX_M }
+        val near = snapToRoute(route, here, fromIndex)
+        var snap = near?.takeIf { it.offsetM <= SNAP_MAX_M }
+        var closest = near
         if (snap == null) {
             // Не нашли рядом с прошлым местом: ищем дальше вперёд по всему маршруту, чтобы не застрять
-            snap = snapToRoute(route, here, fromIndex, window = route.points.size)?.takeIf { it.offsetM <= SNAP_MAX_M }
+            val wide = snapToRoute(route, here, fromIndex, window = route.points.size)
+            closest = wide ?: near
+            snap = wide?.takeIf { it.offsetM <= SNAP_MAX_M }
             if (snap == null) ru.shturman.routing.Diag.snapMisses++
         }
         ru.shturman.routing.Diag.snapOffset = snap?.offsetM ?: -1.0
@@ -490,18 +508,60 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
 
-        // Съехали с маршрута: после нескольких подряд положений вдали строим новый путь отсюда
-        offRouteCount = if (snap == null) offRouteCount + 1 else 0
-        if (offRouteCount >= OFF_ROUTE_FIXES) reroute(here)
+        // Съезд с маршрута, разворот, пропущенный поворот, движение назад: решает детектор (routing/Deviation.kt)
+        if (snap != null) lastTurnDistOnRoute = nextTurn(route, position)?.distanceM ?: Double.MAX_VALUE
+        val event = deviation.update(
+            System.currentTimeMillis(), closest?.offsetM ?: Double.MAX_VALUE, accuracyM, speedMps,
+            courseDeg, closest?.bearing ?: -1.0, lastTurnDistOnRoute
+        )
+        onDeviation(event, here)
         return snap
     }
 
-    private fun reroute(here: LatLon) {
+    private val deviation = DeviationDetector(DeviationLevel.of(settings.getInt("dev_level", 1)))
+    private var lastTurnDistOnRoute = Double.MAX_VALUE
+
+    private fun onDeviation(event: DeviationEvent, here: LatLon) {
+        when (event) {
+            DeviationEvent.NONE -> Unit
+            DeviationEvent.OFF_ROUTE -> reroute(here, "Перестраиваю маршрут")
+            DeviationEvent.U_TURN -> reroute(here, "Разворот, строю новый маршрут")
+            DeviationEvent.MISSED_TURN -> reroute(here, "Вы пропустили поворот, перестраиваю маршрут")
+            DeviationEvent.REVERSE -> {
+                showNotice("Вы едете в обратную сторону")
+                if (_state.value.voiceOn) voice.say("Вы едете в обратную сторону", flush = false)
+            }
+            DeviationEvent.STOPPED_OFF ->
+                showNotice("Стоим вне маршрута. Тронетесь, и маршрут перестроится, либо отмените его крестиком")
+        }
+    }
+
+    /** Короткое сообщение на экране; через несколько секунд пропадает само. */
+    private fun showNotice(text: String) {
+        _state.update { it.copy(notice = text) }
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(6_000)
+            _state.update { if (it.notice == text) it.copy(notice = null) else it }
+        }
+    }
+
+    fun setDevLevel(index: Int) {
+        val i = index.coerceIn(0, 2)
+        settings.edit().putInt("dev_level", i).apply()
+        deviation.level = DeviationLevel.of(i)
+        _state.update { it.copy(devLevel = i) }
+    }
+
+    private fun reroute(here: LatLon, phrase: String? = null) {
         val destination = _state.value.destination ?: return
         val now = System.currentTimeMillis()
-        if (rerouting || now - lastRerouteAt < REROUTE_PAUSE_MS) return
+        if (rerouting || now - lastRerouteAt < deviation.level.pauseMs) return
         rerouting = true
         lastRerouteAt = now
+        if (phrase != null) {
+            showNotice(phrase)
+            if (_state.value.voiceOn) voice.say(phrase)
+        }
         viewModelScope.launch {
             try {
                 val result = router.route(here, destination.position, Date())
@@ -516,10 +576,13 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                             position = position, turn = nextTurn(fresh, position)
                         )
                     }
-                    offRouteCount = 0
+                    deviation.reset()
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Не вышло, попробуем снова через паузу
+                ru.shturman.Errors.log("reroute", e)
             } finally {
                 rerouting = false
             }
@@ -657,7 +720,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 val code = caravan.create()
                 _state.update { it.copy(caravanCode = code, caravanLeader = true, caravanMessage = "Караван создан. Код: $code. Скажите его друзьям.") }
             } catch (e: Exception) {
-                _state.update { it.copy(caravanMessage = "Не вышло: ${e.message?.take(100) ?: "нет интернета"}") }
+                _state.update { it.copy(caravanMessage = "Не вышло. ${friendlyNetError(e)}") }
             }
         }
     }
@@ -673,7 +736,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 caravan.join(code)
                 _state.update { it.copy(caravanCode = code, caravanLeader = caravan.isLeader, caravanMessage = "Вы в караване $code") }
             } catch (e: Exception) {
-                _state.update { it.copy(caravanMessage = "Не вышло: ${e.message?.take(100) ?: "нет интернета"}") }
+                _state.update { it.copy(caravanMessage = "Не вышло. ${friendlyNetError(e)}") }
             }
         }
     }
@@ -768,7 +831,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 sharedSync.sync()
             } catch (e: Exception) {
                 ru.shturman.Errors.log("sync", e)
-                "Не вышло: ${e.message?.take(120) ?: e.javaClass.simpleName}"
+                "Не вышло. ${friendlyNetError(e)}"
             }
             if (!message.startsWith("Не вышло")) ThemeSounds.play(ThemeSound.SYNC) else ThemeSounds.play(ThemeSound.ERROR)
             _state.update { it.copy(syncing = false, syncMessage = message) }
