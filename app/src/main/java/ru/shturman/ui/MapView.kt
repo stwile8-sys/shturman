@@ -115,6 +115,7 @@ fun DarkMap(
                     Style.Builder()
                         .fromJson(MapStyle.JSON)
                         .withImage(MapStyle.ONEWAY_IMAGE, MapStyle.onewayBitmap())
+                        .withImage(MapStyle.HEART_IMAGE, MapStyle.heartBitmap())
                 ) { loaded -> style = loaded }
                 // Пока нет GPS, показываем Псков
                 m.cameraPosition = CameraPosition.Builder()
@@ -206,8 +207,7 @@ fun DarkMap(
     }
     // Режим принцессы: маршрут розовый
     LaunchedEffect(style, princess) {
-        val color = if (princess) "#F2709F" else "#3DDCFF"
-        style?.getLayer("route-line")?.setProperties(PropertyFactory.lineColor(color))
+        style?.let { MapStyle.applyTheme(it, princess) }
     }
     LaunchedEffect(style, destination) {
         style?.getSourceAs<GeoJsonSource>("dest")?.setGeoJson(pointGeoJson(destination))
