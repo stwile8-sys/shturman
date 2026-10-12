@@ -4,28 +4,34 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import ru.shturman.ui.themes.ThemeSpec
+import ru.shturman.ui.themes.Themes
 
-// Все цвета приложения собраны здесь. Хочешь поменять цвет — меняй только тут.
-// Есть две палитры: обычная тёмная и «принцесса» (пастельная: розовый, лавандовый, золотой).
+// Все цвета приложения берутся из выбранной темы (ui/themes/AppTheme.kt). Все 8 тем тёмные.
 object ShColors {
-    /** Режим принцессы. Меняется из настроек, и весь экран перекрашивается сам. */
-    var princess by mutableStateOf(false)
+    /** Номер выбранной темы. Меняется из настроек, и весь экран перекрашивается сам. */
+    var themeId by mutableStateOf(0)
 
-    val Background: Color get() = if (princess) Color(0xFFF8EEF8) else Color(0xFF0A0C10)   // фон приложения
-    val Panel: Color get() = if (princess) Color(0xFFFFF0F7) else Color(0xFF12161C)        // панели
-    val Accent: Color get() = if (princess) Color(0xFFF2709F) else Color(0xFF3DDCFF)       // кнопки, маршрут
-    val Danger: Color get() = if (princess) Color(0xFFE0457B) else Color(0xFFFF2E2E)
-    val Success: Color get() = if (princess) Color(0xFFB79CF2) else Color(0xFF7CFF6B)      // успех (у принцессы — лаванда)
-    val Gold: Color get() = if (princess) Color(0xFFE6B84F) else Color(0xFFFFD400)         // золотой акцент
-    val TextPrimary: Color get() = if (princess) Color(0xFF4A2A4C) else Color(0xFFFFFFFF)  // основной текст
-    val TextSecondary: Color get() = if (princess) Color(0xFF9A7B9E) else Color(0xFF8A9099)
-    val Divider: Color get() = if (princess) Color(0xFFEBD3EA) else Color(0xFF2A2F38)      // разделитель и фон полосы
-    val SearchField: Color get() = if (princess) Color(0xFFF6DDF0) else Color(0xFF1B2028)  // поле поиска внутри панели
+    val T: ThemeSpec get() = Themes.all[themeId.coerceIn(0, Themes.all.size - 1)]
+
+    /** Старое имя: «принцесса» — это тема №2. */
+    val princess: Boolean get() = themeId == 1
+
+    val Background: Color get() = T.bg
+    val Panel: Color get() = T.panel
+    val Accent: Color get() = T.accent
+    val Danger: Color get() = T.danger
+    val Success: Color get() = T.third
+    val Gold: Color get() = if (themeId == 1) T.third else Color(0xFFFFD400)
+    val TextPrimary: Color get() = T.text
+    val TextSecondary: Color get() = T.textSec
+    val Divider: Color get() = T.divider
+    val SearchField: Color get() = T.search
 
     // Цвета раллийного знака по резкости поворота
-    val Sign1to2 = Color(0xFFFF2E2E)
-    val Sign3 = Color(0xFFFF8A00)
-    val Sign4 = Color(0xFFFFD400)
-    val Sign5 = Color(0xFF7CFF6B)
-    val Sign6 = Color(0xFF3DDCFF)
+    val Sign1to2: Color get() = T.signs[0]
+    val Sign3: Color get() = T.signs[1]
+    val Sign4: Color get() = T.signs[2]
+    val Sign5: Color get() = T.signs[3]
+    val Sign6: Color get() = T.signs[4]
 }

@@ -26,7 +26,16 @@ fun signColor(severity: Int): Color = when (severity) {
     else -> ShColors.Sign6
 }
 
-/** Круглый раллийный знак: цифра резкости и буква L (влево) или R (вправо). */
+/** Форма раллийного знака зависит от темы: круг, скошенный угол, прямоугольник со скруглением. Логика 1–6 + L/R та же. */
+fun signShape(): androidx.compose.ui.graphics.Shape = when (ShColors.T.btn) {
+    ru.shturman.ui.themes.BtnKind.CHAMFER -> androidx.compose.foundation.shape.CutCornerShape(30)
+    ru.shturman.ui.themes.BtnKind.ROUND, ru.shturman.ui.themes.BtnKind.SOFT -> CircleShape
+    ru.shturman.ui.themes.BtnKind.SLIM -> androidx.compose.foundation.shape.RoundedCornerShape(50)
+    ru.shturman.ui.themes.BtnKind.GRAIN -> androidx.compose.foundation.shape.RoundedCornerShape(22)
+    else -> androidx.compose.foundation.shape.RoundedCornerShape(12)
+}
+
+/** Раллийный знак: цифра резкости и буква L (влево) или R (вправо). */
 @Composable
 fun RallySign(
     severity: Int,
@@ -36,7 +45,7 @@ fun RallySign(
     Box(
         modifier = modifier
             .size(50.dp)
-            .clip(CircleShape)
+            .clip(signShape())
             .background(signColor(severity)),
         contentAlignment = Alignment.Center
     ) {

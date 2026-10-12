@@ -23,6 +23,20 @@ jobs:
         with:
           gradle-version: 8.11.1
 
+      - name: Download Google Fonts (themes)
+        run: |
+          mkdir -p app/src/main/res/font
+          B=https://raw.githubusercontent.com/google/fonts/main/ofl
+          dl() { curl -fsSL --retry 5 --retry-delay 3 -o "app/src/main/res/font/$1" "$B/$2"; }
+          dl orbitron.ttf 'orbitron/Orbitron%5Bwght%5D.ttf'
+          dl inter.ttf 'inter/Inter%5Bopsz,wght%5D.ttf'
+          dl comfortaa.ttf 'comfortaa/Comfortaa%5Bwght%5D.ttf'
+          dl bebas_neue.ttf 'bebasneue/BebasNeue-Regular.ttf'
+          dl roboto_condensed.ttf 'robotocondensed/RobotoCondensed%5Bwght%5D.ttf'
+          dl racing_sans_one.ttf 'racingsansone/RacingSansOne-Regular.ttf'
+          dl oswald.ttf 'oswald/Oswald%5Bwght%5D.ttf'
+          ls -la app/src/main/res/font
+
       - name: Build debug APK
         run: |
           set -o pipefail

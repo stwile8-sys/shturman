@@ -77,7 +77,7 @@ fun DarkMap(
     danger: List<LatLon> = emptyList(),
     members: List<CaravanMember> = emptyList(),
     satellite: Boolean = false,
-    princess: Boolean = false,
+    themeId: Int = 0,
     onFix: (LatLon, Float) -> Snap? = { _, _ -> null }
 ) {
     val context = LocalContext.current
@@ -224,7 +224,19 @@ fun DarkMap(
 
     // Линия маршрута и точка назначения на карте
     LaunchedEffect(style, route) {
-        style?.getSourceAs<GeoJsonSource>("route")?.setGeoJson(lineGeoJson(route))
+        val src = style?.getSourceAs<GeoJsonSource>("route")
+        val th = ru.shturman.ui.theme.ShColors.T
+        if (src != null && route != null && route.size > 2 && !currentNavigating && th.routeMs > 0) {
+            // Маршрут прорисовывается от начала к концу; у некоторых тем рывками
+            val steps = (th.routeMs / 40).coerceIn(8, 30)
+            val frames = if (th.routeJerky) 8 else steps
+            for (k in 1 until frames) {
+                val upto = (route.size * k / frames).coerceAtLeast(2)
+                src.setGeoJson(lineGeoJson(route.subList(0, upto)))
+                kotlinx.coroutines.delay((th.routeMs / frames).toLong())
+            }
+        }
+        src?.setGeoJson(lineGeoJson(route))
     }
     LaunchedEffect(style, bumps) {
         style?.getSourceAs<GeoJsonSource>("bumps")?.setGeoJson(pointsGeoJson(bumps))
@@ -252,9 +264,9 @@ fun DarkMap(
         st.getLayer("sat-layer")?.setProperties(PropertyFactory.visibility(if (satellite) Property.VISIBLE else Property.NONE))
         st.getLayer("building-3d")?.setProperties(PropertyFactory.visibility(if (satellite) Property.NONE else Property.VISIBLE))
     }
-    // Режим принцессы: маршрут розовый
-    LaunchedEffect(style, princess) {
-        style?.let { MapStyle.applyTheme(it, princess) }
+    // Тема оформления: цвета карты и маршрута
+    LaunchedEffect(style, themeId) {
+        style?.let { MapStyle.applyTheme(it, ru.shturman.ui.theme.ShColors.T) }
     }
     LaunchedEffect(style, destination) {
         style?.getSourceAs<GeoJsonSource>("dest")?.setGeoJson(pointGeoJson(destination))

@@ -19,6 +19,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.theme.ShText
+import ru.shturman.ui.themes.ThemedText
+import ru.shturman.ui.themes.themedEnter
 
 /** Ближайший поворот: раллийный знак, расстояние и улица. Живёт в правом верхнем углу. */
 @Composable
@@ -29,20 +31,20 @@ fun TurnCard(
     distance: String = "320 м",
     street: String = "ул. Ленина"
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    val shape = ru.shturman.ui.themes.themePanelShape()
     Row(
-        modifier = modifier
+        modifier = modifier.themedEnter()
             .widthIn(max = 250.dp)
             .clip(shape)
             .background(ShColors.Panel.copy(alpha = 0.92f))
-            .border(1.dp, ShBorder, shape)
+            .border(ShColors.T.borderW.dp, ShBorder, shape)
             .padding(start = 10.dp, end = 18.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RallyPacenote(severity = severity, isLeft = isLeft)
         Spacer(Modifier.width(12.dp))
         Column {
-            Text(text = distance, color = ShColors.TextPrimary, style = ShText.Distance)
+            ThemedText(text = distance, color = ShColors.TextPrimary, style = ShText.Distance)
             Text(
                 text = street,
                 color = ShColors.TextSecondary,
@@ -64,13 +66,13 @@ fun PaceCard(
     street: String,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    val shape = ru.shturman.ui.themes.themePanelShape()
     Column(
-        modifier = modifier
+        modifier = modifier.themedEnter()
             .widthIn(max = 260.dp)
             .clip(shape)
             .background(ShColors.Panel.copy(alpha = 0.92f))
-            .border(1.dp, ShBorder, shape)
+            .border(ShColors.T.borderW.dp, ShBorder, shape)
             .padding(start = 10.dp, end = 18.dp, top = 10.dp, bottom = 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -82,7 +84,7 @@ fun PaceCard(
             }
             Spacer(Modifier.width(12.dp))
             Column {
-                Text(
+                ThemedText(
                     text = if (first == null) "Прямо" else formatDistance(first.distanceM),
                     color = ShColors.TextPrimary,
                     style = ShText.Distance

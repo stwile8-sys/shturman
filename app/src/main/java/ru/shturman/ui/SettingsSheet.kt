@@ -107,11 +107,13 @@ fun SettingsSheet(
 
             Divider()
 
-            SwitchRow(
-                "Режим принцессы",
-                "Пастельные цвета, изящный шрифт, сердечки и звёздочки, мягкий голос. Функции те же.",
-                s.princess, vm::setPrincess
-            )
+            Section("Тема оформления")
+            ru.shturman.ui.themes.ThemePicker(selected = s.theme, onSelect = vm::setTheme)
+            var themeSounds by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ru.shturman.ui.themes.ThemeSounds.enabled) }
+            SwitchRow("Звуки темы", "Короткие звуки нажатий, начала маршрута, синхронизации и ошибок. Голос навигатора не меняется.", themeSounds) {
+                themeSounds = it
+                vm.setThemeSounds(it)
+            }
 
             Section("Голос и звуки")
             SwitchRow("Голосовые подсказки", "Говорит о поворотах голосом телефона. Нужен русский голос в настройках речи Android.", s.voiceOn, vm::setVoiceOn)

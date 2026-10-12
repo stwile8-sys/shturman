@@ -9,7 +9,7 @@ import ru.shturman.R
  * Звук заставки. Запись лежит в приложении (res/raw/welcome.ogg): чтобы заменить звук, достаточно
  * положить на её место другой файл с тем же именем. Плеер готовится заранее, чтобы заставка не лагала.
  */
-class Welcome(context: Context) {
+class Welcome(context: Context, resId: Int = R.raw.welcome) {
     private var mp: MediaPlayer? = null
 
     init {
@@ -18,7 +18,7 @@ class Welcome(context: Context) {
                 .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build()
-            mp = MediaPlayer.create(context.applicationContext, R.raw.welcome, attrs, 0)
+            mp = MediaPlayer.create(context.applicationContext, resId, attrs, 0)
         }
     }
 

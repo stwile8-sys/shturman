@@ -26,6 +26,8 @@ import ru.shturman.routing.fuelLiters
 import ru.shturman.routing.fuelText
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.theme.ShText
+import ru.shturman.ui.themes.ThemedText
+import ru.shturman.ui.themes.themedEnter
 
 /** Панель выбора маршрута: варианты с временем, время выезда и кнопка «Поехали». */
 @Composable
@@ -42,15 +44,15 @@ fun RoutePanel(
     onStart: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    val shape = ru.shturman.ui.themes.themePanelShape()
     val departMillis = System.currentTimeMillis() + departOffsetMin * 60_000L
 
     Column(
-        modifier = modifier
+        modifier = modifier.themedEnter()
             .fillMaxWidth()
             .clip(shape)
             .background(ShColors.Panel.copy(alpha = 0.95f))
-            .border(1.dp, ShBorder, shape)
+            .border(ShColors.T.borderW.dp, ShBorder, shape)
             .padding(16.dp)
     ) {
         Text(

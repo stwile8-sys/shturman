@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.theme.ShText
+import ru.shturman.ui.themes.ThemedText
+import ru.shturman.ui.themes.themedEnter
 
 /** Нижняя карточка: только сколько проехали относительно всего пути. */
 @Composable
@@ -35,13 +37,13 @@ fun ProgressCard(
     remaining: String? = null,
     fuel: String? = null
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    val shape = ru.shturman.ui.themes.themePanelShape()
     Column(
-        modifier = modifier
+        modifier = modifier.themedEnter()
             .fillMaxWidth()
             .clip(shape)
             .background(ShColors.Panel.copy(alpha = 0.92f))
-            .border(1.dp, ShBorder, shape)
+            .border(ShColors.T.borderW.dp, ShBorder, shape)
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
         val parts = ArrayList<String>()
@@ -54,7 +56,7 @@ fun ProgressCard(
             verticalAlignment = Alignment.Bottom
         ) {
             if (showPercent) {
-                Text(
+                ThemedText(
                     text = "${(progress * 100).toInt()}%",
                     color = ShColors.TextPrimary,
                     style = ShText.BigNumber

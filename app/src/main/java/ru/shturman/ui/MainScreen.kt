@@ -58,6 +58,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.shturman.NavViewModel
 import ru.shturman.auth.UserInfo
 import ru.shturman.ui.theme.ShColors
+import ru.shturman.ui.themes.themedScreenEnter
 import ru.shturman.ui.theme.ShText
 
 /**
@@ -145,7 +146,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             danger = s.danger,
             members = s.members,
             satellite = s.satellite,
-            princess = s.princess,
+            themeId = s.theme,
             onFix = { here, speed -> vm.onFix(here, speed) }
         )
 
@@ -157,7 +158,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             MapButton(
-                icon = if (s.princess) Icons.Filled.Star else Icons.Filled.Menu,
+                icon = if (s.theme == 1) Icons.Filled.Star else Icons.Filled.Menu,
                 description = "Меню",
                 onClick = { showSettings = true }
             )
@@ -278,7 +279,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             else -> 24.dp
         }
         MapButton(
-            icon = if (s.princess) Icons.Filled.Favorite else Icons.Filled.LocationOn,
+            icon = if (s.theme == 1) Icons.Filled.Favorite else Icons.Filled.LocationOn,
             description = "Где я",
             onClick = { recenterKey++ },
             modifier = Modifier
@@ -342,6 +343,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         }
 
         if (showSearch) {
+            Box(Modifier.fillMaxSize().themedScreenEnter()) {
             SearchScreen(
                 home = s.home,
                 work = s.work,
@@ -356,6 +358,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 },
                 onClose = { showSearch = false }
             )
+            }
         }
 
         if (showAdmin) AdminCodesScreen(onClose = { showAdmin = false })

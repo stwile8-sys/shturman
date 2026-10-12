@@ -138,7 +138,7 @@ fun RallyPacenote(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .size(boxSize * 0.38f)
-                .clip(CircleShape)
+                .clip(signShape())
                 .background(signColor(severity)),
             contentAlignment = Alignment.Center
         ) {

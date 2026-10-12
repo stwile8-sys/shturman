@@ -1,0 +1,58 @@
+package ru.shturman.ui.themes
+
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.SoundPool
+
+/** События, для которых у каждой темы есть свой короткий звук. Голос навигатора сюда не входит. */
+enum class ThemeSound(val key: String) { TAP("tap"), NAV("nav"), SPEED("speed"), SYNC("sync"), ERROR("err") }
+
+/**
+ * Звуки темы лежат в res/raw под именами t1_tap, t1_nav, t1_speed, t1_sync, t1_err (t1 … t8 — номер темы).
+ * Чтобы заменить звук, достаточно положить на его место файл с тем же именем.
+ */
+object ThemeSounds {
+    @Volatile var enabled = true
+    private var pool: SoundPool? = null
+    private var ids = HashMap<ThemeSound, Int>()
+    private var loadedFor = -1
+    private var lastSpeedAt = 0L
+
+    /** Загружает звуки выбранной темы. Вызывается при запуске и при смене темы. */
+    @Synchronized
+    fun setTheme(context: Context, themeId: Int) {
+        if (loadedFor == themeId && pool != null) return
+        runCatching { pool?.release() }
+        ids = HashMap()
+        val sp = SoundPool.Builder()
+            .setMaxStreams(4)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            .build()
+        val app = context.applicationContext
+        for (s in ThemeSound.values()) {
+            val res = app.resources.getIdentifier("t${themeId + 1}_${s.key}", "raw", app.packageName)
+            if (res != 0) runCatching { ids[s] = sp.load(app, res, 1) }
+        }
+        pool = sp
+        loadedFor = themeId
+    }
+
+    fun play(sound: ThemeSound, volume: Float = 1f) {
+        if (!enabled) return
+        val id = ids[sound] ?: return
+        runCatching { pool?.play(id, volume, volume, 1, 0, 1f) }
+    }
+
+    /** Звук превышения скорости: повторяется не чаще раза в 3,5 секунды, громче при большем превышении. */
+    fun speeding(excessKmh: Int) {
+        val now = System.currentTimeMillis()
+        if (excessKmh <= 2 || now - lastSpeedAt < 3500L) return
+        lastSpeedAt = now
+        play(ThemeSound.SPEED, (0.35f + (excessKmh - 2).coerceAtMost(40) / 40f * 0.65f))
+    }
+}

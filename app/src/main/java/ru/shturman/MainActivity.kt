@@ -43,7 +43,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // навигатор: экран не гаснет
-        ru.shturman.ui.theme.ShColors.princess = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("princess", false)
+        ru.shturman.ui.theme.ShColors.themeId = ru.shturman.ui.themes.Themes.load(getSharedPreferences("settings", MODE_PRIVATE))
+        ru.shturman.ui.themes.ThemeSounds.enabled = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("theme_sounds", true)
+        ru.shturman.ui.themes.ThemeSounds.setTheme(this, ru.shturman.ui.theme.ShColors.themeId)
         // Если приложение вылетит, причина сохранится и покажется при следующем запуске
         val crashFile = File(filesDir, "crash.txt")
         val previous = Thread.getDefaultUncaughtExceptionHandler()
@@ -62,7 +64,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         )
         // Приветствие голосом только при свежем запуске, не при повороте экрана
-        welcome = ru.shturman.routing.Welcome(this)
+        welcome = ru.shturman.routing.Welcome(this, ru.shturman.ui.theme.ShColors.T.splashRes)
         setContent {
             ShturmanTheme {
                 val context = LocalContext.current
@@ -102,7 +104,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
-                    if (showSplash) SplashOverlay(onPlaySound = { welcome?.play() }, onFinished = { welcome?.stop(); showSplash = false })
+                    if (showSplash) ru.shturman.ui.themes.ThemeSplash(onPlaySound = { welcome?.play() }, onFinished = { welcome?.stop(); showSplash = false })
                 }
             }
         }

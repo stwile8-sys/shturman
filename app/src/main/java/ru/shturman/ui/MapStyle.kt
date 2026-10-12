@@ -1,5 +1,6 @@
 package ru.shturman.ui
 
+import androidx.compose.ui.graphics.toArgb
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -34,62 +35,68 @@ object MapStyle {
         return bmp
     }
 
-    private class Tint(val id: String, val kind: String, val normal: String, val princess: String)
+    private fun hex(c: androidx.compose.ui.graphics.Color): String =
+        String.format("#%06X", c.toArgb() and 0xFFFFFF)
 
-    private val TINTS = listOf(
-        Tint("bg", "bg", "#0A0C10", "#FBEFF7"),
-        Tint("grass", "fill", "#0C120F", "#F3E6F4"),
-        Tint("wood", "fill", "#0D1612", "#E7DDF5"),
-        Tint("residential", "fill", "#0D1015", "#F9E3EF"),
-        Tint("park-flat", "fill", "#0D1612", "#E3E0F6"),
-        Tint("water", "fill", "#0B1823", "#CFDCF7"),
-        Tint("waterway", "line", "#0B1823", "#CFDCF7"),
-        Tint("road-minor", "line", "#242A33", "#FFFFFF"),
-        Tint("road-mid", "line", "#323A45", "#FFFFFF"),
-        Tint("road-major", "line", "#46515E", "#F6D28B"),
-        Tint("centerline", "line", "#7D8896", "#E9BBD6"),
-        Tint("centerline-minor", "line", "#5A6572", "#EBCBE0"),
-        Tint("route-casing", "line", "#0A0C10", "#FFF4FA"),
-        Tint("building-3d", "ext", "#1C222B", "#E6C7E8"),
-        Tint("road-names", "text", "#6B737D", "#9A6C9F"),
-        Tint("place-names", "text", "#8A9099", "#7A4A80"),
-        Tint("landmark-names", "text", "#FFD98A", "#B07A10"),
-        Tint("church-names", "text", "#D9C4FF", "#8A5CC0"),
-        Tint("landmark-dots", "dot", "#FFC857", "#F0B33C"),
-        Tint("church-dots", "dot", "#C9A8FF", "#B79CF2")
-    )
+    private fun mixHex(a: androidx.compose.ui.graphics.Color, b: androidx.compose.ui.graphics.Color, k: Float): String =
+        hex(androidx.compose.ui.graphics.lerp(a, b, k))
 
-    /** Перекрашивает карту: тёмная обычная или светлая розово-лавандовая для режима принцессы. */
-    fun applyTheme(style: org.maplibre.android.maps.Style, princess: Boolean) {
-        for (t in TINTS) {
-            val layer = style.getLayer(t.id) ?: continue
-            val c = if (princess) t.princess else t.normal
-            val halo = if (princess) "#FFF4FA" else "#0A0C10"
-            val stroke = if (princess) "#FFF4FA" else "#0A0C10"
-            when (t.kind) {
+    /** Перекрашивает карту под тему: фон, дороги, вода, дома и подписи считаются от цветов темы. Все темы тёмные. */
+    fun applyTheme(style: org.maplibre.android.maps.Style, th: ru.shturman.ui.themes.ThemeSpec) {
+        val bg = th.bg
+        val white = androidx.compose.ui.graphics.Color.White
+        val halo = hex(bg)
+        val tints = listOf(
+            arrayOf("bg", "bg", hex(bg)),
+            arrayOf("grass", "fill", mixHex(bg, th.third, 0.05f)),
+            arrayOf("wood", "fill", mixHex(bg, th.third, 0.07f)),
+            arrayOf("residential", "fill", mixHex(bg, white, 0.03f)),
+            arrayOf("park-flat", "fill", mixHex(bg, th.third, 0.07f)),
+            arrayOf("water", "fill", mixHex(bg, th.accent, 0.13f)),
+            arrayOf("waterway", "line", mixHex(bg, th.accent, 0.13f)),
+            arrayOf("road-minor", "line", mixHex(bg, white, 0.13f)),
+            arrayOf("road-mid", "line", mixHex(bg, white, 0.19f)),
+            arrayOf("road-major", "line", mixHex(bg, th.second, 0.30f)),
+            arrayOf("centerline", "line", mixHex(bg, white, 0.50f)),
+            arrayOf("centerline-minor", "line", mixHex(bg, white, 0.35f)),
+            arrayOf("route-casing", "line", hex(bg)),
+            arrayOf("building-3d", "ext", mixHex(bg, white, 0.09f)),
+            arrayOf("road-names", "text", mixHex(bg, white, 0.42f)),
+            arrayOf("place-names", "text", mixHex(bg, white, 0.58f)),
+            arrayOf("landmark-names", "text", hex(th.third.copy(alpha = 1f).let { androidx.compose.ui.graphics.lerp(it, white, 0.35f) })),
+            arrayOf("church-names", "text", mixHex(th.second, white, 0.45f)),
+            arrayOf("landmark-dots", "dot", hex(th.third)),
+            arrayOf("church-dots", "dot", mixHex(th.second, white, 0.3f))
+        )
+        for (t in tints) {
+            val layer = style.getLayer(t[0]) ?: continue
+            val c = t[2]
+            when (t[1]) {
                 "bg" -> layer.setProperties(PropertyFactory.backgroundColor(c))
                 "fill" -> layer.setProperties(PropertyFactory.fillColor(c))
                 "line" -> layer.setProperties(PropertyFactory.lineColor(c))
                 "ext" -> layer.setProperties(PropertyFactory.fillExtrusionColor(c))
                 "text" -> layer.setProperties(PropertyFactory.textColor(c), PropertyFactory.textHaloColor(halo))
-                "dot" -> layer.setProperties(PropertyFactory.circleColor(c), PropertyFactory.circleStrokeColor(stroke))
+                "dot" -> layer.setProperties(PropertyFactory.circleColor(c), PropertyFactory.circleStrokeColor(halo))
             }
         }
-        style.getLayer("route-line")?.setProperties(PropertyFactory.lineColor(if (princess) "#F2709F" else "#3DDCFF"))
-        style.addImage(ONEWAY_IMAGE, onewayBitmap(princess))
+        style.getLayer("route-line")?.setProperties(PropertyFactory.lineColor(hex(th.accent)))
+        style.addImage(ONEWAY_IMAGE, onewayBitmap(hex(th.accent)))
         val vis = org.maplibre.android.style.layers.Property.VISIBLE
         val none = org.maplibre.android.style.layers.Property.NONE
-        style.getLayer("trail-smoke")?.setProperties(PropertyFactory.visibility(if (princess) none else vis))
-        style.getLayer("trail-hearts")?.setProperties(PropertyFactory.visibility(if (princess) vis else none))
+        val hearts = th.id == 1
+        style.getLayer("trail-smoke")?.setProperties(PropertyFactory.visibility(if (hearts) none else vis))
+        style.getLayer("trail-hearts")?.setProperties(PropertyFactory.visibility(if (hearts) vis else none))
     }
 
     /** Стрелка-шеврон, смотрит вправо. Вдоль дороги Карта сама поворачивает её по направлению движения. */
-    fun onewayBitmap(princess: Boolean = false): Bitmap {
+    fun onewayBitmap(accentHex: String = "#3DDCFF"): Bitmap {
         val size = 32
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor(if (princess) "#CCF2709F" else "#CC3DDCFF")
+            color = Color.parseColor(accentHex)
+            alpha = 0xCC
             style = Paint.Style.STROKE
             strokeWidth = 5f
             strokeCap = Paint.Cap.ROUND

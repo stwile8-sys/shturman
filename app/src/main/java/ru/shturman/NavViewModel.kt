@@ -16,6 +16,8 @@ import ru.shturman.routing.CaravanDest
 import ru.shturman.routing.CaravanMember
 import ru.shturman.routing.OsmPoints
 import ru.shturman.routing.OverspeedBuzz
+import ru.shturman.ui.themes.ThemeSound
+import ru.shturman.ui.themes.ThemeSounds
 import ru.shturman.routing.VoiceCommand
 import ru.shturman.routing.VoiceListener
 import ru.shturman.routing.alongRoute
@@ -106,7 +108,7 @@ data class NavState(
     // Настройки
     val fullscreen: Boolean = false,
     val satellite: Boolean = false,
-    val princess: Boolean = false,
+    val theme: Int = 0,
     val overspeedSound: Boolean = true,
     val nightVoice: Boolean = true,
     val radarOn: Boolean = true,
@@ -189,7 +191,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         home = loadPlace(app, "home"), work = loadPlace(app, "work"),
         fullscreen = settings.getBoolean("fullscreen", false),
         satellite = settings.getBoolean("satellite", false),
-        princess = settings.getBoolean("princess", false),
+        theme = ru.shturman.ui.themes.Themes.load(settings),
         overspeedSound = settings.getBoolean("overspeed", true),
         nightVoice = settings.getBoolean("night_voice", true),
         radarOn = settings.getBoolean("radar", true),
@@ -205,8 +207,10 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     init {
         voice.onStatus = { m -> _state.update { it.copy(voiceStatus = m) } }
         downloadDataIfNeeded()
-        ShColors.princess = settings.getBoolean("princess", false)
-        voice.princess = ShColors.princess
+        ShColors.themeId = ru.shturman.ui.themes.Themes.load(settings)
+        voice.princess = ShColors.themeId == 1
+        ThemeSounds.enabled = settings.getBoolean("theme_sounds", true)
+        ThemeSounds.setTheme(app, ShColors.themeId)
         voice.nightMode = settings.getBoolean("night_voice", true)
         // Данные OpenStreetMap: камеры (на карте не рисуются, нужны для маршрута и радар-круга),
         // лежачие полицейские и ремонт дорог (рисуются на карте). Обновляются раз в неделю.
@@ -297,6 +301,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         val s = _state.value
         val destination = s.destination ?: return
         if (!s.dataReady) {
+            ThemeSounds.play(ThemeSound.ERROR)
             _state.update { it.copy(routeError = "Дорожные данные ещё загружаются, ${(s.dataProgress * 100).toInt()}%") }
             return
         }
@@ -304,6 +309,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         val fresh = lastFix?.takeIf { System.currentTimeMillis() - lastFixAt < 30_000L }
         val from = fresh ?: lastKnownPosition(getApplication())
         if (from == null) {
+            ThemeSounds.play(ThemeSound.ERROR)
             _state.update { it.copy(routeError = "Нет сигнала GPS: выйдите на открытое место и подождите") }
             return
         }
@@ -356,6 +362,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             } catch (e: Exception) {
+                ThemeSounds.play(ThemeSound.ERROR)
                 _state.update {
                     it.copy(
                         routeLoading = false,
@@ -418,6 +425,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         prepareHazards(route)
         _state.value.destination?.let { caravan.setDestination(it.title, it.position) }
         val position = RoutePosition(0, 0.0)
+        ThemeSounds.play(ThemeSound.NAV)
         _state.update { it.copy(navigating = true, position = position, turn = nextTurn(route, position)) }
     }
 
@@ -470,7 +478,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         }
         announceTurn(nextTurn(route, position))
         val limit = limits.firstOrNull { position.traveledM >= it.startM && position.traveledM < it.endM }?.kmh
-        buzz.update(s.overspeedSound, if (limit != null) kmh - limit else 0)
+        if (s.overspeedSound && limit != null) ThemeSounds.speeding(kmh - limit)
         val hazards = checkHazards(position.traveledM, s)
         _state.update {
             it.copy(
@@ -607,12 +615,18 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     fun setNightVoice(on: Boolean) { putBool("night_voice", on); voice.nightMode = on; _state.update { it.copy(nightVoice = on) } }
     fun setRadar(on: Boolean) { putBool("radar", on); _state.update { it.copy(radarOn = on) } }
 
-    /** Режим принцессы: меняет цвета, шрифт, значки и голос. Функции приложения те же. */
-    fun setPrincess(on: Boolean) {
-        putBool("princess", on)
-        ShColors.princess = on
-        voice.princess = on
-        _state.update { it.copy(princess = on) }
+    /** Тема оформления: цвета, шрифты, формы, анимации и звуки. Функции приложения те же. Голос навигатора не меняется. */
+    fun setTheme(id: Int) {
+        settings.edit().putInt(ru.shturman.ui.themes.Themes.PREF, id).apply()
+        ShColors.themeId = id
+        voice.princess = id == 1
+        ThemeSounds.setTheme(getApplication(), id)
+        _state.update { it.copy(theme = id) }
+    }
+
+    fun setThemeSounds(on: Boolean) {
+        putBool("theme_sounds", on)
+        ThemeSounds.enabled = on
     }
 
     /** Что показывать на нижней карточке: key — percent, distance, eta, remaining, fuel. */
@@ -753,6 +767,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 "Не вышло: ${e.message?.take(120) ?: e.javaClass.simpleName}"
             }
+            if (!message.startsWith("Не вышло")) ThemeSounds.play(ThemeSound.SYNC) else ThemeSounds.play(ThemeSound.ERROR)
             _state.update { it.copy(syncing = false, syncMessage = message) }
         }
     }
