@@ -232,7 +232,22 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             pills += Triple((s.heardText?.let { "«$it»\n" } ?: "") + (s.voiceMessage ?: ""), ShColors.TextPrimary, null)
         }
         if (message != null && !s.navigating) {
-            pills += Triple(message.first, message.second, if (!s.dataReady && s.dataError != null) ({ vm.downloadDataIfNeeded() }) else null)
+            val err = s.routeError
+            val openSettings: (() -> Unit)? = when {
+                err != null && err.startsWith("Геолокация выключена") -> ({
+                    runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                })
+                err != null && err.startsWith("Нет доступа к местоположению") -> ({
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + context.packageName))
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                })
+                else -> null
+            }
+            pills += Triple(message.first, message.second, if (!s.dataReady && s.dataError != null) ({ vm.downloadDataIfNeeded() }) else openSettings)
         } else if (!s.navigating && s.options.isNotEmpty()) {
             if (weather != null) {
                 val extra = ((1.0 / weather.speedFactor - 1.0) * 100).toInt()
