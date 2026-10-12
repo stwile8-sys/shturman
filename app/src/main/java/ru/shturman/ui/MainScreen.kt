@@ -147,7 +147,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             members = s.members,
             satellite = s.satellite,
             themeId = s.theme,
-            onFix = { here, speed -> vm.onFix(here, speed) }
+            onFix = { here, speed, accuracy, course -> vm.onFix(here, speed, accuracy, course) }
         )
 
         Column(
@@ -235,6 +235,9 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         }
         if (s.navigating && s.hazard != null) {
             pills += Triple(s.hazard!!, ShColors.Sign3, null)
+        }
+        if (s.navigating && s.notice != null) {
+            pills += Triple(s.notice!!, ShColors.Accent, null)
         }
         if (pills.isNotEmpty()) {
             Column(

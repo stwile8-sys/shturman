@@ -3,6 +3,7 @@ package ru.shturman.routing
 import android.content.Context
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -12,6 +13,8 @@ import kotlinx.coroutines.tasks.await
 class SharedSync(context: Context, private val store: SpeedStore) {
     private val prefs = context.getSharedPreferences("sync", Context.MODE_PRIVATE)
     private val db get() = FirebaseFirestore.getInstance()
+    /** Две синхронизации сразу (автоматическая и по кнопке) не запускаются: вторая ждёт первую. */
+    private val lock = kotlinx.coroutines.sync.Mutex()
 
     var share: Boolean
         get() = prefs.getBoolean("share", true)
@@ -20,7 +23,9 @@ class SharedSync(context: Context, private val store: SpeedStore) {
     val lastSyncAt: Long get() = prefs.getLong("last_sync", 0L)
 
     /** Отправляет свои новые данные (если разрешено) и забирает чужие. Возвращает короткий итог. */
-    suspend fun sync(): String {
+    suspend fun sync(): String = lock.withLock { syncLocked() }
+
+    private suspend fun syncLocked(): String {
         val started = System.currentTimeMillis()
         var pushed = 0
         if (share) {
