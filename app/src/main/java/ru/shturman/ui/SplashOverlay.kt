@@ -40,10 +40,10 @@ private const val BLACK_HOLD_MS = 900L      // чёрный экран, пока
 private const val SPONSOR_END = 1700f       // «спонсорская» заставка
 private const val SKY_START = 2200f         // из чёрного проявляется небо
 private const val SOUND_AT = 2900f          // начало появления самолёта и звук
-private const val REVEAL_END = 5000f        // самолёт полностью проявился
-private const val TITLE_START = 4300f
-private const val FADE_START = 5400f
-private const val TOTAL = 5800f
+private const val REVEAL_END = 6000f        // самолёт полностью проявился (под длину звука)
+private const val TITLE_START = 5000f
+private const val FADE_START = 7600f
+private const val TOTAL = 8000f
 
 private fun ease(x: Float): Float {
     val t = x.coerceIn(0f, 1f)
