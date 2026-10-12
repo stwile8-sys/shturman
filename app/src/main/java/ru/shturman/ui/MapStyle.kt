@@ -55,6 +55,7 @@ object MapStyle {
     "works": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "danger": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "caravan": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
+    "trail": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "sat": { "type": "raster", "tileSize": 256, "maxzoom": 19,
              "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
              "attribution": "Esri, Maxar, Earthstar Geographics" }
@@ -172,6 +173,11 @@ object MapStyle {
     { "id": "bump-dots", "type": "circle", "source": "bumps", "minzoom": 14,
       "paint": { "circle-radius": 4, "circle-color": "#E8D44D",
                  "circle-stroke-color": "#0A0C10", "circle-stroke-width": 1.5 } },
+
+    { "id": "trail-smoke", "type": "circle", "source": "trail",
+      "paint": { "circle-radius": ["interpolate", ["linear"], ["get", "a"], 0, 3, 1, 9],
+                 "circle-color": "#A8BCC8", "circle-blur": 1,
+                 "circle-opacity": ["*", 0.3, ["-", 1, ["get", "a"]]] } },
 
     { "id": "caravan-dots", "type": "circle", "source": "caravan",
       "paint": { "circle-radius": 9, "circle-color": ["case", ["==", ["get", "leader"], true], "#FFD400", "#7CFF6B"],

@@ -126,6 +126,16 @@ fun DarkMap(
         }
     }
 
+    // Лёгкий дымный след за стрелкой: бледные расплывчатые пятна, которые растут и гаснут за долю секунды
+    val trail = remember { SmokeTrail() }
+    LaunchedEffect(style) {
+        val src = style?.getSourceAs<GeoJsonSource>("trail") ?: return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(90)
+            src.setGeoJson(trail.tick())
+        }
+    }
+
     // Включаем стрелку и свой приём GPS, когда есть и стиль, и разрешение
     DisposableEffect(map, style, hasPermission) {
         val m = map
@@ -136,6 +146,7 @@ fun DarkMap(
         enableLocation(context, m, st)
 
         val bearing = BearingFilter()
+        trail.setFrom(trail.currentPos(), LatLon(0.0, 0.0), false)
         val tracker = GpsTracker(context) { raw ->
             val here = LatLon(raw.latitude, raw.longitude)
             val snap = currentOnFix(here, raw.speed)
@@ -152,6 +163,9 @@ fun DarkMap(
             }
             bearing.value?.let { shown.bearing = it }
 
+            if (shown.latitude.isFinite() && shown.longitude.isFinite()) {
+                trail.setFrom(trail.currentPos(), LatLon(shown.latitude, shown.longitude), raw.speed > 1.5f)
+            }
             if (shown.latitude.isFinite() && shown.longitude.isFinite() && m.locationComponent.isLocationComponentActivated) {
                 m.locationComponent.forceLocationUpdate(shown)
             }
@@ -333,4 +347,51 @@ private fun enableLocation(context: Context, map: MapLibreMap, style: Style) {
     component.cameraMode = CameraMode.TRACKING_GPS // камера едет за стрелкой и поворачивается по курсу
     component.zoomWhileTracking(FOLLOW_ZOOM)
     component.tiltWhileTracking(FOLLOW_TILT)
+}
+
+
+/**
+ * Дымный след: положение стрелки между двумя GPS-точками считается так же плавно, как её двигает карта,
+ * и через каждые ~90 мс в этом месте остаётся пятно, которое за 0,7 с растёт и растворяется.
+ */
+private class SmokeTrail {
+    private class Puff(val lat: Double, val lon: Double, val born: Long)
+
+    private var from: LatLon? = null
+    private var to: LatLon? = null
+    private var t0 = 0L
+    private var moving = false
+    private val puffs = ArrayList<Puff>()
+
+    fun setFrom(start: LatLon?, end: LatLon, isMoving: Boolean) {
+        if (end.lat == 0.0 && end.lon == 0.0) { from = null; to = null; moving = false; return }
+        from = start ?: end
+        to = end
+        t0 = System.currentTimeMillis()
+        moving = isMoving
+    }
+
+    fun currentPos(): LatLon? {
+        val a = from ?: return to
+        val b = to ?: return a
+        val f = ((System.currentTimeMillis() - t0) / 1000.0).coerceIn(0.0, 1.0)
+        return LatLon(a.lat + (b.lat - a.lat) * f, a.lon + (b.lon - a.lon) * f)
+    }
+
+    fun tick(): String {
+        val now = System.currentTimeMillis()
+        val pos = currentPos()
+        if (moving && pos != null && pos.lat.isFinite() && pos.lon.isFinite()) puffs.add(Puff(pos.lat, pos.lon, now))
+        puffs.removeAll { now - it.born > LIFE_MS }
+        val sb = StringBuilder("{\"type\":\"FeatureCollection\",\"features\":[")
+        puffs.forEachIndexed { i, p ->
+            if (i > 0) sb.append(',')
+            val a = ((now - p.born).toDouble() / LIFE_MS).coerceIn(0.0, 1.0)
+            sb.append("{\"type\":\"Feature\",\"properties\":{\"a\":").append(a)
+                .append("},\"geometry\":{\"type\":\"Point\",\"coordinates\":[").append(p.lon).append(',').append(p.lat).append("]}}")
+        }
+        return sb.append("]}").toString()
+    }
+
+    private companion object { const val LIFE_MS = 700L }
 }
