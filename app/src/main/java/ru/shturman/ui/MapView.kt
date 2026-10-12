@@ -144,9 +144,13 @@ fun DarkMap(
                         .withImage(MapStyle.HEART_IMAGE, MapStyle.heartBitmap())
                 ) { loaded -> style = loaded }
                 // Пока нет GPS, показываем Псков
+                val saved = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+                val sLat = saved.getFloat("map_lat", 0f).toDouble()
+                val sLon = saved.getFloat("map_lon", 0f).toDouble()
+                val hasSaved = sLat in -85.0..85.0 && sLat != 0.0 && sLon != 0.0
                 m.cameraPosition = CameraPosition.Builder()
-                    .target(LatLng(57.8136, 28.3496))
-                    .zoom(15.5)
+                    .target(if (hasSaved) LatLng(sLat, sLon) else LatLng(57.8136, 28.3496))
+                    .zoom(if (hasSaved) saved.getFloat("map_zoom", 15.5f).toDouble().coerceIn(3.0, 19.0) else 15.5)
                     .tilt(FOLLOW_TILT)
                     .build()
             }
@@ -230,6 +234,12 @@ fun DarkMap(
         }
         runCatching { m.locationComponent.addOnCameraTrackingChangedListener(trackListener) }
         onDispose {
+            runCatching {
+                val c = m.cameraPosition.target
+                if (c != null) context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).edit()
+                    .putFloat("map_lat", c.latitude.toFloat()).putFloat("map_lon", c.longitude.toFloat())
+                    .putFloat("map_zoom", m.cameraPosition.zoom.toFloat()).apply()
+            }
             tracker.stop()
             handler.removeCallbacks(back)
             runCatching { m.locationComponent.removeOnCameraTrackingChangedListener(trackListener) }

@@ -126,6 +126,7 @@ fun SettingsSheet(
             ) { Text("Проверить голос", style = ShText.Small) }
             s.voiceStatus?.let { Text(text = it, color = ShColors.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
             SwitchRow("Ночной режим голоса", "С 22:00 до 6:00 голос тише, а фразы короче.", s.nightVoice, vm::setNightVoice)
+            SwitchRow("Вибрация перед поворотом", "Короткий отклик за 300, 150 и 50 метров до поворота.", s.turnVibro, vm::setTurnVibro)
             SwitchRow("Звук при превышении", "Мягкое «вжжж», громче по мере превышения скорости.", s.overspeedSound, vm::setOverspeedSound)
 
             Section("Съезд с маршрута")
@@ -254,6 +255,33 @@ fun SettingsSheet(
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
             ) { Text("Отправить отчёт разработчику", style = ShText.Small) }
+
+            Section("Данные")
+            var cacheText by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+            var resetArmed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                cacheText = "Временные файлы: ${"%.1f".format(java.util.Locale.US, vm.cacheSizeBytes() / 1048576.0)} МБ"
+            }
+            Text(text = cacheText, color = ShColors.TextSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = {
+                    val freed = vm.clearCache()
+                    cacheText = "Освобождено ${"%.1f".format(java.util.Locale.US, freed / 1048576.0)} МБ"
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text("Очистить кэш", style = ShText.Small) }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    if (resetArmed) { vm.resetSettings(); resetArmed = false } else resetArmed = true
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ShColors.SearchField, contentColor = ShColors.TextPrimary)
+            ) { Text(if (resetArmed) "Нажмите ещё раз: сбросить настройки" else "Сбросить настройки", style = ShText.Small) }
 
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
