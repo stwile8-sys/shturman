@@ -146,6 +146,25 @@ private fun DrawScope.drawSky(a: Float, t: Float) {
             1f to Color(0xFFFFD6A0).copy(alpha = a)
         )
     )
+    // последние звёзды наверху гаснут по мере того, как светлеет
+    val rnd = kotlin.random.Random(12)
+    for (i in 0 until 40) {
+        val sx = rnd.nextFloat() * size.width; val sy = rnd.nextFloat() * size.height * 0.3f; val ph = rnd.nextFloat() * 6.28f
+        val sa = a * (1f - span(t, SKY_START + 400f, REVEAL_END)) * (0.4f + 0.4f * sin(t / 350f + ph))
+        if (sa > 0f) drawCircle(Color.White.copy(alpha = sa.coerceIn(0f, 1f)), 1.2f + (i % 3), Offset(sx, sy))
+    }
+    // лучи от солнца медленно вращаются
+    val sunC = Offset(size.width * 0.78f, size.height * 0.74f)
+    for (k in 0 until 9) {
+        val ang = k * 0.7f + t / 9000f
+        val len = size.width * 0.9f
+        val ex = sunC.x + kotlin.math.cos(ang) * len; val ey = sunC.y + sin(ang) * len
+        val nx = -sin(ang) * size.width * 0.05f; val ny = kotlin.math.cos(ang) * size.width * 0.05f
+        drawPath(
+            Path().apply { moveTo(sunC.x, sunC.y); lineTo(ex + nx, ey + ny); lineTo(ex - nx, ey - ny); close() },
+            Brush.radialGradient(listOf(Color(0xFFFFE6B0).copy(alpha = 0.10f * a), Color.Transparent), sunC, len)
+        )
+    }
     // солнце у горизонта
     drawCircle(
         brush = Brush.radialGradient(
@@ -200,6 +219,20 @@ private fun DrawScope.drawPlane(t: Float, skyA: Float, reveal: Float) {
     }
 
     rotate(tilt, pivot = Offset(cx, cy)) {
+        // инверсионный след от двигателя, тянется назад и тает
+        val trail = span(t, REVEAL_END - 600f, REVEAL_END + 800f)
+        if (trail > 0f) {
+            val start = P(-0.02f, 0.14f)
+            val end = Offset(start.x - size.width * 1.2f * trail, start.y + w * 0.02f)
+            drawLine(
+                Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.55f)), startX = end.x, endX = start.x),
+                start, end, strokeWidth = w * 0.012f, cap = StrokeCap.Round
+            )
+            drawLine(
+                Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.18f)), startX = end.x, endX = start.x),
+                start, end, strokeWidth = w * 0.04f, cap = StrokeCap.Round
+            )
+        }
         // чёрная фигура
         val black = Color.Black.copy(alpha = skyA)
         for (p in listOf(fin, stab, wing, fuselage, engine)) drawPath(p, black)

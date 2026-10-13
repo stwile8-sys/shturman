@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -86,6 +87,10 @@ fun DarkMap(
     var style by remember { mutableStateOf<Style?>(null) }
     var hasPermission by remember { mutableStateOf(hasLocationPermission(context)) }
     var routeShown by remember { mutableStateOf(false) }
+    // Заглушка, пока карта не прорисовалась; через 15 секунд без карты — сообщение об ошибке
+    var mapReady by remember { mutableStateOf(false) }
+    var mapFailed by remember { mutableStateOf(false) }
+    var reloadKey by remember { mutableStateOf(0) }
     val currentOnFix by rememberUpdatedState(onFix)
     val currentNavigating by rememberUpdatedState(navigating)
     val currentRoute by rememberUpdatedState(route)
@@ -135,6 +140,9 @@ fun DarkMap(
             )
         }
         MapView(context).apply {
+            addOnDidFinishLoadingMapListener { mapReady = true; mapFailed = false }
+            addOnDidBecomeIdleListener { mapReady = true; mapFailed = false }
+            addOnDidFailLoadingMapListener { if (!mapReady) mapFailed = true }
             getMapAsync { m ->
                 map = m
                 // Долгое нажатие на карту копирует координаты точки
@@ -390,7 +398,28 @@ fun DarkMap(
         }
     }
 
-    AndroidView(factory = { mapView }, modifier = modifier)
+    LaunchedEffect(reloadKey) {
+        kotlinx.coroutines.delay(15_000)
+        if (!mapReady) mapFailed = true
+    }
+
+    androidx.compose.foundation.layout.Box(modifier = modifier) {
+        AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+        androidx.compose.animation.AnimatedVisibility(
+            visible = !mapReady,
+            enter = androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(500))
+        ) {
+            MapPlaceholder(
+                failed = mapFailed,
+                onRetry = {
+                    mapFailed = false
+                    reloadKey++
+                    runCatching { map?.triggerRepaint() }
+                }
+            )
+        }
+    }
 }
 
 /** Сглаживает курс, чтобы стрелка не дёргалась на изгибах дороги и шуме GPS. */

@@ -149,20 +149,20 @@ fun SearchScreen(
         )
 
         when {
-            error != null -> Text(
-                text = error,
-                color = ShColors.Danger,
-                fontSize = 14.sp,
+            error != null -> EmptyState(
+                kind = if (error.contains("интернет", ignoreCase = true)) EmptyKind.OFFLINE else EmptyKind.ERROR,
+                title = "Поиск не удался",
+                hint = error,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
             )
-            searching && results.isEmpty() -> Text(text = stringResource(ru.shturman.R.string.s_5ab71ea3),
-                color = ShColors.TextSecondary,
-                style = ShText.Small,
+            searching && results.isEmpty() -> LoadingLine(
+                text = stringResource(ru.shturman.R.string.s_5ab71ea3),
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
             )
-            query.trim().length >= 3 && !searching && results.isEmpty() -> Text(text = stringResource(ru.shturman.R.string.s_8767f9ec),
-                color = ShColors.TextSecondary,
-                style = ShText.Small,
+            query.trim().length >= 3 && !searching && results.isEmpty() -> EmptyState(
+                kind = EmptyKind.SEARCH,
+                title = stringResource(ru.shturman.R.string.s_8767f9ec),
+                hint = "Попробуйте написать короче: улицу и номер дома или название места.",
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
             )
         }
