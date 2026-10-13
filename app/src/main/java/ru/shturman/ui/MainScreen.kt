@@ -357,6 +357,14 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                     .navigationBarsPadding()
                     .padding(12.dp)
             )
+        } else if (s.routeLoading) {
+            // Заглушка, пока маршрут считается
+            RouteSkeleton(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(12.dp)
+            )
         }
 
         if (showSettings) {

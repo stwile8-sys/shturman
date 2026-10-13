@@ -948,6 +948,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun tripCount(): Int = runCatching { tripLog.trips().size }.getOrDefault(0)
+
     fun exportText(): String =
         ru.shturman.stats.TripMath.csv(tripLog.trips()) + "\n" + ru.shturman.stats.TripMath.refuelCsv(tripLog.refuels())
 
