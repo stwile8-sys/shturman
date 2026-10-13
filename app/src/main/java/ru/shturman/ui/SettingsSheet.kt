@@ -354,7 +354,7 @@ private fun CarPage(s: NavState, vm: NavViewModel) {
     Spacer(Modifier.height(6.dp))
     TextField(
         value = rfPlace, onValueChange = { rfPlace = it.take(40) }, label = { Text(stringResource(R.string.s_a3c3bce3), fontSize = 12.sp) },
-        singleLine = true, shape = RoundedCornerShape(14.dp), colors = fieldColors(), modifier = Modifier.fillMaxWidth()
+        singleLine = true, shape = RoundedCornerShape(14.dp), colors = sheetFieldColors(), modifier = Modifier.fillMaxWidth()
     )
     Spacer(Modifier.height(6.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -677,7 +677,7 @@ private fun CheckRow(title: String, checked: Boolean, onChange: (Boolean) -> Uni
 }
 
 @Composable
-private fun fieldColors() = TextFieldDefaults.colors(
+private fun sheetFieldColors() = TextFieldDefaults.colors(
     focusedContainerColor = ShColors.SearchField,
     unfocusedContainerColor = ShColors.SearchField,
     focusedTextColor = ShColors.TextPrimary,
@@ -698,7 +698,7 @@ private fun NumberField(label: String, value: String, modifier: Modifier, intege
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = if (integer) KeyboardType.NumberPassword else KeyboardType.Decimal),
         shape = RoundedCornerShape(14.dp),
-        colors = fieldColors(),
+        colors = sheetFieldColors(),
         modifier = modifier
     )
 }
