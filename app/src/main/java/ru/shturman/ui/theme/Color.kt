@@ -14,6 +14,15 @@ object ShColors {
 
     val T: ThemeSpec get() = Themes.all[themeId.coerceIn(0, Themes.all.size - 1)]
 
+    /** Характер оформления темы: стекло, неон, телеметрия или глубина (ui/themes/Look.kt). */
+    val L: ru.shturman.ui.themes.ThemeLook get() = ru.shturman.ui.themes.Looks.of(themeId)
+
+    /** Второй цвет градиентов темы. */
+    val Accent2: Color get() = L.acc2
+
+    /** Цвет текста на заливке акцентом. */
+    val OnAccent: Color get() = T.bg
+
     /** Старое имя: «принцесса» — это тема №2. */
     val princess: Boolean get() = themeId == 1
 

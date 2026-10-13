@@ -32,23 +32,11 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.random.Random
 
-/** Форма панелей выбранной темы. */
-fun themePanelShape(): Shape {
-    val t = ShColors.T
-    return if (t.btn == BtnKind.CHAMFER) CutCornerShape(topStart = t.panelRadius.dp, bottomEnd = t.panelRadius.dp)
-    else RoundedCornerShape(t.panelRadius.dp)
-}
+/** Форма панелей выбранной темы (стекло, неон, телеметрия или глубина). */
+fun themePanelShape(): Shape = ru.shturman.ui.fx.panelShape()
 
 /** Форма кнопок выбранной темы. */
-fun themeButtonShape(): Shape {
-    val t = ShColors.T
-    return when (t.btn) {
-        BtnKind.CHAMFER -> CutCornerShape(topStart = t.btnRadius.dp, bottomEnd = t.btnRadius.dp)
-        BtnKind.SLIM -> RoundedCornerShape(50)
-        BtnKind.ROUND -> RoundedCornerShape(t.btnRadius.dp)
-        else -> RoundedCornerShape(t.btnRadius.dp)
-    }
-}
+fun themeButtonShape(): Shape = ru.shturman.ui.fx.chipShape()
 
 /** Материал кнопки: полосы, карбон, бетон, зерно, пламя по краям, блеск, размытие. Рисуется поверх фона кнопки. */
 fun Modifier.themedButtonTexture(): Modifier = drawBehind {
@@ -112,27 +100,31 @@ private val BounceOut = Easing { x ->
     }
 }
 
-/** Появление панели: у каждой темы свой стиль и длительность. */
+/**
+ * Появление панели по характеру темы: стекло — мягкая пружина снизу; неон — «загрузка» рывками с глитчем;
+ * телеметрия — резкий въезд сбоку; глубина — выезд из глубины с поворотом. index — задержка для каскада.
+ */
 @Composable
-fun Modifier.themedEnter(): Modifier {
-    val t = ShColors.T
+fun Modifier.themedEnter(index: Int = 0): Modifier {
+    val flavor = ShColors.L.flavor
     val p = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        val easing: Easing = when (t.enter) {
-            EnterKind.DROP -> BounceOut
-            EnterKind.SIDE_FAST, EnterKind.SIDE_DUST -> LinearEasing
-            else -> androidx.compose.animation.core.FastOutSlowInEasing
+        kotlinx.coroutines.delay(index * 70L)
+        when (flavor) {
+            Flavor.GLASS -> p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.62f, stiffness = 220f))
+            Flavor.NEON -> p.animateTo(1f, tween(420, easing = LinearEasing))
+            Flavor.TELEMETRY -> p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.72f, stiffness = 520f))
+            Flavor.DEPTH -> p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.58f, stiffness = 180f))
         }
-        p.animateTo(1f, tween(t.enterMs, easing = easing))
     }
-    val kind = t.enter
+    val dust = ShColors.T.enter == EnterKind.SIDE_DUST
     return this.drawBehind {
         // Rally: за въезжающей панелью остаётся облако пыли
-        if (kind == EnterKind.SIDE_DUST) {
-            val q = 1f - p.value
+        if (dust) {
+            val q = (1f - p.value).coerceIn(0f, 1f)
             if (q > 0.02f) {
                 for (i in 0 until 6) {
-                    val x = size.width * (1.02f + 0.14f * i) * (0.5f + 0.5f * q) 
+                    val x = size.width * (1.02f + 0.14f * i) * (0.5f + 0.5f * q)
                     val y = size.height * (0.2f + 0.12f * i)
                     drawCircle(Color(0xFFC79A66).copy(alpha = 0.35f * q), size.height * (0.16f + 0.03f * i), Offset(x, y))
                 }
@@ -141,35 +133,50 @@ fun Modifier.themedEnter(): Modifier {
     }.graphicsLayer {
         val v = p.value
         val q = 1f - v
-        when (kind) {
-            EnterKind.RISE -> { translationY = q * 20.dp.toPx(); alpha = v }
-            EnterKind.FLOAT -> {
-                translationY = q * 30.dp.toPx()
-                rotationZ = sin(v * PI.toFloat() * 3f) * q * 3f
-                scaleX = 0.9f + 0.1f * v; scaleY = 0.9f + 0.1f * v
-                alpha = v
+        cameraDistance = 14f * density
+        when (flavor) {
+            Flavor.GLASS -> {
+                alpha = v.coerceIn(0f, 1f)
+                translationY = q * 28.dp.toPx()
+                val sc = 0.94f + 0.06f * v; scaleX = sc; scaleY = sc
             }
-            EnterKind.SIDE_FAST -> { translationX = -q * size.width * 0.7f; alpha = 0.3f + 0.7f * v }
-            EnterKind.STICK_DOWN -> { transformOrigin = TransformOrigin(0.5f, 0f); scaleY = v.coerceAtLeast(0.02f); alpha = 0.3f + 0.7f * v }
-            EnterKind.EMERGE -> { translationX = q * size.width * 0.4f; alpha = v; scaleX = 1f + q * 0.25f }
-            EnterKind.DROP -> { translationY = -(1f - v) * 110.dp.toPx(); alpha = v.coerceIn(0.2f, 1f) }
-            EnterKind.SIDE_DUST -> { translationX = q * size.width * 0.5f; alpha = 0.2f + 0.8f * v }
-            EnterKind.FOG -> { alpha = v; scaleX = 1.05f - 0.05f * v; scaleY = 1.05f - 0.05f * v; translationY = q * 10.dp.toPx() }
+            Flavor.NEON -> {
+                val st = (v * 5f).toInt() / 5f
+                alpha = if (v >= 1f) 1f else st.coerceAtLeast(0.15f)
+                if (v < 1f) translationX = (if ((v * 10f).toInt() % 2 == 0) 6f else -4f) * density * q
+            }
+            Flavor.TELEMETRY -> {
+                alpha = (v * 1.6f).coerceIn(0f, 1f)
+                translationX = q * size.width * 0.55f
+                rotationY = -q * 28f
+            }
+            Flavor.DEPTH -> {
+                transformOrigin = TransformOrigin(0.5f, 1f)
+                alpha = (v * 1.4f).coerceIn(0f, 1f)
+                rotationX = q * 70f
+                val sc = 0.9f + 0.1f * v; scaleX = sc; scaleY = sc
+            }
         }
     }
 }
 
-/** Появление целого экрана (настройки, поиск): длительность перехода из темы. */
+/** Появление целого экрана (поиск, вход): глубина и пружина по характеру темы. */
 @Composable
 fun Modifier.themedScreenEnter(): Modifier {
-    val t = ShColors.T
+    val flavor = ShColors.L.flavor
     val p = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { p.animateTo(1f, tween(t.transMs, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
-    val jerky = t.routeJerky
+    LaunchedEffect(Unit) {
+        p.animateTo(1f, if (flavor == Flavor.NEON) tween(360, easing = LinearEasing) else androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 260f))
+    }
     return this.graphicsLayer {
-        val v = if (jerky) (p.value * 4f).toInt() / 4f else p.value
-        alpha = v
-        translationY = (1f - v) * 24.dp.toPx()
+        val v = p.value
+        cameraDistance = 14f * density
+        alpha = v.coerceIn(0f, 1f)
+        when (flavor) {
+            Flavor.DEPTH -> { rotationX = (1f - v) * -18f; val sc = 0.92f + 0.08f * v; scaleX = sc; scaleY = sc }
+            Flavor.TELEMETRY -> translationX = (1f - v) * size.width * 0.3f
+            else -> { val sc = 0.94f + 0.06f * v; scaleX = sc; scaleY = sc; translationY = (1f - v) * 24.dp.toPx() }
+        }
     }
 }
 
