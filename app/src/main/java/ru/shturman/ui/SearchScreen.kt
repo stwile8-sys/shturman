@@ -19,7 +19,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import ru.shturman.ui.fx.panel
+import ru.shturman.ui.fx.pressFx
+import ru.shturman.ui.themes.themedEnter
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -70,10 +73,11 @@ fun SearchScreen(
         onQuery(query)
     }
 
+    Box(Modifier.fillMaxSize()) {
+    ru.shturman.ui.fx.AuroraBackground()
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(ShColors.Background)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -99,10 +103,10 @@ fun SearchScreen(
                     )
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(24.dp),
+                shape = ru.shturman.ui.fx.chipShape(),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = ShColors.SearchField,
-                    unfocusedContainerColor = ShColors.SearchField,
+                    focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
                     focusedTextColor = ShColors.TextPrimary,
                     unfocusedTextColor = ShColors.TextPrimary,
                     cursorColor = ShColors.Accent,
@@ -111,6 +115,8 @@ fun SearchScreen(
                 ),
                 modifier = Modifier
                     .weight(1f)
+                    .themedEnter(1)
+                    .panel(ru.shturman.ui.fx.chipShape(), elevation = 12.dp, glowing = true)
                     .focusRequester(focus)
             )
         }
@@ -122,12 +128,13 @@ fun SearchScreen(
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)
         ) {
             for ((kind, label, place) in listOf(Triple("home", "Дом", home), Triple("work", "Работа", work))) {
-                val shape = RoundedCornerShape(20.dp)
+                val shape = ru.shturman.ui.fx.chipShape()
                 Box(
                     modifier = Modifier
-                        .clip(shape)
-                        .background(ShColors.SearchField)
-                        .border(1.dp, if (saving == kind) ShColors.Accent else ShBorder, shape)
+                        .themedEnter(if (kind == "home") 2 else 3)
+                        .pressFx()
+                        .panel(shape, elevation = 8.dp, glowing = saving == kind)
+                        .border(if (saving == kind) 1.5.dp else 0.dp, if (saving == kind) ShColors.Accent else androidx.compose.ui.graphics.Color.Transparent, shape)
                         .combinedClickable(
                             onClick = { if (place != null) onPick(place) else saving = kind },
                             onLongClick = { saving = kind }
@@ -168,10 +175,14 @@ fun SearchScreen(
         }
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(results) { place ->
+            itemsIndexed(results) { i, place ->
                 Column(
                     modifier = Modifier
+                        .themedEnter(i.coerceAtMost(8))
                         .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .pressFx()
+                        .panel(ru.shturman.ui.fx.chipShape(), elevation = 6.dp)
                         .clickable {
                             val kind = saving
                             if (kind != null) {
@@ -182,7 +193,7 @@ fun SearchScreen(
                                 onPick(place)
                             }
                         }
-                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     Text(text = place.title, color = ShColors.TextPrimary, style = ShText.Small)
                     if (place.subtitle.isNotEmpty()) {
@@ -190,14 +201,8 @@ fun SearchScreen(
                         Text(text = place.subtitle, color = ShColors.TextSecondary, fontSize = 13.sp)
                     }
                 }
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                        .height(1.dp)
-                        .background(ShColors.Divider)
-                )
             }
         }
+    }
     }
 }
