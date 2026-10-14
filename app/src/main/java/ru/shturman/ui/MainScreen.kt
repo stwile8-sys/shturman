@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.vectorResource
 import androidx.core.content.ContextCompat
@@ -209,7 +210,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 .padding(end = 12.dp, bottom = when {
                     mapMode -> SearchPillReserve + 8.dp
                     s.navigating -> 112.dp + 64.dp
-                    s.options.isNotEmpty() -> 300.dp + 64.dp
+                    s.options.isNotEmpty() && LocalConfiguration.current.screenWidthDp >= 700 -> 24.dp + 64.dp
+                    s.options.isNotEmpty() -> (LocalConfiguration.current.screenHeightDp * 0.36f + 394f).dp
                     else -> 24.dp + 64.dp
                 })
         )
@@ -321,7 +323,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
 
         val bottomPadding = when {
             s.navigating -> 112.dp
-            s.options.isNotEmpty() -> 300.dp
+            s.options.isNotEmpty() && LocalConfiguration.current.screenWidthDp >= 700 -> 24.dp
+            s.options.isNotEmpty() -> (LocalConfiguration.current.screenHeightDp * 0.36f + 330f).dp
             else -> 24.dp
         }
         if (mapMode) {
@@ -377,6 +380,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                     startKey++
                     vm.startNavigation()
                 },
+                onClose = { vm.clearRoute() },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
