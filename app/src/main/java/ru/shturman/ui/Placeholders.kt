@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import ru.shturman.ui.fx.panel
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -242,8 +244,8 @@ fun RouteSkeleton(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(ShColors.T.panelRadius.dp))
-            .background(ShColors.Panel.copy(alpha = 0.96f))
+            .widthIn(max = 520.dp)
+            .panel(ru.shturman.ui.fx.panelShape(34.dp), elevation = 18.dp)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {

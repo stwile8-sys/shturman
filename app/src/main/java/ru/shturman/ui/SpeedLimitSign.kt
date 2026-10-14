@@ -15,12 +15,14 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.shturman.ui.fx.popOnChange
 
 /** Круглый знак «ограничение скорости»: белый круг, красное кольцо, число по центру. */
 @Composable
 fun SpeedLimitSign(limit: Int, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
+            .popOnChange(limit)
             .size(60.dp)
             .shadow(8.dp, CircleShape)
             .background(Color.White, CircleShape)

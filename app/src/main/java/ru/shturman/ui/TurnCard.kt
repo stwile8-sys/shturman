@@ -21,6 +21,9 @@ import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.theme.ShText
 import ru.shturman.ui.themes.ThemedText
 import ru.shturman.ui.themes.themedEnter
+import ru.shturman.ui.fx.changeFx
+import ru.shturman.ui.fx.panel
+import androidx.compose.foundation.layout.Box
 
 /** Ближайший поворот: раллийный знак, расстояние и улица. Живёт в правом верхнем углу. */
 @Composable
@@ -35,13 +38,11 @@ fun TurnCard(
     Row(
         modifier = modifier.themedEnter()
             .widthIn(max = 250.dp)
-            .clip(shape)
-            .background(ShColors.Panel.copy(alpha = 0.92f))
-            .border(ShColors.T.borderW.dp, ShBorder, shape)
+            .panel(shape, glowing = true)
             .padding(start = 10.dp, end = 18.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        RallyPacenote(severity = severity, isLeft = isLeft)
+        Box(Modifier.changeFx(severity to isLeft)) { RallyPacenote(severity = severity, isLeft = isLeft) }
         Spacer(Modifier.width(12.dp))
         Column {
             ThemedText(text = distance, color = ShColors.TextPrimary, style = ShText.Distance)
@@ -70,13 +71,11 @@ fun PaceCard(
     Column(
         modifier = modifier.themedEnter()
             .widthIn(max = 260.dp)
-            .clip(shape)
-            .background(ShColors.Panel.copy(alpha = 0.92f))
-            .border(ShColors.T.borderW.dp, ShBorder, shape)
+            .panel(shape, glowing = true)
             .padding(start = 10.dp, end = 18.dp, top = 10.dp, bottom = 10.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val first = notes.firstOrNull()
+        val first = notes.firstOrNull()
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.changeFx(first?.let { it.severity to it.isLeft })) {
             if (first == null) {
                 RallyArrow(severity = null, isLeft = false, boxSize = 60.dp)
             } else {
