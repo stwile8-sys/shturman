@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,6 +62,7 @@ fun SearchPill(onSearch: () -> Unit, onLocate: () -> Unit, modifier: Modifier = 
     Row(
         modifier = modifier
             .themedEnter(2)
+            .widthIn(max = 560.dp)
             .fillMaxWidth()
             .height(62.dp)
             .pressFx()
