@@ -316,6 +316,7 @@ private fun NavPage(s: NavState, vm: NavViewModel) {
     Section(stringResource(R.string.s_ebadc474))
     SwitchRow(stringResource(R.string.s_42fc7088), stringResource(R.string.s_d64dbd69), s.fullscreen, vm::setFullscreen)
     SwitchRow(stringResource(R.string.s_5b66acf3), stringResource(R.string.s_efc34ccd), s.satellite, vm::setSatellite)
+    SwitchRow("3D-карта", "В поездке сильный наклон и объёмные дома. Если на магнитоле тормозит — выключите.", s.map3d, vm::setMap3d)
 
     Section(stringResource(R.string.s_4a9ccc8c))
     CheckRow("Проценты пути", s.cardPercent) { vm.setCardOption("percent", it) }

@@ -156,6 +156,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             members = s.members,
             satellite = s.satellite,
             themeId = s.theme,
+            map3d = s.map3d,
             onFix = { here, speed, accuracy, course, altitude -> vm.onFix(here, speed, accuracy, course, altitude) }
         )
 

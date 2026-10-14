@@ -130,6 +130,7 @@ data class NavState(
     val devLevel: Int = 1,
     val hud: Hud = Hud(),
     val turnVibro: Boolean = true,
+    val map3d: Boolean = true,
     val overspeedSound: Boolean = true,
     val nightVoice: Boolean = true,
     val radarOn: Boolean = true,
@@ -216,6 +217,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         theme = ru.shturman.ui.themes.Themes.load(settings),
         devLevel = settings.getInt("dev_level", 1).coerceIn(0, 2),
         turnVibro = settings.getBoolean("turn_vibro", true),
+        map3d = settings.getBoolean("map3d", true),
         overspeedSound = settings.getBoolean("overspeed", true),
         nightVoice = settings.getBoolean("night_voice", true),
         radarOn = settings.getBoolean("radar", true),
@@ -872,6 +874,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(overspeedSound = on) }
     }
     fun setNightVoice(on: Boolean) { putBool("night_voice", on); voice.nightMode = on; _state.update { it.copy(nightVoice = on) } }
+    fun setMap3d(on: Boolean) { putBool("map3d", on); _state.update { it.copy(map3d = on) } }
     fun setTurnVibro(on: Boolean) { putBool("turn_vibro", on); _state.update { it.copy(turnVibro = on) } }
     fun setRadar(on: Boolean) { putBool("radar", on); _state.update { it.copy(radarOn = on) } }
 

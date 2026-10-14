@@ -55,6 +55,12 @@ private const val FOLLOW_TILT = 60.0
 private const val START_ZOOM = 18.0
 private const val START_TILT = 64.0
 
+/** Наклон камеры: с 3D-картой — сильный (как в варианте «глубина»), без неё — умеренный. */
+private object MapCam {
+    var follow = FOLLOW_TILT
+    var start = START_TILT
+}
+
 /**
  * Карта на весь экран: тёмная 3D-карта.
  * Стрелка «ты здесь» повёрнута по курсу, а во время поездки едет прямо по линии маршрута.
@@ -79,6 +85,7 @@ fun DarkMap(
     members: List<CaravanMember> = emptyList(),
     satellite: Boolean = false,
     themeId: Int = 0,
+    map3d: Boolean = true,
     onFix: (LatLon, Float, Float, Float, Float) -> Snap? = { _, _, _, _, _ -> null }
 ) {
     val context = LocalContext.current
@@ -169,7 +176,7 @@ fun DarkMap(
                 m.cameraPosition = CameraPosition.Builder()
                     .target(if (hasSaved) LatLng(sLat, sLon) else LatLng(57.8136, 28.3496))
                     .zoom(if (hasSaved) saved.getFloat("map_zoom", 15.5f).toDouble().coerceIn(3.0, 19.0) else 15.5)
-                    .tilt(FOLLOW_TILT)
+                    .tilt(MapCam.follow)
                     .build()
             }
         }
@@ -238,7 +245,7 @@ fun DarkMap(
         val back = Runnable {
             val lc = m.locationComponent
             if (currentNavigating && lc.isLocationComponentActivated && lc.cameraMode == CameraMode.NONE) {
-                lc.setCameraMode(CameraMode.TRACKING_GPS, 600L, FOLLOW_ZOOM, null, FOLLOW_TILT, null)
+                lc.setCameraMode(CameraMode.TRACKING_GPS, 600L, FOLLOW_ZOOM, null, MapCam.follow, null)
             }
         }
         val trackListener = object : org.maplibre.android.location.OnCameraTrackingChangedListener {
@@ -324,6 +331,57 @@ fun DarkMap(
         style?.getSourceAs<GeoJsonSource>("dest")?.setGeoJson(pointGeoJson(destination))
     }
 
+    // 3D-карта: высокие дома и сильный наклон; без неё дома плоские, наклон меньше
+    MapCam.follow = if (map3d) FOLLOW_TILT else 40.0
+    MapCam.start = if (map3d) START_TILT else 45.0
+    LaunchedEffect(style, map3d) {
+        val st = style ?: return@LaunchedEffect
+        st.getLayer("building-3d")?.setProperties(
+            org.maplibre.android.style.layers.PropertyFactory.visibility(
+                if (map3d) org.maplibre.android.style.layers.Property.VISIBLE else org.maplibre.android.style.layers.Property.NONE
+            )
+        )
+        val m = map ?: return@LaunchedEffect
+        runCatching { if (m.locationComponent.isLocationComponentActivated) m.locationComponent.tiltWhileTracking(MapCam.follow) }
+    }
+
+    // Просмотр маршрута: по линии бежит светящаяся точка; точка назначения пульсирует кольцом
+    LaunchedEffect(style, route, navigating, destination) {
+        val st = style ?: return@LaunchedEffect
+        val comet = st.getSourceAs<GeoJsonSource>("comet")
+        val pulse = st.getLayer("dest-pulse")
+        comet?.setGeoJson(pointsGeoJson(emptyList()))
+        if (destination == null) return@LaunchedEffect
+        val pts = route
+        val cum = if (pts != null && pts.size >= 2) DoubleArray(pts.size).also { c ->
+            for (i in 1 until pts.size) c[i] = c[i - 1] + ru.shturman.routing.distanceM(pts[i - 1], pts[i])
+        } else null
+        if (cum != null && !navigating) delay(ru.shturman.ui.theme.ShColors.T.routeMs.toLong() + 300)
+        val t0 = System.currentTimeMillis()
+        while (true) {
+            val t = System.currentTimeMillis() - t0
+            if (cum != null && pts != null && !navigating) {
+                val cyc = 3000L
+                val ph = (t % cyc) / cyc.toDouble()
+                val e = if (ph < 0.85) { val x = ph / 0.85; x * x * (3 - 2 * x) } else 1.0
+                val target = cum.last() * e
+                var i = java.util.Arrays.binarySearch(cum, target)
+                if (i < 0) i = (-i - 2)
+                i = i.coerceIn(0, pts.size - 2)
+                val seg = (cum[i + 1] - cum[i]).coerceAtLeast(0.001)
+                val f = ((target - cum[i]) / seg).coerceIn(0.0, 1.0)
+                val a = pts[i]; val b = pts[i + 1]
+                comet?.setGeoJson(pointGeoJson(LatLon(a.lat + (b.lat - a.lat) * f, a.lon + (b.lon - a.lon) * f)))
+            }
+            val q = (t % 1800L) / 1800f
+            pulse?.setProperties(
+                org.maplibre.android.style.layers.PropertyFactory.circleRadius(10f + 24f * q),
+                org.maplibre.android.style.layers.PropertyFactory.circleStrokeOpacity(1f - q)
+            )
+            delay(40)
+        }
+    }
+
     // Когда маршрут построен, показываем его целиком; когда отменён или закончился, возвращаемся к себе
     LaunchedEffect(map, route, navigating) {
         val m = map ?: return@LaunchedEffect
@@ -338,7 +396,7 @@ fun DarkMap(
             val d = context.resources.displayMetrics.density
             m.animateCamera(
                 CameraUpdateFactory.newLatLngBounds(
-                    bounds, 0.0, 0.0,
+                    bounds, 0.0, if (map3d) 32.0 else 0.0,
                     (32 * d).toInt(), (130 * d).toInt(), (32 * d).toInt(), (330 * d).toInt()
                 ),
                 900
@@ -347,7 +405,7 @@ fun DarkMap(
             routeShown = false
             if (active) {
                 m.locationComponent.setCameraMode(
-                    CameraMode.TRACKING_GPS, 800L, FOLLOW_ZOOM, null, FOLLOW_TILT, null
+                    CameraMode.TRACKING_GPS, 800L, FOLLOW_ZOOM, null, MapCam.follow, null
                 )
             }
         }
@@ -359,7 +417,7 @@ fun DarkMap(
         if (startKey > 0 && m.locationComponent.isLocationComponentActivated) {
             delay(450)
             m.locationComponent.setCameraMode(
-                CameraMode.TRACKING_GPS, 1800L, START_ZOOM, null, START_TILT, null
+                CameraMode.TRACKING_GPS, 1800L, START_ZOOM, null, MapCam.start, null
             )
         }
     }
@@ -369,7 +427,7 @@ fun DarkMap(
         val m = map ?: return@LaunchedEffect
         if (recenterKey > 0 && m.locationComponent.isLocationComponentActivated) {
             m.locationComponent.setCameraMode(
-                CameraMode.TRACKING_GPS, 600L, FOLLOW_ZOOM, null, FOLLOW_TILT, null
+                CameraMode.TRACKING_GPS, 600L, FOLLOW_ZOOM, null, MapCam.follow, null
             )
         }
     }
@@ -478,7 +536,7 @@ private fun enableLocation(context: Context, map: MapLibreMap, style: Style) {
     component.renderMode = RenderMode.GPS          // стрелка повёрнута по курсу
     component.cameraMode = CameraMode.TRACKING_GPS // камера едет за стрелкой и поворачивается по курсу
     component.zoomWhileTracking(FOLLOW_ZOOM)
-    component.tiltWhileTracking(FOLLOW_TILT)
+    component.tiltWhileTracking(MapCam.follow)
 }
 
 
