@@ -459,24 +459,3 @@ private fun StatusPill(
     }
 }
 
-/** Текущая скорость: число и «км/ч». Краснеет, если быстрее ограничения. */
-@Composable
-private fun SpeedReadout(kmh: Int, over: Boolean, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(16.dp)
-    Column(
-        modifier = modifier
-            .width(60.dp)
-            .clip(shape)
-            .background(ShColors.Panel.copy(alpha = 0.92f))
-            .border(1.dp, ShBorder, shape)
-            .padding(vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = kmh.toString(),
-            color = if (over) ShColors.Danger else ShColors.TextPrimary,
-            style = ShText.Distance.copy(fontSize = 24.sp)
-        )
-        Text(text = stringResource(ru.shturman.R.string.s_fee7a82e), color = ShColors.TextSecondary, fontSize = 11.sp)
-    }
-}
