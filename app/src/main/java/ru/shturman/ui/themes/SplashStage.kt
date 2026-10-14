@@ -1,7 +1,7 @@
 package ru.shturman.ui.themes
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -132,7 +132,7 @@ fun SplashStage(
         flags[0] = true
         SplashGate.covering = false
         scope.launch {
-            out.animateTo(1f, tween(if (fast) 360 else 520, easing = FastOutSlowInEasing))
+            out.animateTo(1f, tween(if (fast) 420 else 640, easing = CubicBezierEasing(0.65f, 0f, 0.35f, 1f)))
             if (!flags[1]) { flags[1] = true; onFinished() }
         }
     }
