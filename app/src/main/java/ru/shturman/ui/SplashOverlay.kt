@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import ru.shturman.ui.themes.flareAt
 import kotlin.math.min
 import kotlin.math.sin
 
@@ -77,6 +78,7 @@ fun SplashOverlay(onPlaySound: () -> Unit, onFinished: () -> Unit) {
                 drawSky(skyA, t)
                 val reveal = span(t, SOUND_AT, REVEAL_END)
                 drawPlane(t, skyA, reveal)
+                drawNearClouds(t, skyA)
             }
         }
         // Спонсорская подпись
@@ -151,6 +153,7 @@ private fun DrawScope.drawSky(a: Float, t: Float) {
         ),
         radius = size.width * 0.5f, center = Offset(size.width * 0.78f, size.height * 0.74f)
     )
+    flareAt(sunC, Color(0xFFFFE6B0), 0.7f * a)
     // облака медленно плывут влево
     for (i in 0 until 7) {
         val speed = 0.012f + (i % 3) * 0.006f
@@ -230,6 +233,25 @@ private fun DrawScope.drawPlane(t: Float, skyA: Float, reveal: Float) {
                 for (i in 0 until 14) {
                     drawCircle(Color(0xFF2A5A9C), radius = 0.0075f * w, center = P(-0.30f + i * 0.045f, -0.025f))
                 }
+                // объём: светлый верх, затенённое брюхо
+                drawPath(fuselage, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.45f), Color.Transparent), cy - 0.08f * w, cy - 0.03f * w))
+                drawPath(fuselage, Brush.verticalGradient(listOf(Color.Transparent, Color(0xFF1A2A40).copy(alpha = 0.28f)), cy, cy + 0.08f * w))
+                drawPath(wing, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.25f), Color(0xFF1A2A40).copy(alpha = 0.2f)), cy, cy + 0.22f * w))
+            }
+            // солнечный блик пробегает по борту, когда самолёт проявился целиком
+            val g = (t - REVEAL_END) / 1100f
+            if (g in 0f..1f) {
+                val gx = cx - 0.55f * w + 1.1f * w * g
+                val ga = (0.65f * (1f - kotlin.math.abs(g - 0.5f) * 1.6f)).coerceAtLeast(0f)
+                drawPath(fuselage, Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = ga), Color.Transparent), startX = gx - 0.07f * w, endX = gx + 0.07f * w))
+            }
+            // огни: белый строб на киле и красный маячок под брюхом
+            if (reveal > 0.6f) {
+                val strobe = if (t % 1200f < 70f) 1f else 0f
+                val beacon = if (t % 900f < 420f) 1f else 0.15f
+                val top = P(-0.55f, -0.24f); val belly = P(0.02f, 0.085f)
+                drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.95f * strobe), Color.Transparent), top, 0.05f * w), 0.05f * w, top)
+                drawCircle(Brush.radialGradient(listOf(Color(0xFFFF3030).copy(alpha = 0.85f * beacon), Color.Transparent), belly, 0.03f * w), 0.03f * w, belly)
             }
             // светящийся край проявления
             if (reveal < 1f) {
@@ -241,6 +263,23 @@ private fun DrawScope.drawPlane(t: Float, skyA: Float, reveal: Float) {
                     topLeft = Offset(front - 0.05f * w, cy - 0.3f * w), size = Size(0.1f * w, 0.6f * w)
                 )
             }
+        }
+    }
+}
+
+/** Близкие облака проплывают перед самолётом быстрее дальних: глубина кадра. */
+private fun DrawScope.drawNearClouds(t: Float, a: Float) {
+    for (i in 0 until 3) {
+        val speed = 0.05f + i * 0.02f
+        val x = ((1.2f - (t - SKY_START) * speed / 1000f - i * 0.45f) % 1.8f + 1.8f) % 1.8f - 0.4f
+        val y = size.height * (0.56f + i * 0.09f)
+        val r = size.width * (0.22f + i * 0.05f)
+        for (k in 0 until 4) {
+            val c = Offset(x * size.width + k * r * 0.55f, y + (k % 2) * r * 0.12f)
+            drawCircle(
+                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.16f * a), Color.Transparent), c, r * (0.7f + 0.15f * k)),
+                r * (0.7f + 0.15f * k), c
+            )
         }
     }
 }
