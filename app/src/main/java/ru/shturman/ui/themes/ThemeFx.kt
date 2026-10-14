@@ -31,6 +31,7 @@ import ru.shturman.ui.theme.ShColors
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.random.Random
+import kotlinx.coroutines.flow.first
 
 /** Форма панелей выбранной темы (стекло, неон, телеметрия или глубина). */
 fun themePanelShape(): Shape = ru.shturman.ui.fx.panelShape()
@@ -55,6 +56,12 @@ fun Modifier.themedEnter(index: Int = 0): Modifier {
     val flavor = ShColors.L.flavor
     val p = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
+        // Под заставкой ждём, пока она начнёт уходить: тогда интерфейс въезжает каскадом в такт раскрытию.
+        androidx.compose.runtime.withFrameNanos { }
+        if (SplashGate.covering) {
+            androidx.compose.runtime.snapshotFlow { SplashGate.covering }.first { !it }
+            kotlinx.coroutines.delay(160L)
+        }
         kotlinx.coroutines.delay(index * 70L)
         when (flavor) {
             Flavor.GLASS -> p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.62f, stiffness = 220f))

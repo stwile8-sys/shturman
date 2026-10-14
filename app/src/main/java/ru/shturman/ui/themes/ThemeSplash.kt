@@ -54,6 +54,7 @@ private fun fmod(a: Float, b: Float): Float = ((a % b) + b) % b
 /**
  * Загрузочный экран: у каждой темы свой. Длительность подогнана под звук заставки темы
  * (splashMs), а главный момент анимации совпадает с пиком звука (splashPeakMs).
+ * Камера, вспышка на пике, плёнка и уход в приложение — общий «кинослой» (SplashStage).
  * Классика оставляет прежнюю заставку с самолётом.
  */
 @Composable
@@ -63,31 +64,16 @@ fun ThemeSplash(onPlaySound: () -> Unit, onFinished: () -> Unit) {
         SplashOverlay(onPlaySound = onPlaySound, onFinished = onFinished)
         return
     }
-    val total = th.splashMs.toFloat()
-    val clock = remember { Animatable(0f) }
-    val fade = remember { Animatable(1f) }
-    val done = remember { booleanArrayOf(false) }
-
-    LaunchedEffect(Unit) {
-        delay(HOLD_MS)
-        onPlaySound()
-        clock.animateTo(total, tween(total.toInt(), easing = LinearEasing))
-        fade.animateTo(0f, tween(350))
-        if (!done[0]) { done[0] = true; onFinished() }
-    }
-
-    val t = clock.value
     val peak = th.splashPeakMs.toFloat()
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .alpha(fade.value)
-            .background(Color.Black)
-            .pointerInput(Unit) {
-                detectTapGestures { if (!done[0]) { done[0] = true; onFinished() } }
-            },
-        contentAlignment = Alignment.Center
-    ) {
+    SplashStage(
+        totalMs = th.splashMs.toFloat(),
+        peakMs = peak,
+        holdMs = HOLD_MS,
+        soundAtMs = 0f,
+        look = splashLookFor(th.id),
+        onPlaySound = onPlaySound,
+        onFinished = onFinished
+    ) { t ->
         Canvas(Modifier.fillMaxSize()) {
             when (th.id) {
                 1 -> drawPrincess(t, peak)
@@ -191,7 +177,20 @@ private fun DrawScope.drawPrincess(t: Float, peak: Float) {
     for (k in 0 until (n * draw).toInt()) {
         drawCircle(Color(0xFFFFB3DE).a(0.9f), u * 0.7f, heartPt(2f * PI.toFloat() * k / n, big, c))
     }
-    if (t < peak) glow(heartPt(2f * PI.toFloat() * draw, big, c), u * 8f, WHITE, 0.9f)
+    if (t < peak) {
+        glow(heartPt(2f * PI.toFloat() * draw, big, c), u * 8f, WHITE, 0.9f)
+        // искристый хвост за «пером»
+        for (k in 1..10) {
+            val d = draw - k * 0.012f
+            if (d <= 0f) break
+            val tp = heartPt(2f * PI.toFloat() * d, big, c)
+            val j = Offset(sin(k * 2.3f + t / 90f) * u * 1.2f, cos(k * 1.7f + t / 110f) * u * 1.2f)
+            star4(Offset(tp.x + j.x, tp.y + j.y), u * (1.4f - k * 0.1f), Color(0xFFFFE3F3).a(0.8f * (1f - k / 11f)))
+        }
+    }
+    // мягкие лучи за сердцем после пика
+    val rays = span(t, peak, peak + 700f) * (1f - 0.6f * span(t, 3600f, 5000f))
+    raysFrom(c, 14, w * 0.9f, Color(0xFFFFB3DE), 0.10f * rays, t / 5000f, 0.05f)
     // на пике вспыхивает и заливается, потом мягко «бьётся»
     val fillA = span(t, peak, peak + 500f)
     if (fillA > 0f) {
@@ -214,8 +213,10 @@ private fun DrawScope.drawPrincess(t: Float, peak: Float) {
             star4(sp, u * (2.2f + 0.6f * sin(t / 120f + k)), WHITE.a(fillA))
         }
     }
-    val fl = 1f - lin(t, peak, peak + 450f)
-    if (t >= peak && fl > 0f) drawRect(Color(0xFFFFD1EC).a(0.35f * fl))
+    // ударная волна на пике и «удары сердца»
+    shockRing(t, peak, c, w * 0.85f, Color(0xFFFFC2E4))
+    shockRing(t, peak + 880f, c, w * 0.6f, Color(0xFFFFD6EE), 900f, 0.6f)
+    shockRing(t, peak + 1760f, c, w * 0.5f, Color(0xFFFFD6EE), 900f, 0.4f)
     vignette(0.55f)
 }
 
@@ -277,6 +278,19 @@ private fun DrawScope.drawNascar(t: Float, peak: Float) {
         drawPath(pathOf {
             moveTo(x - u * 4f, top); lineTo(x + u * 4f, top); lineTo(bx + u * 22f, h * 0.72f); lineTo(bx - u * 22f, h * 0.72f); close()
         }, Brush.verticalGradient(listOf(Color(0xFFFFF7DA).a(0.16f * a), CLEAR), top, h * 0.72f))
+    }
+    // два поисковых луча шарят по небу перед заездом
+    val search = lit * span(t, peak - 900f, peak - 200f) * (1f - span(t, 4200f, 4900f))
+    if (search > 0f) {
+        for (side in intArrayOf(-1, 1)) {
+            val o = Offset(w * (0.5f + side * 0.32f), h * 0.5f)
+            val a = -PI.toFloat() / 2f + sin(t / 700f + side * 1.3f) * 0.55f
+            val len = h * 0.62f
+            val e = Offset(o.x + cos(a) * len, o.y + sin(a) * len)
+            val nx = -sin(a) * len * 0.07f; val ny = cos(a) * len * 0.07f
+            drawPath(pathOf { moveTo(o.x, o.y); lineTo(e.x + nx, e.y + ny); lineTo(e.x - nx, e.y - ny); close() },
+                Brush.radialGradient(listOf(Color(0xFFE8EEFF).a(0.16f * search), CLEAR), o, len))
+        }
     }
     // трибуны ступенями
     for (r in 0 until 5) {
@@ -350,8 +364,6 @@ private fun DrawScope.drawNascar(t: Float, peak: Float) {
         val b = Offset(a.x - vx * 0.06f, a.y - (vy + u * 60f * p) * 0.06f)
         drawLine(Color(0xFFFFC14D).a(1f - p), a, b, u * 0.5f, cap = StrokeCap.Round)
     }
-    val fl = 1f - lin(t, peak, peak + 300f)
-    if (t >= peak && fl > 0f) drawRect(WHITE.a(0.2f * fl))
     // клетчатый флаг машет сверху
     val fa = span(t, 3500f, 3900f)
     if (fa > 0f) {
@@ -363,6 +375,9 @@ private fun DrawScope.drawNascar(t: Float, peak: Float) {
             drawRect(col.a(fa), Offset(fx - u * 14f + k * cell, fy - u * 4f + r * cell + wave), Size(cell + 0.6f, cell + 0.6f))
         }
     }
+    // блики от прожекторов и конфетти под флаг
+    for (i in 1..2) flareAt(Offset(w * masts[i], h * 0.07f), Color(0xFFFFF3D0), 0.45f * lightOn[i])
+    confettiRain(t, 3600f, listOf(WHITE, Color(0xFFE60019), Color(0xFFFFD100), Color(0xFF1E4FBF)), 80, 5)
     // финальная шахматная шторка
     val wipe = lin(t, 4900f, 5600f)
     if (wipe > 0f) {
@@ -462,6 +477,12 @@ private fun DrawScope.drawGt(t: Float, peak: Float) {
     val arcP = Path()
     for (k in 0..40) { val a = ang(rpm * k / 40f); val x = c.x + cos(a) * rr * 0.72f; val y = c.y + sin(a) * rr * 0.72f; if (k == 0) arcP.moveTo(x, y) else arcP.lineTo(x, y) }
     drawPath(arcP, (if (redline) Color(0xFFFF2A2A) else Color(0xFF6EC1FF)).a(0.55f * appear), style = Stroke(u * 2.2f, cap = StrokeCap.Round))
+    // шлейф стрелки: несколько «призраков» прошлых положений
+    for (k in 1..5) {
+        val ga = ang(tachRpm(max(0f, t - k * 28f), peak))
+        val gtip = Offset(c.x + cos(ga) * rr * 0.95f, c.y + sin(ga) * rr * 0.95f)
+        drawLine(Color(0xFFFF3B1F).a(0.16f * (1f - k / 6f) * appear), c, gtip, u * 1.1f, cap = StrokeCap.Round)
+    }
     // стрелка
     val a = ang(rpm)
     val tip = Offset(c.x + cos(a) * rr * 0.95f, c.y + sin(a) * rr * 0.95f)
@@ -486,6 +507,13 @@ private fun DrawScope.drawGt(t: Float, peak: Float) {
     // индикатор передачи: черточки
     val gear = if (t < peak + 300f) 2 else 3
     for (g in 0 until gear) drawRoundRect(Color(0xFFFF3B1F).a(appear), Offset(c.x - u * 6f + g * u * 4.5f, c.y + rr * 0.42f), Size(u * 3.2f, u * 1.6f), CornerRadius(u * 0.5f))
+    // удар при переключении передачи
+    shockRing(t, peak + 160f, c, w * 0.9f, WHITE, 650f, 0.8f)
+    // в отсечке края кадра пульсируют красным
+    if (redline) {
+        val pulse = if ((t / 70f).toInt() % 2 == 0) 1f else 0.55f
+        drawRect(Brush.radialGradient(listOf(CLEAR, Color(0xFFE60019).a(0.28f * pulse)), Offset(w / 2, h / 2), max(w, h) * 0.7f))
+    }
     // линии скорости после пика
     val sp = span(t, peak, peak + 200f) * (1f - span(t, 2600f, 3100f))
     if (sp > 0f) {
@@ -496,8 +524,6 @@ private fun DrawScope.drawGt(t: Float, peak: Float) {
             drawLine(WHITE.a(0.12f * sp), Offset(x, y), Offset(x + len, y), u * 0.35f)
         }
     }
-    val fl = 1f - lin(t, peak, peak + 260f)
-    if (t >= peak && fl > 0f) drawRect(WHITE.a(0.25f * fl))
     vignette(0.6f)
 }
 
@@ -616,11 +642,14 @@ private fun DrawScope.drawNight(t: Float, peak: Float) {
                 drawPath(pathOf { moveTo(w / 2, hz); quadraticTo(w / 2 + (cx - w / 2) * 0.2f, hz - (hz - cy) * 0.6f, cx, cy) },
                     Color(0xFF3DA5FF).a(0.35f * (1f - span(t, 5200f, 7600f))), style = Stroke(u * 1.2f, cap = StrokeCap.Round))
             }
+            glow(Offset(cx, cy + sp * 0.22f), sp * 0.7f, Color(0xFF1E6BFF), 0.22f * burner)
             jetRear(cx, cy, sp, burner, t)
+            // кольцо скачка уплотнения на форсаже
+            shockRing(t, peak, Offset(cx, cy), w * 0.95f, Color(0xFFA8DCFF), 800f, 0.9f)
         }
     }
-    val fl = 1f - lin(t, peak, peak + 500f)
-    if (t >= peak && fl > 0f) drawRect(Color(0xFF3DA5FF).a(0.25f * fl))
+    flareAt(Offset(cx, cy + sp * 0.1f), Color(0xFF6EB8FF), 0.6f * lift * (1f - span(t, 5600f, 7400f)))
+    flareAt(Offset(w * 0.82f, h * 0.12f), Color(0xFF9DB8FF), 0.3f)
     vignette(0.6f)
 }
 
@@ -667,6 +696,7 @@ private fun DrawScope.drawStreet(t: Float, peak: Float) {
                 val fl = if (k % 4 != 1) lampsOn else lampsOn * (0.6f + if ((t / 90f + k).toInt() % 3 != 0) 0.4f else 0f)
                 glow(top, u * (3f + 14f * z), amber, 0.8f * fl)
                 drawCircle(Color(0xFFFFE2A0).a(fl), u * (0.4f + 1.1f * z), top)
+                if (z > 0.55f) star4(top, u * (1.5f + 3f * z) * fl, Color(0xFFFFF0C8).a(0.7f * fl))
                 val ry = b.y + (b.y - hz) * 0.08f
                 drawOval(amber.a(0.16f * fl), Offset(b.x - u * (1f + 2f * z), ry), Size(u * (2f + 4f * z), u * (3f + 22f * z)))
             }
@@ -706,6 +736,10 @@ private fun DrawScope.drawStreet(t: Float, peak: Float) {
             val ph = (t / 110f).toInt() % 4
             glow(Offset(-w * 0.05f, h * 0.62f), w * 0.75f, Color(0xFFFF1E2E), 0.55f * pol * (if (ph < 2) 1f else 0.15f))
             glow(Offset(w * 1.05f, h * 0.62f), w * 0.75f, Color(0xFF2E5BFF), 0.55f * pol * (if (ph >= 2) 1f else 0.15f))
+            // отражения мигалок на мокром асфальте
+            val redOn = if (ph < 2) 1f else 0.15f; val blueOn = if (ph >= 2) 1f else 0.15f
+            drawRect(Brush.verticalGradient(listOf(CLEAR, Color(0xFFFF1E2E).a(0.20f * pol * redOn), CLEAR), hz, h), Offset(0f, hz), Size(w * 0.35f, h - hz))
+            drawRect(Brush.verticalGradient(listOf(CLEAR, Color(0xFF2E5BFF).a(0.20f * pol * blueOn), CLEAR), hz, h), Offset(w * 0.65f, hz), Size(w * 0.35f, h - hz))
         }
         // толпа силуэтами по низу, подпрыгивает после пика
         for (row in 0..1) {
@@ -726,8 +760,7 @@ private fun DrawScope.drawStreet(t: Float, peak: Float) {
             }
         }
     }
-    val fl = 1f - lin(t, peak, peak + 250f)
-    if (t >= peak && fl > 0f) drawRect(amber.a(0.25f * fl))
+    rainStreaks(t, Color(0xFFFFD27A), 0.22f * lampsOn, 80, 12)
     drawRect(Color(0xFF6B5A1A).a(0.12f)) // зеленовато-янтарный фильтр
     vignette(0.65f)
 }
@@ -838,6 +871,10 @@ private fun DrawScope.drawRally(t: Float, peak: Float) {
             for (k in 0 until 10) glow(Offset(rx(z) + (k - 4.5f) * sw * 0.12f, ry(z) - sw * 0.05f * k), sw * (0.25f + 0.05f * k), Color(0xFFD8B28A), 0.25f)
             rallyCarFront(rx(z), ry(z) - jump, sw, span(t, peak - 1400f, peak - 1000f))
         }
+        // кольцо пыли при приземлении
+        scale(1f, 0.32f, Offset(rx(0.95f), h * 0.86f)) {
+            shockRing(t, peak + 150f, Offset(rx(0.95f), h * 0.86f), w * 0.7f, Color(0xFFE8C9A0), 800f, 0.8f)
+        }
         // облако пыли после пика, две волны
         for (burst in 0..1) {
             val t0 = if (burst == 0) peak - 60f else peak + 650f
@@ -867,9 +904,8 @@ private fun DrawScope.drawRally(t: Float, peak: Float) {
             val y = (rnd.nextFloat() + sin(t / 1500f + i) * 0.01f) * h * 0.8f
             drawCircle(Color(0xFFFFE7B0).a(0.35f * (0.5f + 0.5f * sin(t / 300f + i))), u * 0.35f, Offset(x, y))
         }
+        flareAt(sun, Color(0xFFFFE2A0), 0.55f)
     }
-    val fl = 1f - lin(t, peak, peak + 380f)
-    if (t >= peak && fl > 0f) drawRect(Color(0xFFFFF2D0).a(0.45f * fl))
     vignette(0.6f)
 }
 
@@ -900,6 +936,7 @@ private fun DrawScope.drawDrift(t: Float, peak: Float) {
     }
     glow(Offset(w * 0.22f, h * 0.10f), w * 0.4f, Color(0xFFB7C4FF), 0.25f)
     drawCircle(Color(0xFFEDF0FF), u * 4.5f, Offset(w * 0.22f, h * 0.10f))
+    flareAt(Offset(w * 0.22f, h * 0.10f), Color(0xFFB7C4FF), 0.3f)
     // хребты гор слоями с туманом
     val ridges = listOf(Triple(0.24f, Color(0xFF232867), 0.06f), Triple(0.30f, Color(0xFF161A48), 0.09f), Triple(0.40f, Color(0xFF0B0D2A), 0.12f))
     ridges.forEachIndexed { idx, (base, col, amp) ->
@@ -973,6 +1010,12 @@ private fun DrawScope.drawDrift(t: Float, peak: Float) {
             drawPath(pathOf {
                 moveTo(o.x, o.y); lineTo(far.x - fy * len * 1.2f, far.y + fx * len * 1.2f); lineTo(far.x + fy * len * 1.2f, far.y - fx * len * 1.2f); close()
             }, Brush.radialGradient(listOf(Color(0xFFE8F0FF).a(0.35f), CLEAR), o, len * 4.2f))
+            // фары слепят, когда машина близко
+            val near = span(sp, 0.45f, 0.8f)
+            if (near > 0f) {
+                glow(o, len * 0.9f, Color(0xFFE8F0FF), 0.35f * near)
+                star4(o, len * 0.3f * near, WHITE.a(0.75f * near))
+            }
         }
         rotate((ang * 180f / PI.toFloat()), c) {
             drawRoundRect(Color(0xFF0E0F16), Offset(c.x - len / 2, c.y - wd / 2), Size(len, wd), CornerRadius(wd * 0.3f))
@@ -1000,7 +1043,5 @@ private fun DrawScope.drawDrift(t: Float, peak: Float) {
         val x = (fmod(t / 1000f * (0.06f + 0.03f * i) + i * 0.37f, 1.6f) - 0.3f) * w
         scale(1f, 0.14f, Offset(x, y)) { glow(Offset(x, y), w * 0.55f, Color(0xFFB8C0F0), 0.16f) }
     }
-    val fl = 1f - lin(t, peak, peak + 300f)
-    if (t >= peak && fl > 0f) drawRect(Color(0xFFDCE4FF).a(0.14f * fl))
     vignette(0.6f)
 }

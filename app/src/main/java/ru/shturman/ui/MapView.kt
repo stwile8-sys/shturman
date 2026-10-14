@@ -415,9 +415,9 @@ fun DarkMap(
     LaunchedEffect(startKey) {
         val m = map ?: return@LaunchedEffect
         if (startKey > 0 && m.locationComponent.isLocationComponentActivated) {
-            delay(450)
+            delay(250)
             m.locationComponent.setCameraMode(
-                CameraMode.TRACKING_GPS, 1800L, START_ZOOM, null, MapCam.start, null
+                CameraMode.TRACKING_GPS, 2100L, START_ZOOM, null, MapCam.start, null
             )
         }
     }
