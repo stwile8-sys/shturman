@@ -43,7 +43,6 @@ private const val SKY_START = 2200f         // из чёрного проявл�
 private const val SOUND_AT = 2900f          // начало появления самолёта и звук
 private const val REVEAL_END = 6000f        // самолёт полностью проявился (под длину звука)
 private const val TITLE_START = 5000f
-private const val FADE_START = 8300f
 private const val TOTAL = 8700f
 
 private fun ease(x: Float): Float {
@@ -56,40 +55,19 @@ private fun span(t: Float, a: Float, b: Float) = ease((t - a) / (b - a))
 /**
  * Заставка: чёрный экран, пока приложение грузится; короткая «заставка спонсора»; затем на фоне неба
  * из чёрной фигуры медленно проявляется самолёт, в этот момент играет звук. Касание пропускает заставку.
+ * Камера, блик и уход кругом из самолёта — общий «кинослой» SplashStage.
  */
 @Composable
 fun SplashOverlay(onPlaySound: () -> Unit, onFinished: () -> Unit) {
-    val clock = remember { Animatable(0f) }
-    val fade = remember { Animatable(1f) }
-    val done = remember { booleanArrayOf(false) }
-
-    LaunchedEffect(Unit) {
-        delay(BLACK_HOLD_MS)
-        var soundPlayed = false
-        // Звук запускается в нужный момент по таймеру, не зависящему от кадров
-        clock.animateTo(TOTAL, tween(TOTAL.toInt(), easing = LinearEasing)) {
-            if (!soundPlayed && value >= SOUND_AT) {
-                soundPlayed = true
-                onPlaySound()
-            }
-        }
-        fade.animateTo(0f, tween(350))
-        if (!done[0]) { done[0] = true; onFinished() }
-    }
-
-    val t = clock.value
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .alpha(fade.value)
-            .background(Color.Black)
-            .pointerInput(Unit) {
-                detectTapGestures {
-                    if (!done[0]) { done[0] = true; onFinished() }
-                }
-            },
-        contentAlignment = Alignment.Center
-    ) {
+    ru.shturman.ui.themes.SplashStage(
+        totalMs = TOTAL,
+        peakMs = REVEAL_END,
+        holdMs = BLACK_HOLD_MS,
+        soundAtMs = SOUND_AT,
+        look = ru.shturman.ui.themes.splashLookFor(0),
+        onPlaySound = onPlaySound,
+        onFinished = onFinished
+    ) { t ->
         Canvas(modifier = Modifier.fillMaxSize()) {
             val sponsorA = if (t < SPONSOR_END) span(t, 0f, 400f) * (1f - span(t, 1300f, SPONSOR_END)) else 0f
             if (sponsorA > 0f) drawSponsor(sponsorA, t)

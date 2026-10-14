@@ -54,6 +54,7 @@ private fun fmod(a: Float, b: Float): Float = ((a % b) + b) % b
 /**
  * Загрузочный экран: у каждой темы свой. Длительность подогнана под звук заставки темы
  * (splashMs), а главный момент анимации совпадает с пиком звука (splashPeakMs).
+ * Камера, вспышка на пике, плёнка и уход в приложение — общий «кинослой» (SplashStage).
  * Классика оставляет прежнюю заставку с самолётом.
  */
 @Composable
@@ -63,31 +64,16 @@ fun ThemeSplash(onPlaySound: () -> Unit, onFinished: () -> Unit) {
         SplashOverlay(onPlaySound = onPlaySound, onFinished = onFinished)
         return
     }
-    val total = th.splashMs.toFloat()
-    val clock = remember { Animatable(0f) }
-    val fade = remember { Animatable(1f) }
-    val done = remember { booleanArrayOf(false) }
-
-    LaunchedEffect(Unit) {
-        delay(HOLD_MS)
-        onPlaySound()
-        clock.animateTo(total, tween(total.toInt(), easing = LinearEasing))
-        fade.animateTo(0f, tween(350))
-        if (!done[0]) { done[0] = true; onFinished() }
-    }
-
-    val t = clock.value
     val peak = th.splashPeakMs.toFloat()
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .alpha(fade.value)
-            .background(Color.Black)
-            .pointerInput(Unit) {
-                detectTapGestures { if (!done[0]) { done[0] = true; onFinished() } }
-            },
-        contentAlignment = Alignment.Center
-    ) {
+    SplashStage(
+        totalMs = th.splashMs.toFloat(),
+        peakMs = peak,
+        holdMs = HOLD_MS,
+        soundAtMs = 0f,
+        look = splashLookFor(th.id),
+        onPlaySound = onPlaySound,
+        onFinished = onFinished
+    ) { t ->
         Canvas(Modifier.fillMaxSize()) {
             when (th.id) {
                 1 -> drawPrincess(t, peak)
@@ -214,8 +200,6 @@ private fun DrawScope.drawPrincess(t: Float, peak: Float) {
             star4(sp, u * (2.2f + 0.6f * sin(t / 120f + k)), WHITE.a(fillA))
         }
     }
-    val fl = 1f - lin(t, peak, peak + 450f)
-    if (t >= peak && fl > 0f) drawRect(Color(0xFFFFD1EC).a(0.35f * fl))
     vignette(0.55f)
 }
 
@@ -350,8 +334,6 @@ private fun DrawScope.drawNascar(t: Float, peak: Float) {
         val b = Offset(a.x - vx * 0.06f, a.y - (vy + u * 60f * p) * 0.06f)
         drawLine(Color(0xFFFFC14D).a(1f - p), a, b, u * 0.5f, cap = StrokeCap.Round)
     }
-    val fl = 1f - lin(t, peak, peak + 300f)
-    if (t >= peak && fl > 0f) drawRect(WHITE.a(0.2f * fl))
     // клетчатый флаг машет сверху
     val fa = span(t, 3500f, 3900f)
     if (fa > 0f) {
@@ -496,8 +478,6 @@ private fun DrawScope.drawGt(t: Float, peak: Float) {
             drawLine(WHITE.a(0.12f * sp), Offset(x, y), Offset(x + len, y), u * 0.35f)
         }
     }
-    val fl = 1f - lin(t, peak, peak + 260f)
-    if (t >= peak && fl > 0f) drawRect(WHITE.a(0.25f * fl))
     vignette(0.6f)
 }
 
@@ -619,8 +599,6 @@ private fun DrawScope.drawNight(t: Float, peak: Float) {
             jetRear(cx, cy, sp, burner, t)
         }
     }
-    val fl = 1f - lin(t, peak, peak + 500f)
-    if (t >= peak && fl > 0f) drawRect(Color(0xFF3DA5FF).a(0.25f * fl))
     vignette(0.6f)
 }
 
@@ -726,8 +704,6 @@ private fun DrawScope.drawStreet(t: Float, peak: Float) {
             }
         }
     }
-    val fl = 1f - lin(t, peak, peak + 250f)
-    if (t >= peak && fl > 0f) drawRect(amber.a(0.25f * fl))
     drawRect(Color(0xFF6B5A1A).a(0.12f)) // зеленовато-янтарный фильтр
     vignette(0.65f)
 }
@@ -868,8 +844,6 @@ private fun DrawScope.drawRally(t: Float, peak: Float) {
             drawCircle(Color(0xFFFFE7B0).a(0.35f * (0.5f + 0.5f * sin(t / 300f + i))), u * 0.35f, Offset(x, y))
         }
     }
-    val fl = 1f - lin(t, peak, peak + 380f)
-    if (t >= peak && fl > 0f) drawRect(Color(0xFFFFF2D0).a(0.45f * fl))
     vignette(0.6f)
 }
 
@@ -1000,7 +974,5 @@ private fun DrawScope.drawDrift(t: Float, peak: Float) {
         val x = (fmod(t / 1000f * (0.06f + 0.03f * i) + i * 0.37f, 1.6f) - 0.3f) * w
         scale(1f, 0.14f, Offset(x, y)) { glow(Offset(x, y), w * 0.55f, Color(0xFFB8C0F0), 0.16f) }
     }
-    val fl = 1f - lin(t, peak, peak + 300f)
-    if (t >= peak && fl > 0f) drawRect(Color(0xFFDCE4FF).a(0.14f * fl))
     vignette(0.6f)
 }
