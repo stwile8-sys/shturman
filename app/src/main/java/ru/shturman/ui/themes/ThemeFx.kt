@@ -47,7 +47,7 @@ fun Modifier.themedButtonTexture(): Modifier = drawBehind {
         BtnKind.STRIPES -> {
             val bandH = h * 0.09f
             val y0 = h * 0.70f
-            drawRect(Color.White, Offset(0f, y0), Size(w, bandH))
+            drawRect(Color.White.copy(alpha = 0.85f), Offset(0f, y0), Size(w, bandH))
             drawRect(t.second, Offset(0f, y0 + bandH), Size(w, bandH))
             drawRect(t.third, Offset(0f, y0 + bandH * 2), Size(w, bandH))
         }
@@ -62,7 +62,7 @@ fun Modifier.themedButtonTexture(): Modifier = drawBehind {
         BtnKind.CONCRETE -> {
             val r = Random(11)
             repeat(70) {
-                val c = if (r.nextBoolean()) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.22f)
+                val c = if (r.nextBoolean()) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.16f)
                 drawCircle(c, radius = 1f + r.nextFloat() * 1.6f, center = Offset(r.nextFloat() * w, r.nextFloat() * h))
             }
             drawLine(Color.White.copy(alpha = 0.10f), Offset(w * 0.1f, h * 0.9f), Offset(w * 0.55f, h * 0.15f), strokeWidth = 1.5f)
@@ -76,8 +76,8 @@ fun Modifier.themedButtonTexture(): Modifier = drawBehind {
             drawRect(Brush.verticalGradient(listOf(Color.Transparent, t.accent.copy(alpha = 0.18f))))
         }
         BtnKind.SLIM -> {
-            drawRect(Brush.horizontalGradient(listOf(t.accent.copy(alpha = 0.55f), Color.Transparent), 0f, w * 0.35f))
-            drawRect(Brush.horizontalGradient(listOf(Color.Transparent, t.accent.copy(alpha = 0.55f)), w * 0.65f, w))
+            drawRect(Brush.horizontalGradient(listOf(t.accent.copy(alpha = 0.35f), Color.Transparent), 0f, w * 0.35f))
+            drawRect(Brush.horizontalGradient(listOf(Color.Transparent, t.accent.copy(alpha = 0.35f)), w * 0.65f, w))
         }
         BtnKind.ROUND -> {
             drawOval(Color.White.copy(alpha = 0.16f), Offset(w * 0.12f, h * 0.06f), Size(w * 0.5f, h * 0.28f))

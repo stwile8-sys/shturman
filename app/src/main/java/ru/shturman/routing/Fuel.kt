@@ -20,6 +20,6 @@ fun fuelLiters(lengthM: Double, timeSec: Double, litersPer100: Double): Double {
 }
 
 fun fuelText(liters: Double, pricePerLiter: Double): String {
-    val l = String.format(java.util.Locale("ru"), "%.1f", liters)
+    val l = String.format(java.util.Locale.forLanguageTag("ru"), "%.1f", liters)
     return "$l л · ${Math.round(liters * pricePerLiter)} ₽"
 }

@@ -461,7 +461,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         }
         val gainMin = ((now - best) / 60.0).toInt()
         if (bestOffset == 0 || gainMin < 5) return null
-        val clock = java.text.SimpleDateFormat("H:mm", java.util.Locale("ru")).format(Date(baseMs + bestOffset * 60_000L))
+        val clock = java.text.SimpleDateFormat("H:mm", java.util.Locale.forLanguageTag("ru")).format(Date(baseMs + bestOffset * 60_000L))
         return "Выедь в $clock — приедешь на $gainMin мин раньше"
     }
 

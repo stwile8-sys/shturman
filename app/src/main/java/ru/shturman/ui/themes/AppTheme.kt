@@ -80,7 +80,7 @@ object Themes {
         ThemeSpec(
             id = 0, name = "Классика", vibe = "Неоновый киберпанк, цифровой шторм",
             bg = Color(0xFF050608), panel = Color(0xFF0D1015), accent = Color(0xFF00F0FF), second = Color(0xFFFF00A8),
-            third = Color(0xFFB4FF00), danger = Color(0xFFFF2233), text = Color(0xFFFFFFFF), textSec = Color(0xFF8A9099),
+            third = Color(0xFFB4FF00), danger = Color(0xFFFF2233), text = Color(0xFFFFFFFF), textSec = Color(0xFF9AA1AB),
             divider = Color(0xFF252B34), search = Color(0xFF161B22), iconTint = Color(0xFF00F0FF), flash = Color(0xFF00F0FF),
             signs = listOf(Color(0xFFFF2233), Color(0xFFFF00A8), Color(0xFFFFD400), Color(0xFFB4FF00), Color(0xFF00F0FF)),
             numFont = vf(R.font.orbitron, 700), textFont = vf(R.font.inter, 500), letterSp = 0f,
@@ -170,8 +170,8 @@ object Themes {
         // 8. DRIFT NIGHT — туман, горная дорога
         ThemeSpec(
             id = 7, name = "Drift Night", vibe = "Ночной дрифт на горной дороге, туман",
-            bg = Color(0xFF0A0F1E), panel = Color(0xFF141A2E), accent = Color(0xFF4A6FFF), second = Color(0xFF8A2BE2),
-            third = Color(0xFFB4FF00), danger = Color(0xFFFF2233), text = Color(0xFFEAF0FF), textSec = Color(0xFF8A98C4),
+            bg = Color(0xFF0A0F1E), panel = Color(0xFF141A2E), accent = Color(0xFF5C7CFF), second = Color(0xFF8A2BE2),
+            third = Color(0xFFB4FF00), danger = Color(0xFFFF2233), text = Color(0xFFEAF0FF), textSec = Color(0xFF9AA8D2),
             divider = Color(0xFF232C4A), search = Color(0xFF1B2340), iconTint = Color(0xFF8AA4FF), flash = Color(0xFF6A5BFF),
             signs = listOf(Color(0xFFFF2233), Color(0xFFB04BE8), Color(0xFFFFD400), Color(0xFFB4FF00), Color(0xFF4A6FFF)),
             numFont = vf(R.font.orbitron, 600), textFont = vf(R.font.inter, 500), letterSp = 0.5f,

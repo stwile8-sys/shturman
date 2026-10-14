@@ -40,7 +40,7 @@ class Voice(context: Context) {
         tts = TextToSpeech(app) { status ->
             val engine = tts
             if (status == TextToSpeech.SUCCESS && engine != null) {
-                val result = engine.setLanguage(Locale("ru", "RU"))
+                val result = engine.setLanguage(Locale.forLanguageTag("ru-RU"))
                 ready = result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED
                 engine.setAudioAttributes(attrs())
                 pickFemaleVoice(engine)

@@ -130,7 +130,7 @@ fun AdminCodesScreen(onClose: () -> Unit) {
                         Text("$who", color = ShColors.TextSecondary, fontSize = 13.sp)
                         if (row.usedAt > 0) {
                             Text(
-                                SimpleDateFormat("d MMM yyyy, HH:mm", Locale("ru")).format(Date(row.usedAt)),
+                                SimpleDateFormat("d MMM yyyy, HH:mm", Locale.forLanguageTag("ru")).format(Date(row.usedAt)),
                                 color = ShColors.TextSecondary, fontSize = 12.sp
                             )
                         }
