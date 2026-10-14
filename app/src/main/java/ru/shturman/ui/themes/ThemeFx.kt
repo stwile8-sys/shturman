@@ -35,60 +35,6 @@ import kotlin.random.Random
 /** Форма панелей выбранной темы (стекло, неон, телеметрия или глубина). */
 fun themePanelShape(): Shape = ru.shturman.ui.fx.panelShape()
 
-/** Форма кнопок выбранной темы. */
-fun themeButtonShape(): Shape = ru.shturman.ui.fx.chipShape()
-
-/** Материал кнопки: полосы, карбон, бетон, зерно, пламя по краям, блеск, размытие. Рисуется поверх фона кнопки. */
-fun Modifier.themedButtonTexture(): Modifier = drawBehind {
-    val t = ShColors.T
-    val w = size.width
-    val h = size.height
-    when (t.btn) {
-        BtnKind.STRIPES -> {
-            val bandH = h * 0.09f
-            val y0 = h * 0.70f
-            drawRect(Color.White.copy(alpha = 0.85f), Offset(0f, y0), Size(w, bandH))
-            drawRect(t.second, Offset(0f, y0 + bandH), Size(w, bandH))
-            drawRect(t.third, Offset(0f, y0 + bandH * 2), Size(w, bandH))
-        }
-        BtnKind.CARBON -> {
-            var x = -h
-            while (x < w) {
-                drawLine(Color.White.copy(alpha = 0.07f), Offset(x, h), Offset(x + h, 0f), strokeWidth = 3f)
-                x += 7f
-            }
-            drawRect(t.accent, Offset(0f, 0f), Size(w * 0.09f, h))
-        }
-        BtnKind.CONCRETE -> {
-            val r = Random(11)
-            repeat(70) {
-                val c = if (r.nextBoolean()) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.16f)
-                drawCircle(c, radius = 1f + r.nextFloat() * 1.6f, center = Offset(r.nextFloat() * w, r.nextFloat() * h))
-            }
-            drawLine(Color.White.copy(alpha = 0.10f), Offset(w * 0.1f, h * 0.9f), Offset(w * 0.55f, h * 0.15f), strokeWidth = 1.5f)
-            drawLine(Color.Black.copy(alpha = 0.3f), Offset(w * 0.6f, h * 0.95f), Offset(w * 0.95f, h * 0.4f), strokeWidth = 1.5f)
-        }
-        BtnKind.GRAIN -> {
-            val r = Random(5)
-            repeat(90) {
-                drawCircle(Color(0xFFE3C79A).copy(alpha = 0.13f), radius = 0.8f + r.nextFloat() * 1.2f, center = Offset(r.nextFloat() * w, r.nextFloat() * h))
-            }
-            drawRect(Brush.verticalGradient(listOf(Color.Transparent, t.accent.copy(alpha = 0.18f))))
-        }
-        BtnKind.SLIM -> {
-            drawRect(Brush.horizontalGradient(listOf(t.accent.copy(alpha = 0.35f), Color.Transparent), 0f, w * 0.35f))
-            drawRect(Brush.horizontalGradient(listOf(Color.Transparent, t.accent.copy(alpha = 0.35f)), w * 0.65f, w))
-        }
-        BtnKind.ROUND -> {
-            drawOval(Color.White.copy(alpha = 0.16f), Offset(w * 0.12f, h * 0.06f), Size(w * 0.5f, h * 0.28f))
-        }
-        BtnKind.SOFT -> {
-            drawRect(Brush.radialGradient(listOf(t.accent.copy(alpha = 0.22f), Color.Transparent), Offset(w / 2, h / 2), w * 0.8f))
-        }
-        BtnKind.CHAMFER -> Unit
-    }
-}
-
 private val BounceOut = Easing { x ->
     val n = 7.5625f
     val d = 2.75f
