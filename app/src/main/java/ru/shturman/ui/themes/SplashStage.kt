@@ -146,7 +146,7 @@ fun SplashStage(
         var played = false
         if (soundAtMs <= 0f) { played = true; onPlaySound() }
         clock.animateTo(totalMs, tween(totalMs.toInt(), easing = LinearEasing)) {
-            if (!played && value >= soundAtMs) { played = true; onPlaySound() }
+            if (!played && !flags[0] && value >= soundAtMs) { played = true; onPlaySound() }
         }
         leave(false)
     }
