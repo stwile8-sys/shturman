@@ -26,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import ru.shturman.ui.themes.themedEnter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,16 +46,17 @@ fun LoginScreen() {
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    Box(Modifier.fillMaxSize()) {
+    ru.shturman.ui.fx.AuroraBackground()
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(ShColors.Background)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(horizontal = 28.dp)
     ) {
         Column(
-            modifier = Modifier.align(Alignment.Center),
+            modifier = Modifier.align(Alignment.Center).themedEnter(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(text = stringResource(ru.shturman.R.string.s_d246d2cf),
@@ -87,7 +89,8 @@ fun LoginScreen() {
                 )
             }
 
-            Button(
+            ru.shturman.ui.fx.GlowButton(
+                text = if (loading) "Вхожу…" else stringResource(ru.shturman.R.string.s_98bf3d4f),
                 onClick = {
                     if (!loading) {
                         loading = true
@@ -98,25 +101,9 @@ fun LoginScreen() {
                         }
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ShColors.Accent,
-                    contentColor = ShColors.Background
-                )
-            ) {
-                if (loading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        color = ShColors.Background,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text(text = stringResource(ru.shturman.R.string.s_98bf3d4f), style = ShText.Button)
-                }
-            }
+                enabled = !loading,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Text(text = stringResource(ru.shturman.R.string.s_0f3468a4),
                 color = ShColors.TextSecondary,
@@ -124,5 +111,6 @@ fun LoginScreen() {
                 textAlign = TextAlign.Center
             )
         }
+    }
     }
 }

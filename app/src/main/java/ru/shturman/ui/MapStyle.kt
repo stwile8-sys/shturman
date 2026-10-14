@@ -60,7 +60,6 @@ object MapStyle {
             arrayOf("centerline", "line", mixHex(bg, white, 0.50f)),
             arrayOf("centerline-minor", "line", mixHex(bg, white, 0.35f)),
             arrayOf("route-casing", "line", hex(bg)),
-            arrayOf("building-3d", "ext", mixHex(bg, white, 0.09f)),
             arrayOf("road-names", "text", mixHex(bg, white, 0.42f)),
             arrayOf("place-names", "text", mixHex(bg, white, 0.58f)),
             arrayOf("landmark-names", "text", hex(th.third.copy(alpha = 1f).let { androidx.compose.ui.graphics.lerp(it, white, 0.35f) })),
@@ -81,6 +80,23 @@ object MapStyle {
             }
         }
         style.getLayer("route-line")?.setProperties(PropertyFactory.lineColor(hex(th.accent)))
+        val look = ru.shturman.ui.themes.Looks.of(th.id)
+        style.getLayer("route-glow")?.setProperties(PropertyFactory.lineColor(hex(look.glow)))
+        style.getLayer("comet-glow")?.setProperties(PropertyFactory.circleColor(hex(th.accent)))
+        style.getLayer("dest-pulse")?.setProperties(PropertyFactory.circleStrokeColor(hex(th.accent)))
+        style.getLayer("dest-pin")?.setProperties(PropertyFactory.circleColor(hex(th.accent)))
+        // дома: внизу темнее, выше светлее и с оттенком темы (как в варианте «глубина»)
+        style.getLayer("building-3d")?.setProperties(
+            PropertyFactory.fillExtrusionColor(
+                org.maplibre.android.style.expressions.Expression.interpolate(
+                    org.maplibre.android.style.expressions.Expression.linear(),
+                    org.maplibre.android.style.expressions.Expression.coalesce(org.maplibre.android.style.expressions.Expression.get("render_height"), org.maplibre.android.style.expressions.Expression.literal(9)),
+                    org.maplibre.android.style.expressions.Expression.stop(0, org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.parseColor(mixHex(bg, white, 0.08f)))),
+                    org.maplibre.android.style.expressions.Expression.stop(30, org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.parseColor(mixHex(androidx.compose.ui.graphics.lerp(bg, white, 0.14f), th.accent, 0.10f)))),
+                    org.maplibre.android.style.expressions.Expression.stop(80, org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.parseColor(mixHex(androidx.compose.ui.graphics.lerp(bg, white, 0.22f), th.accent, 0.18f))))
+                )
+            )
+        )
         style.addImage(ONEWAY_IMAGE, onewayBitmap(hex(th.accent)))
         val vis = org.maplibre.android.style.layers.Property.VISIBLE
         val none = org.maplibre.android.style.layers.Property.NONE
@@ -131,6 +147,7 @@ object MapStyle {
     "caravan": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "trail": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "bloom": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
+    "comet": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "sat": { "type": "raster", "tileSize": 256, "maxzoom": 19,
              "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
              "attribution": "Esri, Maxar, Earthstar Geographics" }
@@ -190,6 +207,11 @@ object MapStyle {
 
     { "id": "sat-layer", "type": "raster", "source": "sat", "layout": { "visibility": "none" } },
 
+    { "id": "route-glow", "type": "line", "source": "route",
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": "#3DDCFF", "line-opacity": 0.42, "line-blur": 10,
+                 "line-width": ["interpolate", ["linear"], ["zoom"], 10, 12, 16, 24, 19, 36] } },
+
     { "id": "route-casing", "type": "line", "source": "route",
       "layout": { "line-cap": "round", "line-join": "round" },
       "paint": { "line-color": "#0A0C10", "line-opacity": 0.85,
@@ -203,9 +225,10 @@ object MapStyle {
     { "id": "building-3d", "type": "fill-extrusion", "source": "omt", "source-layer": "building", "minzoom": 13,
       "paint": {
         "fill-extrusion-color": "#1C222B",
-        "fill-extrusion-height": ["coalesce", ["get", "render_height"], 8],
+        "fill-extrusion-height": ["*", 1.25, ["coalesce", ["get", "render_height"], 9]],
         "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-        "fill-extrusion-opacity": 0.92 } },
+        "fill-extrusion-vertical-gradient": true,
+        "fill-extrusion-opacity": 0.94 } },
 
     { "id": "oneway-forward", "type": "symbol", "source": "omt", "source-layer": "transportation", "minzoom": 15,
       "filter": ["all", ["==", "oneway", 1],
@@ -283,6 +306,16 @@ object MapStyle {
       "layout": { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 12,
                   "text-offset": [0, 1.4], "text-allow-overlap": true },
       "paint": { "text-color": "#FFFFFF", "text-halo-color": "#0A0C10", "text-halo-width": 1.5 } },
+
+    { "id": "comet-glow", "type": "circle", "source": "comet",
+      "paint": { "circle-radius": 16, "circle-color": "#3DDCFF", "circle-blur": 1, "circle-opacity": 0.75 } },
+
+    { "id": "comet-core", "type": "circle", "source": "comet",
+      "paint": { "circle-radius": 5, "circle-color": "#FFFFFF", "circle-opacity": 0.95 } },
+
+    { "id": "dest-pulse", "type": "circle", "source": "dest",
+      "paint": { "circle-radius": 14, "circle-color": "rgba(0,0,0,0)",
+                 "circle-stroke-color": "#3DDCFF", "circle-stroke-width": 2.5, "circle-stroke-opacity": 0.8 } },
 
     { "id": "dest-pin", "type": "circle", "source": "dest",
       "paint": { "circle-radius": 8, "circle-color": "#FF2E2E",

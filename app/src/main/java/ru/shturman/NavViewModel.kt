@@ -130,6 +130,7 @@ data class NavState(
     val devLevel: Int = 1,
     val hud: Hud = Hud(),
     val turnVibro: Boolean = true,
+    val map3d: Boolean = true,
     val overspeedSound: Boolean = true,
     val nightVoice: Boolean = true,
     val radarOn: Boolean = true,
@@ -216,6 +217,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         theme = ru.shturman.ui.themes.Themes.load(settings),
         devLevel = settings.getInt("dev_level", 1).coerceIn(0, 2),
         turnVibro = settings.getBoolean("turn_vibro", true),
+        map3d = settings.getBoolean("map3d", true),
         overspeedSound = settings.getBoolean("overspeed", true),
         nightVoice = settings.getBoolean("night_voice", true),
         radarOn = settings.getBoolean("radar", true),
@@ -872,6 +874,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(overspeedSound = on) }
     }
     fun setNightVoice(on: Boolean) { putBool("night_voice", on); voice.nightMode = on; _state.update { it.copy(nightVoice = on) } }
+    fun setMap3d(on: Boolean) { putBool("map3d", on); _state.update { it.copy(map3d = on) } }
     fun setTurnVibro(on: Boolean) { putBool("turn_vibro", on); _state.update { it.copy(turnVibro = on) } }
     fun setRadar(on: Boolean) { putBool("radar", on); _state.update { it.copy(radarOn = on) } }
 
@@ -1108,7 +1111,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             .remove("voice").remove("fullscreen").remove("satellite").remove("overspeed").remove("night_voice")
             .remove("radar").remove("card_percent").remove("card_distance").remove("card_eta")
             .remove("card_remaining").remove("card_fuel").remove("consumption").remove("fuel_price")
-            .remove("dev_level").remove("theme_sounds").remove("turn_vibro")
+            .remove("dev_level").remove("theme_sounds").remove("turn_vibro").remove("map3d")
             .apply()
         ThemeSounds.enabled = true
         deviation.level = DeviationLevel.MEDIUM
@@ -1117,7 +1120,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(
                 voiceOn = true, fullscreen = false, satellite = false, overspeedSound = true, nightVoice = true,
                 radarOn = true, cardPercent = true, cardDistance = true, cardEta = true, cardRemaining = false,
-                cardFuel = false, consumption = 8.0f, fuelPrice = 60.0f, devLevel = 1, turnVibro = true
+                cardFuel = false, consumption = 8.0f, fuelPrice = 60.0f, devLevel = 1, turnVibro = true, map3d = true
             )
         }
     }
