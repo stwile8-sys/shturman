@@ -166,7 +166,7 @@ fun SplashStage(
             }
             .drawWithContent {
                 if (o <= 0f || look.exit == SplashExit.WARP) { drawContent(); return@drawWithContent }
-                drawExit(look, o, accent, accent2) { drawContent() }
+                drawExit(look, o, accent, accent2) { this@drawWithContent.drawContent() }
             }
             .background(Color.Black)
     ) {
