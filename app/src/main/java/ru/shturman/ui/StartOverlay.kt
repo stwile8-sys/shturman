@@ -5,6 +5,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -28,6 +30,11 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import ru.shturman.ui.fx.LocalFx
+import ru.shturman.ui.fx.fxAnchor
+import ru.shturman.ui.fx.rememberFxAnchor
 import ru.shturman.ui.theme.NumberFont
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.themes.Flavor
@@ -41,19 +48,29 @@ private fun lin(t: Float, a: Float, b: Float) = ((t - a) / (b - a)).coerceIn(0f,
  * Старт поездки после «Поехали», у каждой темы свой:
  * стекло — мягкая вспышка и кольцо; неон — квадратная волна, скан и глитч надписи (у Street ещё мигалки);
  * телеметрия — пять стартовых огней, зелёный и полосы скорости; глубина — тоннель из глубины.
+ * Надпись «Поехали!» собирается по буквам (у каждой темы по-своему), в момент появления — вспышка,
+ * лёгкая тряска и взрыв частиц темы; в конце буквы улетают. Камера карты в это время подлетает к стрелке.
  * trigger: каждый раз, когда число растёт, сцена проигрывается заново. Рисуется лёгкими средствами.
  */
 @Composable
 fun StartOverlay(trigger: Int) {
     val flavor = ShColors.L.flavor
-    val dur = if (flavor == Flavor.TELEMETRY) 2100 else 1700
+    val dur = if (flavor == Flavor.TELEMETRY) 2300 else 1900
     val progress = remember { Animatable(0f) }
     var visible by remember { mutableStateOf(false) }
+    val fx = LocalFx.current
+    val anchor = rememberFxAnchor()
+    // момент, когда появляется надпись (у телеметрии — после зелёного)
+    val textAt = if (flavor == Flavor.TELEMETRY) 0.6f else 0.1f
 
     LaunchedEffect(trigger) {
         if (trigger == 0) return@LaunchedEffect
         visible = true
         progress.snapTo(0f)
+        launch {
+            delay((dur * (textAt + 0.08f)).toLong())
+            if (anchor.center.isSpecified) fx.burst(anchor.center, 2.2f)
+        }
         progress.animateTo(1f, tween(durationMillis = dur, easing = LinearEasing))
         visible = false
     }
@@ -62,46 +79,114 @@ fun StartOverlay(trigger: Int) {
     val accent = ShColors.Accent
     val accent2 = ShColors.Accent2
     val street = ShColors.themeId == 5
-    // момент, когда появляется надпись (у телеметрии — после зелёного)
-    val textAt = if (flavor == Flavor.TELEMETRY) 0.62f else 0.08f
+    val p = progress.value
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .fxAnchor(anchor)
+            .graphicsLayer {
+                // короткая тряска в момент старта
+                val k = lin(p, textAt, textAt + 0.14f)
+                if (k > 0f && k < 1f && flavor != Flavor.GLASS) {
+                    val amp = 5f * density * (1f - k) * (1f - k)
+                    translationX = sin(k * 47f) * amp
+                    translationY = sin(k * 61f + 1f) * amp * 0.7f
+                }
+            }
+    ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val p = progress.value
-            val out = 1f - lin(p, 0.78f, 1f)
+            val out = 1f - lin(p, 0.8f, 1f)
             when (flavor) {
                 Flavor.GLASS -> drawGlass(p, out, accent, accent2)
                 Flavor.NEON -> drawNeon(p, out, accent, accent2, street)
                 Flavor.TELEMETRY -> drawLights(p, out, accent)
                 Flavor.DEPTH -> drawTunnel(p, out, accent, accent2)
             }
+            // вспышка в момент появления надписи
+            val f = lin(p, textAt, textAt + 0.16f)
+            if (p >= textAt && f < 1f) drawRect(Color.White.copy(alpha = 0.24f * (1f - f) * (1f - f)))
         }
-        val p = progress.value
-        val tA = lin(p, textAt, textAt + 0.12f) * (1f - lin(p, 0.8f, 1f))
-        if (tA > 0f) {
-            Text(
-                text = if (flavor == Flavor.GLASS) "Поехали!" else "ПОЕХАЛИ!",
-                color = Color.White,
-                fontFamily = NumberFont,
-                fontWeight = FontWeight.Bold,
-                fontStyle = if (flavor == Flavor.GLASS) FontStyle.Normal else FontStyle.Italic,
-                fontSize = 44.sp,
-                letterSpacing = if (flavor == Flavor.GLASS) 1.sp else 4.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .graphicsLayer {
-                        val g = lin(p, textAt, textAt + 0.25f)
-                        alpha = tA
-                        when (flavor) {
-                            Flavor.GLASS -> { val s = 0.7f + 0.3f * (1f + sin(g * 3.14f) * 0.15f) * ease(g); scaleX = s; scaleY = s }
-                            Flavor.NEON -> { if (g < 1f) translationX = (if ((g * 12).toInt() % 2 == 0) 8f else -6f) * density * (1f - g) }
-                            Flavor.TELEMETRY -> { translationX = (1f - ease(g)) * size.width * 0.6f; rotationY = (1f - ease(g)) * -30f }
-                            Flavor.DEPTH -> { val s = 0.3f + 0.7f * ease(g); scaleX = s; scaleY = s; rotationX = (1f - ease(g)) * 50f; cameraDistance = 14f * density }
-                        }
-                        shadowElevation = 0f
+        KineticTitle(
+            text = if (flavor == Flavor.GLASS) "Поехали!" else "ПОЕХАЛИ!",
+            p = p, textAt = textAt, flavor = flavor, accent = accent, accent2 = accent2,
+            modifier = Modifier.align(Alignment.Center)
+        )
+    }
+}
+
+/** Отскок с перелётом: буква чуть увеличивается больше нормы и возвращается. */
+private fun backOut(x: Float): Float {
+    val t = x.coerceIn(0f, 1f) - 1f
+    return 1f + 2.70158f * t * t * t + 1.70158f * t * t
+}
+
+/**
+ * Надпись по буквам. Появление: стекло — пружинный «поп» снизу; неон — мерцание с цветными двойниками;
+ * телеметрия — въезд справа с наклоном; глубина — из камеры на экран. Уход: буквы улетают по характеру темы.
+ */
+@Composable
+private fun KineticTitle(text: String, p: Float, textAt: Float, flavor: Flavor, accent: Color, accent2: Color, modifier: Modifier) {
+    val italic = flavor != Flavor.GLASS
+    Row(modifier = modifier) {
+        text.forEachIndexed { i, ch ->
+            val a0 = textAt + i * 0.022f
+            val g = lin(p, a0, a0 + 0.17f)
+            val o = lin(p, 0.78f + i * 0.012f, 0.93f + i * 0.012f)
+            if (g <= 0f) return@forEachIndexed
+            Box {
+                // цветные двойники у неона — сбой сигнала
+                if (flavor == Flavor.NEON && (g < 1f || o > 0f)) {
+                    val k = if (g < 1f) 1f - g else o
+                    for ((col, dx) in listOf(accent to -3f, accent2 to 3f)) {
+                        Text(
+                            text = ch.toString(), color = col.copy(alpha = 0.8f * k), fontFamily = NumberFont, fontWeight = FontWeight.Bold,
+                            fontStyle = FontStyle.Italic, fontSize = 46.sp, letterSpacing = 3.sp,
+                            modifier = Modifier.graphicsLayer { translationX = dx * density * (1f + 2f * k) }
+                        )
                     }
-            )
+                }
+                Text(
+                    text = ch.toString(),
+                    color = Color.White,
+                    fontFamily = NumberFont,
+                    fontWeight = FontWeight.Bold,
+                    fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
+                    fontSize = 46.sp,
+                    letterSpacing = if (italic) 3.sp else 1.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.graphicsLayer {
+                        cameraDistance = 14f * density
+                        var al = g.coerceIn(0f, 1f)
+                        when (flavor) {
+                            Flavor.GLASS -> {
+                                val s = 0.3f + 0.7f * backOut(g)
+                                scaleX = s; scaleY = s
+                                translationY = (1f - ease(g)) * 30f * density - o * 24f * density
+                                val so = 1f + 0.4f * ease(o); scaleX *= so; scaleY *= so
+                            }
+                            Flavor.NEON -> {
+                                al = if (g >= 1f) 1f else ((g * 6f).toInt() / 6f).coerceAtLeast(0.2f)
+                                if (g < 1f) translationX = (if ((g * 14).toInt() % 2 == 0) 7f else -5f) * density * (1f - g)
+                                if (o > 0f) {
+                                    translationX = (if ((o * 16).toInt() % 2 == 0) 9f else -9f) * density * o
+                                    scaleY = 1f - 0.85f * ease(o)
+                                }
+                            }
+                            Flavor.TELEMETRY -> {
+                                translationX = (1f - ease(g)) * 260f * density - ease(o) * 700f * density
+                                rotationY = (1f - ease(g)) * -40f
+                            }
+                            Flavor.DEPTH -> {
+                                val s = (3f - 2f * ease(g)) * (1f + 2.2f * o * o)
+                                scaleX = s; scaleY = s
+                                rotationX = (1f - ease(g)) * 50f
+                            }
+                        }
+                        alpha = al * (1f - ease(o))
+                    }
+                )
+            }
         }
     }
 }
