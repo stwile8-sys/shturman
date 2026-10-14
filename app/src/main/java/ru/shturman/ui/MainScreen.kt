@@ -60,6 +60,9 @@ import ru.shturman.NavViewModel
 import ru.shturman.auth.UserInfo
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.themes.themedScreenEnter
+import ru.shturman.ui.themes.themedEnter
+import ru.shturman.ui.fx.panel
+import ru.shturman.ui.fx.pressFx
 import ru.shturman.ui.theme.ShText
 
 /**
@@ -130,6 +133,10 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         if (arrived) vm.arrived()
     }
 
+    val fx = remember { ru.shturman.ui.fx.FxController() }
+    // Режим «просто карта»: маршрута нет и он не строится — снизу строка «Куда едем?»
+    val mapMode = !s.navigating && s.options.isEmpty() && !s.routeLoading && s.destination == null
+    androidx.compose.runtime.CompositionLocalProvider(ru.shturman.ui.fx.LocalFx provides fx) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -161,28 +168,34 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             MapButton(
                 icon = if (s.theme == 1) Icons.Filled.Star else Icons.Filled.Menu,
                 description = "Меню",
-                onClick = { showSettings = true }
+                onClick = { showSettings = true },
+                index = 0
             )
             MapButton(
                 icon = Icons.Filled.Search,
                 description = "Куда едем?",
-                onClick = { showSearch = true }
+                onClick = { showSearch = true },
+                index = 1,
+                accent = true
             )
             MapButton(
                 icon = ImageVector.vectorResource(R.drawable.ic_music),
                 description = "Музыка",
-                onClick = { showMusic = true }
+                onClick = { showMusic = true },
+                index = 2
             )
             MapButton(
                 icon = ImageVector.vectorResource(R.drawable.ic_radar),
                 description = "Антирадар",
-                onClick = { showRadar = true }
+                onClick = { showRadar = true },
+                index = 3
             )
             if (s.destination != null) {
                 MapButton(
                     icon = Icons.Filled.Close,
                     description = "Отменить маршрут",
-                    onClick = { vm.clearRoute() }
+                    onClick = { vm.clearRoute() },
+                    index = 4
                 )
             }
         }
@@ -194,10 +207,11 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
                 .padding(end = 12.dp, bottom = when {
-                    s.navigating -> 112.dp
-                    s.options.isNotEmpty() -> 300.dp
-                    else -> 24.dp
-                } + 64.dp)
+                    mapMode -> SearchPillReserve + 8.dp
+                    s.navigating -> 112.dp + 64.dp
+                    s.options.isNotEmpty() -> 300.dp + 64.dp
+                    else -> 24.dp + 64.dp
+                })
         )
 
         // Раллийный дорожник: форма дороги впереди
@@ -301,7 +315,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .navigationBarsPadding()
-                    .padding(start = 12.dp, bottom = if (s.navigating) 180.dp else 24.dp)
+                    .padding(start = 12.dp, bottom = if (s.navigating) 180.dp else if (mapMode) SearchPillReserve else 24.dp)
             )
         }
 
@@ -310,15 +324,26 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             s.options.isNotEmpty() -> 300.dp
             else -> 24.dp
         }
-        MapButton(
-            icon = if (s.theme == 1) Icons.Filled.Favorite else Icons.Filled.LocationOn,
-            description = "Где я",
-            onClick = { recenterKey++ },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(end = 12.dp, bottom = bottomPadding)
-        )
+        if (mapMode) {
+            SearchPill(
+                onSearch = { showSearch = true },
+                onLocate = { recenterKey++ },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 26.dp)
+            )
+        } else {
+            MapButton(
+                icon = if (s.theme == 1) Icons.Filled.Favorite else Icons.Filled.LocationOn,
+                description = "Где я",
+                onClick = { recenterKey++ },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 12.dp, bottom = bottomPadding)
+            )
+        }
 
         if (s.navigating && route != null) {
             val remainingSec = route.timeSec * (1.0 - progress)
@@ -406,6 +431,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         if (showRadar) AntiRadarSheet(onDismiss = { showRadar = false })
 
         StartOverlay(trigger = startKey)
+        ru.shturman.ui.fx.FxHost(fx)
+    }
     }
 }
 
@@ -416,14 +443,14 @@ private fun StatusPill(
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    val shape = ru.shturman.ui.fx.chipShape()
     Box(
         modifier = modifier
+            .themedEnter()
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clip(shape)
-            .background(ShColors.Panel.copy(alpha = 0.92f))
-            .border(1.dp, ShBorder, shape)
+            .then(if (onClick != null) Modifier.pressFx() else Modifier)
+            .panel(shape, elevation = 8.dp)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.CenterStart
