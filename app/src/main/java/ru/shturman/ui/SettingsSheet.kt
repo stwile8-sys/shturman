@@ -83,6 +83,9 @@ import ru.shturman.service.AutoPrefs
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.theme.ShText
 import ru.shturman.ui.themes.Themes
+import ru.shturman.ui.themes.themedEnter
+import ru.shturman.ui.fx.pressFx
+import androidx.compose.foundation.border
 
 /** Разделы настроек. Главный экран — список разделов, каждый открывается своей страницей. */
 private enum class Page(val title: String) {
@@ -114,7 +117,9 @@ fun SettingsSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = ShColors.Panel,
+        containerColor = androidx.compose.ui.graphics.lerp(ShColors.Panel, Color.White, 0.06f).copy(alpha = 0.97f),
+        shape = if (ShColors.L.flavor == ru.shturman.ui.themes.Flavor.TELEMETRY) androidx.compose.foundation.shape.CutCornerShape(topEnd = 26.dp)
+            else RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp),
         contentColor = ShColors.TextPrimary,
         dragHandle = { BottomSheetDefaults.DragHandle(color = ShColors.Divider) }
     ) {
@@ -124,8 +129,19 @@ fun SettingsSheet(
             targetState = page,
             transitionSpec = {
                 val forward = targetState != null
-                (slideInHorizontally(tween()) { w -> if (forward) w / 4 else -w / 4 } + fadeIn(tween())) togetherWith
-                    (slideOutHorizontally(tween()) { w -> if (forward) -w / 4 else w / 4 } + fadeOut(tween()))
+                when (ShColors.L.flavor) {
+                    ru.shturman.ui.themes.Flavor.DEPTH ->
+                        (androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(0.7f, 260f), if (forward) 0.85f else 1.1f) + fadeIn(tween())) togetherWith
+                            (androidx.compose.animation.scaleOut(tween(), if (forward) 1.1f else 0.85f) + fadeOut(tween()))
+                    ru.shturman.ui.themes.Flavor.TELEMETRY ->
+                        slideInHorizontally(androidx.compose.animation.core.spring(0.8f, 600f)) { w -> if (forward) w else -w } togetherWith
+                            slideOutHorizontally(tween()) { w -> if (forward) -w else w }
+                    ru.shturman.ui.themes.Flavor.NEON ->
+                        fadeIn(androidx.compose.animation.core.tween(160)) togetherWith fadeOut(androidx.compose.animation.core.tween(120))
+                    else ->
+                        (slideInHorizontally(androidx.compose.animation.core.spring(0.75f, 300f)) { w -> if (forward) w / 4 else -w / 4 } + fadeIn(tween())) togetherWith
+                            (slideOutHorizontally(tween()) { w -> if (forward) -w / 4 else w / 4 } + fadeOut(tween()))
+                }
             },
             label = "settingsPage"
         ) { current ->
@@ -170,32 +186,32 @@ private fun Home(user: UserInfo, s: NavState, vm: NavViewModel, isAdmin: Boolean
     Profile(user)
 
     Group("Внешний вид и голос")
-    CategoryRow(Icons.Filled.Star, Page.THEME.title,
+    CategoryRow(Icons.Filled.Star, Page.THEME.title, Page.THEME.ordinal,
         (Themes.all.getOrNull(s.theme)?.name ?: "") + if (ru.shturman.ui.themes.ThemeSounds.enabled) " · звуки темы" else "") { open(Page.THEME) }
-    CategoryRow(Icons.Filled.PlayArrow, Page.VOICE.title,
+    CategoryRow(Icons.Filled.PlayArrow, Page.VOICE.title, Page.VOICE.ordinal,
         (if (s.voiceOn) "Подсказки включены" else "Подсказки выключены") + if (s.nightVoice) " · ночной режим" else "") { open(Page.VOICE) }
 
     Group("В дороге")
-    CategoryRow(Icons.Filled.LocationOn, Page.NAV.title,
+    CategoryRow(Icons.Filled.LocationOn, Page.NAV.title, Page.NAV.ordinal,
         "Съезд: ${LEVELS.getOrElse(s.devLevel) { "Средняя" }.lowercase()}" + (if (s.fullscreen) " · полный экран" else "") + (if (s.satellite) " · спутник" else "")) { open(Page.NAV) }
-    CategoryRow(Icons.Filled.Build, Page.CAR.title,
+    CategoryRow(Icons.Filled.Build, Page.CAR.title, Page.CAR.ordinal,
         "${trimNumber(s.consumption)} л/100 км · ${trimNumber(s.fuelPrice)} ₽/л · заправки и ТО") { open(Page.CAR) }
-    CategoryRow(Icons.Filled.DateRange, Page.TRIPS.title,
+    CategoryRow(Icons.Filled.DateRange, Page.TRIPS.title, Page.TRIPS.ordinal,
         if (trips == 0) "Поездок пока нет" else "$trips ${plural(trips, "поездка", "поездки", "поездок")} за 3 месяца") { open(Page.TRIPS) }
-    CategoryRow(Icons.Filled.Place, Page.CARAVAN.title,
+    CategoryRow(Icons.Filled.Place, Page.CARAVAN.title, Page.CARAVAN.ordinal,
         s.caravanCode?.let { "Код $it · на карте ${s.members.size}" } ?: "Вы не в караване") { open(Page.CARAVAN) }
 
     Group("Система")
-    CategoryRow(Icons.Filled.Notifications, Page.NOTIF.title,
+    CategoryRow(Icons.Filled.Notifications, Page.NOTIF.title, Page.NOTIF.ordinal,
         listOfNotNull(
             if (AutoPrefs.quietHours(ctx)) "тихие часы" else null,
             if (AutoPrefs.btAutostart(ctx)) "Bluetooth" else null,
             if (AutoPrefs.chargeAutostart(ctx)) "зарядка" else null
         ).joinToString(" · ").ifEmpty { "Итог поездки, тихие часы, автозапуск" }.replaceFirstChar { it.uppercase() }) { open(Page.NOTIF) }
-    CategoryRow(Icons.Filled.Settings, Page.DATA.title, "Копия в аккаунте, кэш, сброс") { open(Page.DATA) }
-    CategoryRow(Icons.Filled.Lock, Page.PRIVACY.title,
+    CategoryRow(Icons.Filled.Settings, Page.DATA.title, Page.DATA.ordinal, "Копия в аккаунте, кэш, сброс") { open(Page.DATA) }
+    CategoryRow(Icons.Filled.Lock, Page.PRIVACY.title, Page.PRIVACY.ordinal,
         (if (s.shareData) "Обучение включено" else "Обучение выключено") + " · отчёт разработчику") { open(Page.PRIVACY) }
-    if (isAdmin) CategoryRow(Icons.Filled.Edit, Page.ADMIN.title, "Коды активации") { open(Page.ADMIN) }
+    if (isAdmin) CategoryRow(Icons.Filled.Edit, Page.ADMIN.title, Page.ADMIN.ordinal, "Коды активации") { open(Page.ADMIN) }
 
     Spacer(Modifier.height(12.dp))
     TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth().height(48.dp)) {
@@ -232,19 +248,26 @@ private fun Group(title: String) {
 }
 
 @Composable
-private fun CategoryRow(icon: ImageVector, title: String, summary: String, onClick: () -> Unit) {
+private fun CategoryRow(icon: ImageVector, title: String, index: Int, summary: String, onClick: () -> Unit) {
+    val shape = ru.shturman.ui.fx.chipShape()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
+            .themedEnter(index)
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(ShColors.SearchField)
+            .pressFx()
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.06f))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
         Box(
-            modifier = Modifier.size(40.dp).clip(CircleShape).background(ShColors.Accent.copy(alpha = 0.16f)),
+            modifier = Modifier
+                .size(42.dp)
+                .clip(if (ShColors.L.flavor == ru.shturman.ui.themes.Flavor.TELEMETRY) ru.shturman.ui.fx.chipShape() else RoundedCornerShape(14.dp))
+                .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(ShColors.Accent.copy(alpha = 0.30f), ShColors.Accent2.copy(alpha = 0.12f)))),
             contentAlignment = Alignment.Center
         ) {
             Icon(imageVector = icon, contentDescription = null, tint = ShColors.Accent, modifier = Modifier.size(22.dp))
@@ -560,15 +583,14 @@ private fun PrivacyPage(user: UserInfo, s: NavState, vm: NavViewModel) {
     Hint(stringResource(R.string.s_0f3468a4))
 
     Section("Синхронизация")
-    Button(
-        onClick = vm::syncNow,
+    ru.shturman.ui.fx.GlowButton(
+        text = if (s.syncing) "Синхронизирую…" else "Синхронизировать",
+        onClick = { vm.syncNow() },
         enabled = !s.syncing,
-        modifier = Modifier.fillMaxWidth().height(48.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = ShColors.Accent, contentColor = ShColors.Background)
-    ) {
-        Text(text = if (s.syncing) "Синхронизирую…" else "Синхронизировать", style = ShText.Button)
-    }
+        burst = 0f,
+        height = 52.dp,
+        modifier = Modifier.fillMaxWidth()
+    )
     s.syncMessage?.let { Hint(it, Modifier.padding(top = 8.dp)) }
     Hint("В фоне синхронизация идёт сама раз в 2 часа, когда есть интернет.", Modifier.padding(top = 6.dp))
 
@@ -608,12 +630,18 @@ private fun plainButton() = ButtonDefaults.buttonColors(containerColor = ShColor
 @Composable
 private fun WideButton(text: String, onClick: () -> Unit) {
     Spacer(Modifier.height(8.dp))
-    Button(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(48.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = plainButton()
-    ) { Text(text, style = ShText.Small) }
+    val shape = ru.shturman.ui.fx.chipShape()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .pressFx()
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.07f))
+            .border(1.dp, Color.White.copy(alpha = 0.10f), shape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { Text(text, color = ShColors.TextPrimary, style = ShText.Small) }
 }
 
 @Composable

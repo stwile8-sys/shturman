@@ -1111,7 +1111,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             .remove("voice").remove("fullscreen").remove("satellite").remove("overspeed").remove("night_voice")
             .remove("radar").remove("card_percent").remove("card_distance").remove("card_eta")
             .remove("card_remaining").remove("card_fuel").remove("consumption").remove("fuel_price")
-            .remove("dev_level").remove("theme_sounds").remove("turn_vibro")
+            .remove("dev_level").remove("theme_sounds").remove("turn_vibro").remove("map3d")
             .apply()
         ThemeSounds.enabled = true
         deviation.level = DeviationLevel.MEDIUM
@@ -1120,7 +1120,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(
                 voiceOn = true, fullscreen = false, satellite = false, overspeedSound = true, nightVoice = true,
                 radarOn = true, cardPercent = true, cardDistance = true, cardEta = true, cardRemaining = false,
-                cardFuel = false, consumption = 8.0f, fuelPrice = 60.0f, devLevel = 1, turnVibro = true
+                cardFuel = false, consumption = 8.0f, fuelPrice = 60.0f, devLevel = 1, turnVibro = true, map3d = true
             )
         }
     }
