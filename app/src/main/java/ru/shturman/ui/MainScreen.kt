@@ -165,12 +165,14 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 .align(Alignment.TopStart)
                 .statusBarsPadding()
                 .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            MapButton(
-                icon = if (s.theme == 1) Icons.Filled.Star else Icons.Filled.Menu,
-                description = "Меню",
-                onClick = { showSettings = true },
+            MapCapsule(
+                items = listOf(
+                    CapsuleItem(if (s.theme == 1) Icons.Filled.Star else Icons.Filled.Menu, "Меню") { showSettings = true },
+                    CapsuleItem(ImageVector.vectorResource(R.drawable.ic_music), "Музыка") { showMusic = true },
+                    CapsuleItem(ImageVector.vectorResource(R.drawable.ic_radar), "Антирадар") { showRadar = true }
+                ),
                 index = 0
             )
             MapButton(
@@ -180,24 +182,12 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 index = 1,
                 accent = true
             )
-            MapButton(
-                icon = ImageVector.vectorResource(R.drawable.ic_music),
-                description = "Музыка",
-                onClick = { showMusic = true },
-                index = 2
-            )
-            MapButton(
-                icon = ImageVector.vectorResource(R.drawable.ic_radar),
-                description = "Антирадар",
-                onClick = { showRadar = true },
-                index = 3
-            )
             if (s.destination != null) {
                 MapButton(
                     icon = Icons.Filled.Close,
                     description = "Отменить маршрут",
                     onClick = { vm.clearRoute() },
-                    index = 4
+                    index = 2
                 )
             }
         }

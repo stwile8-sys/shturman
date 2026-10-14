@@ -43,6 +43,8 @@ import ru.shturman.routing.fuelText
 import ru.shturman.ui.fx.GlowButton
 import ru.shturman.ui.fx.GrabHandle
 import ru.shturman.ui.fx.chipShape
+import ru.shturman.ui.fx.choiceChipShape
+import ru.shturman.ui.fx.closeButtonShape
 import ru.shturman.ui.fx.panel
 import ru.shturman.ui.fx.panelShape
 import ru.shturman.ui.fx.pressFx
@@ -103,8 +105,8 @@ fun RoutePanel(
                     modifier = Modifier
                         .size(44.dp)
                         .pressFx()
-                        .clip(if (l.flavor == Flavor.TELEMETRY) chipShape() else CircleShape)
-                        .background(Color.White.copy(alpha = 0.10f))
+                        .clip(closeButtonShape())
+                        .background(Color.White.copy(alpha = 0.09f))
                         .clickable { ThemeSounds.play(ThemeSound.TAP); onClose() },
                     contentAlignment = Alignment.Center
                 ) { Icon(Icons.Filled.Close, contentDescription = "Отменить маршрут", tint = ShColors.TextPrimary, modifier = Modifier.size(20.dp)) }
@@ -225,21 +227,24 @@ private fun TowerRow(index: Int, pos: String, name: String, meta: String, time: 
     }
 }
 
-/** Плашка времени выезда. */
+/** Плашка времени выезда: тонкая обводка, выбранная подсвечена цветом темы. */
 @Composable
 private fun DepartChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val shape = chipShape()
+    val shape = choiceChipShape()
+    val acc = ShColors.Accent
+    val bg by animateColorAsState(if (selected) acc.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.06f), label = "chipBg")
+    val edge by animateColorAsState(if (selected) acc else Color.White.copy(alpha = 0.12f), label = "chipEdge")
     Box(
         modifier = Modifier
             .heightIn(min = 40.dp)
             .pressFx()
             .clip(shape)
-            .background(if (selected) ShColors.Accent else Color.White.copy(alpha = 0.07f))
-            .border(1.dp, if (selected) ShColors.Accent else Color.White.copy(alpha = 0.10f), shape)
+            .background(bg)
+            .border(1.dp, edge, shape)
             .clickable { ThemeSounds.play(ThemeSound.TAP); onClick() }
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+            .padding(horizontal = 15.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, color = if (selected) ShColors.OnAccent else ShColors.TextPrimary, style = ShText.Small.copy(fontSize = 13.sp))
+        Text(label, color = if (selected) acc else ShColors.TextSecondary, style = ShText.Small.copy(fontSize = 13.sp))
     }
 }

@@ -1,6 +1,5 @@
 package ru.shturman.ui.fx
 
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -28,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -45,17 +43,17 @@ import ru.shturman.ui.themes.ThemeSounds
 
 /** Форма главной кнопки по характеру темы. */
 fun glowButtonShape(): Shape = when (ShColors.L.flavor) {
-    Flavor.TELEMETRY -> CutCornerShape(topEnd = 18.dp, bottomStart = 18.dp)
-    Flavor.NEON -> RoundedCornerShape(14.dp)
-    else -> RoundedCornerShape(20.dp)
+    Flavor.TELEMETRY -> CutCornerShape(topEnd = 16.dp, bottomStart = 16.dp)
+    Flavor.NEON -> RoundedCornerShape(15.dp)
+    else -> RoundedCornerShape(22.dp)
 }
 
 /** Градиент акцентов темы для заливок. */
 fun accentBrush(): Brush = Brush.linearGradient(listOf(ShColors.Accent, ShColors.Accent2), Offset.Zero, Offset.Infinite)
 
 /**
- * Главная кнопка («Поехали», «Войти», «Синхронизировать»): градиент двух цветов темы, бегущий блик,
- * цветное свечение, отклик на нажатие и, по желанию, взрыв частиц из её центра.
+ * Главная кнопка («Поехали», «Войти», «Синхронизировать»): ровный градиент двух цветов темы и мягкая
+ * цветная тень, без бликов и полосок. Отклик на нажатие по теме и, по желанию, взрыв частиц из центра.
  */
 @Composable
 fun GlowButton(
@@ -69,38 +67,13 @@ fun GlowButton(
     val fx = LocalFx.current
     val anchor = rememberFxAnchor()
     val l = ShColors.L
-    val shape = glowButtonShape()
-    val tr = rememberInfiniteTransition(label = "sheen")
-    val sheen by tr.animateFloat(-0.5f, 1.8f, infiniteRepeatable(tween(2800, easing = FastOutSlowInEasing)), label = "s")
-    val pulse by tr.animateFloat(0.6f, 1f, infiniteRepeatable(tween(1500), RepeatMode.Reverse), label = "p")
     val source = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
             .fxAnchor(anchor)
             .height(height)
             .pressFx()
-            .shadow(if (l.flavor == Flavor.NEON) 18.dp * pulse else 14.dp, shape, clip = false, ambientColor = l.glow, spotColor = l.glow)
-            .clip(shape)
-            .background(if (enabled) accentBrush() else Brush.linearGradient(listOf(ShColors.Divider, ShColors.SearchField)))
-            .drawWithContent {
-                drawContent()
-                if (!enabled) return@drawWithContent
-                // бегущий блик
-                val x = size.width * sheen
-                drawRect(
-                    Brush.linearGradient(
-                        listOf(Color.Transparent, Color.White.copy(alpha = 0.45f), Color.Transparent),
-                        Offset(x - size.height, 0f), Offset(x + size.height * 0.2f, size.height)
-                    )
-                )
-                // клетка финиша у телеметрии
-                if (l.flavor == Flavor.TELEMETRY) {
-                    val c = size.height / 4f
-                    for (r in 0 until 4) for (k in 0 until 3) {
-                        if ((r + k) % 2 == 0) drawRect(ShColors.OnAccent.copy(alpha = 0.28f), Offset(size.width - c * (k + 1) - 6f, r * c), androidx.compose.ui.geometry.Size(c, c))
-                    }
-                }
-            }
+            .accentButton(glowButtonShape(), elevation = 14.dp, enabled = enabled)
             .clickable(interactionSource = source, indication = null, enabled = enabled) {
                 ThemeSounds.play(ThemeSound.TAP)
                 if (burst > 0f) fx.burst(anchor.center, burst)
@@ -111,7 +84,7 @@ fun GlowButton(
         Text(
             text = text,
             color = if (enabled) ShColors.OnAccent else ShColors.TextSecondary,
-            style = ShText.Button.copy(fontSize = 18.sp, letterSpacing = if (l.flavor == Flavor.GLASS) 0.3.sp else 1.5.sp)
+            style = ShText.Button.copy(fontSize = 18.sp, letterSpacing = if (l.flavor == Flavor.GLASS) 0.3.sp else 1.2.sp)
         )
     }
 }
