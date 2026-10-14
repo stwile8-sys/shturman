@@ -48,6 +48,8 @@ fun UpdatePrompt(enabled: Boolean) {
     val update = info ?: return
     val downloading = progress != null
     AlertDialog(
+        containerColor = androidx.compose.ui.graphics.lerp(ru.shturman.ui.theme.ShColors.Panel, androidx.compose.ui.graphics.Color.White, 0.07f),
+        shape = ru.shturman.ui.fx.panelShape(28.dp),
         onDismissRequest = { if (!downloading) info = null },
         title = { Text(stringResource(ru.shturman.R.string.s_1c592b84)) },
         text = {

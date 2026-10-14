@@ -25,6 +25,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import ru.shturman.ui.themes.themedEnter
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
+import ru.shturman.ui.fx.panel
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -80,7 +84,8 @@ fun AccessGate(uid: String, onSignOut: () -> Unit, content: @Composable () -> Un
                     Text(it, color = ShColors.Danger, fontSize = 14.sp, textAlign = TextAlign.Center)
                 }
                 Spacer(Modifier.height(16.dp))
-                Button(
+                ru.shturman.ui.fx.GlowButton(
+                    text = if (busy) "Проверяю…" else "Активировать",
                     onClick = {
                         busy = true
                         scope.launch {
@@ -90,10 +95,9 @@ fun AccessGate(uid: String, onSignOut: () -> Unit, content: @Composable () -> Un
                         }
                     },
                     enabled = !busy && code.length >= 6,
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ShColors.Accent, contentColor = ShColors.Background)
-                ) { Text(if (busy) "Проверяю…" else "Активировать", style = ShText.Button) }
+                    burst = 0f,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 TextButton(onClick = onSignOut) { Text(stringResource(ru.shturman.R.string.s_6d4183b7), color = ShColors.TextSecondary, style = ShText.Small) }
             }
         }
@@ -116,14 +120,19 @@ fun AccessGate(uid: String, onSignOut: () -> Unit, content: @Composable () -> Un
 
 @Composable
 private fun GateBox(content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(ShColors.Background)
-            .padding(28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) { content() }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        ru.shturman.ui.fx.AuroraBackground()
+        Column(
+            modifier = Modifier
+                .padding(20.dp)
+                .widthIn(max = 460.dp)
+                .themedEnter()
+                .panel(ru.shturman.ui.fx.panelShape(28.dp), elevation = 24.dp, glowing = true)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) { content() }
+    }
 }
 
 @Composable
