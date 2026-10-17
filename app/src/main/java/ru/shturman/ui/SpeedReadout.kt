@@ -7,7 +7,14 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -29,7 +36,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ru.shturman.ui.fx.panel
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.theme.ShText
 import ru.shturman.ui.themes.Flavor
@@ -57,12 +63,17 @@ fun SpeedReadout(kmh: Int, over: Boolean, modifier: Modifier = Modifier) {
     val pulse by tr.animateFloat(0.3f, 1f, infiniteRepeatable(tween(420), RepeatMode.Reverse), label = "p")
     val accent = if (over) ShColors.Danger else ShColors.Accent
     val accent2 = if (over) ShColors.Danger else ShColors.Accent2
-    val boxSize = when (l.flavor) { Flavor.TELEMETRY -> 92.dp; Flavor.APEX -> 86.dp; else -> 80.dp }
+    // Крупно и на плотном фоне: скорость должна читаться с одного взгляда, поверх любой карты
+    val boxSize = when (l.flavor) { Flavor.TELEMETRY -> 104.dp; else -> 96.dp }
     Box(
         modifier = modifier
             .themedEnter()
             .size(boxSize)
-            .panel(shape, elevation = 10.dp, glowing = over)
+            .shadow(14.dp, shape, clip = false, ambientColor = Color.Black, spotColor = if (over) ShColors.Danger else Color.Black)
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(lerp(ShColors.Panel, Color.White, 0.10f), ShColors.Panel)))
+            .background(if (over) ShColors.Danger.copy(alpha = 0.22f) else Color.Transparent)
+            .border(1.5.dp, if (over) ShColors.Danger else Color.White.copy(alpha = 0.18f), shape)
             .drawWithContent {
                 drawContent()
                 if (l.flavor == Flavor.APEX) {
@@ -114,14 +125,20 @@ fun SpeedReadout(kmh: Int, over: Boolean, modifier: Modifier = Modifier) {
             },
         contentAlignment = if (l.flavor == Flavor.TELEMETRY) Alignment.BottomCenter else Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = if (l.flavor == Flavor.TELEMETRY) Modifier.padding(bottom = 8.dp) else Modifier
+        ) {
             ThemedText(
                 // у табло APEX три разряда: погасшие сегменты видны и у пустых
                 text = if (l.flavor == Flavor.APEX) kmh.toString().padStart(3) else kmh.toString(),
                 color = if (over) ShColors.Danger else ShColors.TextPrimary,
-                style = ShText.Distance.copy(fontSize = when (l.flavor) { Flavor.TELEMETRY -> 20.sp; Flavor.APEX -> 28.sp; else -> 24.sp })
+                style = ShText.Distance.copy(
+                    fontSize = when (l.flavor) { Flavor.TELEMETRY -> 30.sp; Flavor.APEX -> 32.sp; else -> 36.sp },
+                    shadow = Shadow(Color.Black.copy(alpha = 0.75f), Offset(0f, 2f), 6f)
+                )
             )
-            Text(text = stringResource(ru.shturman.R.string.s_fee7a82e), color = ShColors.TextSecondary, fontSize = 10.sp)
+            Text(text = stringResource(ru.shturman.R.string.s_fee7a82e), color = ShColors.TextSecondary, fontSize = 11.sp)
         }
     }
 }
