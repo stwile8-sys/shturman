@@ -24,6 +24,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -166,6 +169,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
     var skeletonH by remember { mutableStateOf(0.dp) }
     var paceH by remember { mutableStateOf(0.dp) }
     fun Modifier.measureH(set: (Dp) -> Unit) = this.onSizeChanged { set(with(density) { it.height.toDp() }) }
+    // Карта на весь экран, а панели — над системными кнопками внизу: их высоту учитываем для стрелки
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     // Режим «просто карта»: маршрута нет и он не строится — снизу строка «Куда едем?»
     val mapMode = !s.navigating && s.options.isEmpty() && !s.routeLoading && s.destination == null
     androidx.compose.runtime.CompositionLocalProvider(ru.shturman.ui.fx.LocalFx provides fx) {
@@ -188,7 +193,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             satellite = s.satellite,
             themeId = s.theme,
             map3d = s.map3d,
-            bottomInset = if (s.navigating) navBottomH else 0.dp,
+            // стрелка — на высоте кнопки «Где я»: над нижней строкой отступ 8 dp и половина кнопки 28 dp
+            markerFromBottom = if (s.navigating) navBottomH + 36.dp + navBarBottom else 0.dp,
             onFix = { here, speed, accuracy, course, altitude -> vm.onFix(here, speed, accuracy, course, altitude) }
         )
 

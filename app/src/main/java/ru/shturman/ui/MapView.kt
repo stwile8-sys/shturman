@@ -86,8 +86,8 @@ fun DarkMap(
     satellite: Boolean = false,
     themeId: Int = 0,
     map3d: Boolean = true,
-    /** Высота нижней панели в поездке: стрелка держится над ней, в нижней части экрана. */
-    bottomInset: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(0f),
+    /** Где держать стрелку в поездке: расстояние от низа экрана до её центра (0 — по центру, как обычно). */
+    markerFromBottom: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(0f),
     onFix: (LatLon, Float, Float, Float, Float) -> Snap? = { _, _, _, _, _ -> null }
 ) {
     val context = LocalContext.current
@@ -418,23 +418,32 @@ fun DarkMap(
         }
     }
 
-    // В поездке стрелка стоит в нижней части экрана, чуть выше нижней панели: впереди видно больше дороги
-    // и поворотов. Камера сдвигается отступом сверху: центр кадра = (высота + отступ) / 2.
+    // В поездке стрелка стоит в нижней части экрана — на высоте кнопки «Где я» (markerFromBottom — расстояние
+    // от низа экрана): впереди видно больше дороги и поворотов. Камера сдвигается отступом сверху:
+    // центр кадра = (высота + отступ) / 2. Подлёт камеры при старте и возврат к стрелке могут сбить отступ,
+    // поэтому в поездке он проверяется каждые полторы секунды и при необходимости ставится заново.
     val densityNow = androidx.compose.ui.platform.LocalDensity.current
-    LaunchedEffect(map, style, hasPermission, navigating, bottomInset) {
+    LaunchedEffect(map, style, hasPermission, navigating, markerFromBottom) {
         val m = map ?: return@LaunchedEffect
-        // компонент стрелки включается чуть позже карты — подождём его
         var tries = 0
         while (!m.locationComponent.isLocationComponentActivated && tries < 40) { delay(250); tries++ }
         if (!m.locationComponent.isLocationComponentActivated) return@LaunchedEffect
-        val h = mapView.height.toFloat()
-        if (h <= 0f) return@LaunchedEffect
-        val top = if (navigating) {
-            val above = with(densityNow) { bottomInset.toPx() + androidx.compose.ui.unit.Dp(96f).toPx() } // стрелка — на 96 dp выше панели
-            val y = (h - above).coerceAtLeast(h * 0.5f)
-            (2f * y - h).coerceIn(0f, h * 0.6f)
-        } else 0f
-        runCatching { m.locationComponent.paddingWhileTracking(doubleArrayOf(0.0, top.toDouble(), 0.0, 0.0), 700L, null) }
+        val fromBottom = with(densityNow) { markerFromBottom.toPx() }
+        while (true) {
+            val h = mapView.height.toFloat()
+            if (h > 0f) {
+                val top = if (navigating && fromBottom > 0f) {
+                    val y = (h - fromBottom).coerceAtLeast(h * 0.5f)
+                    (2f * y - h).coerceIn(0f, h * 0.7f)
+                } else 0f
+                val current = runCatching { m.cameraPosition.padding?.getOrNull(1) }.getOrNull() ?: 0.0
+                if (kotlin.math.abs(current - top) > 2.0) {
+                    runCatching { m.locationComponent.paddingWhileTracking(doubleArrayOf(0.0, top.toDouble(), 0.0, 0.0), 400L, null) }
+                }
+            }
+            if (!navigating) break
+            delay(1500)
+        }
     }
 
     // «Поехали»: пока идёт заставка, камера плавно подлетает к стрелке
