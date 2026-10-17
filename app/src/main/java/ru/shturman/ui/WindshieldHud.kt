@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,6 +42,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -54,14 +61,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import ru.shturman.NavState
+import ru.shturman.routing.LatLon
 import ru.shturman.routing.OVERSPEED_TOLERANCE_KMH
+import ru.shturman.routing.bearingDeg
 import ru.shturman.ui.theme.NumberFont
 import java.util.Locale
+import kotlin.math.cos
+import kotlin.math.sin
 
 private val HudWhite = Color(0xFFFFFFFF)
 private val HudDim = Color(0xFFB8C2CC)
 private val HudRed = Color(0xFFFF3B30)
 private val HudLimitRed = Color(0xFFFF2D2D)
+private val HudRouteColor = Color(0xFF3DDCFF)
 
 /** С этого расстояния до поворота полоска начинает укорачиваться, метры. */
 private const val BAR_FROM_M = 600.0
@@ -183,7 +195,11 @@ private fun HudPicture(s: NavState, modifier: Modifier) {
         if (landscape) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 if (navigating) {
-                    Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) { TurnBlock(s, u) }
+                    // слева поворот и под ним линия маршрута впереди
+                    Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        TurnBlock(s, u)
+                        HudRoute(s, u, Modifier.weight(1f).fillMaxWidth())
+                    }
                     Spacer(Modifier.width(u * 0.08f))
                 }
                 Column(
@@ -200,14 +216,95 @@ private fun HudPicture(s: NavState, modifier: Modifier) {
             Column(
                 Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = if (navigating) Arrangement.SpaceEvenly else Arrangement.Center
+                verticalArrangement = if (navigating) Arrangement.Top else Arrangement.Center
             ) {
-                if (navigating) TurnBlock(s, u)
+                if (navigating) {
+                    TurnBlock(s, u)
+                    // линия маршрута впереди занимает всё место между поворотом и скоростью
+                    HudRoute(s, u, Modifier.weight(1f).fillMaxWidth())
+                }
                 SpeedBlock(s, u)
                 HudText(footer, u * 0.075f, HudDim)
             }
         }
     }
+}
+
+/**
+ * Линия маршрута впереди, «по ходу движения вверх», как схема: видно, куда уходит дорога и где поворот.
+ * Без карты и плиток — только несколько десятков точек линии, поэтому почти не тратит батарею.
+ * Сколько видно вперёд — от скорости: 15 секунд пути, от 220 до 600 м.
+ */
+@Composable
+private fun HudRoute(s: NavState, u: Dp, modifier: Modifier) {
+    val route = s.route
+    val pos = s.position
+    val stroke = with(LocalDensity.current) { (u * 0.05f).toPx() }
+    Canvas(modifier.clipToBounds()) {
+        if (route == null || pos == null || route.points.size < 2 || route.cumM.size != route.points.size) return@Canvas
+        val pts = route.points
+        val cum = route.cumM
+        val aheadM = (s.speedKmh / 3.6 * 15.0).coerceIn(220.0, 600.0)
+        val t0 = pos.traveledM.coerceIn(0.0, cum.last())
+        val here = pointOnRoute(pts, cum, t0, pos.index)
+        // направление дороги в нашей точке: на 20 м вперёд (в самом конце — с 20 м назад)
+        val h = Math.toRadians(
+            if (t0 + 20.0 <= cum.last()) bearingDeg(here, pointOnRoute(pts, cum, t0 + 20.0, pos.index))
+            else bearingDeg(pointOnRoute(pts, cum, t0 - 20.0, pos.index), here)
+        )
+        val sinH = sin(h)
+        val cosH = cos(h)
+        val kx = 111_320.0 * cos(Math.toRadians(here.lat))
+        val scale = (size.height * 0.86f) / aheadM.toFloat()
+        val cx = size.width / 2f
+        val baseY = size.height - stroke * 1.6f
+        fun screen(p: LatLon): Offset {
+            val x = (p.lon - here.lon) * kx
+            val y = (p.lat - here.lat) * 110_540.0
+            val forward = x * sinH + y * cosH
+            val right = x * cosH - y * sinH
+            return Offset(cx + (right * scale).toFloat(), baseY - (forward * scale).toFloat())
+        }
+        val line = Path()
+        val from = (t0 - 25.0).coerceAtLeast(0.0)
+        val to = (t0 + aheadM).coerceAtMost(cum.last())
+        val a = screen(pointOnRoute(pts, cum, from, pos.index))
+        line.moveTo(a.x, a.y)
+        var i = (pos.index - 30).coerceAtLeast(0)
+        while (i < pts.size && cum[i] <= from) i++
+        while (i < pts.size && cum[i] < to) {
+            val p = screen(pts[i])
+            line.lineTo(p.x, p.y)
+            i++
+        }
+        val b = screen(pointOnRoute(pts, cum, to, pos.index))
+        line.lineTo(b.x, b.y)
+        drawPath(line, HudRouteColor, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        // финиш, если он уже виден
+        if (to >= cum.last() - 1.0) drawCircle(HudWhite, stroke * 0.9f, b)
+        // наша машина — белый наконечник внизу по центру
+        val w = stroke * 1.2f
+        val car = Path().apply {
+            moveTo(cx, baseY - w * 1.5f)
+            lineTo(cx + w, baseY + w)
+            lineTo(cx, baseY + w * 0.35f)
+            lineTo(cx - w, baseY + w)
+            close()
+        }
+        drawPath(car, HudWhite)
+    }
+}
+
+/** Точка на линии маршрута в d метрах от начала. Ищет рядом с подсказкой index, чтобы не перебирать весь маршрут. */
+private fun pointOnRoute(pts: List<LatLon>, cum: DoubleArray, d: Double, index: Int): LatLon {
+    if (d <= 0.0) return pts.first()
+    if (d >= cum.last()) return pts.last()
+    var i = index.coerceIn(0, pts.size - 2)
+    while (i > 0 && cum[i] > d) i--
+    while (i < pts.size - 2 && cum[i + 1] < d) i++
+    val seg = cum[i + 1] - cum[i]
+    val t = if (seg < 1e-6) 0.0 else ((d - cum[i]) / seg).coerceIn(0.0, 1.0)
+    return LatLon(pts[i].lat + (pts[i + 1].lat - pts[i].lat) * t, pts[i].lon + (pts[i + 1].lon - pts[i].lon) * t)
 }
 
 /** Ближайший поворот: стрелка, расстояние, улица и полоска, которая укорачивается к повороту. */
