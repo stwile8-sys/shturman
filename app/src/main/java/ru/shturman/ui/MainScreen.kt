@@ -80,6 +80,24 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
     var showMusic by remember { mutableStateOf(false) }
     var showRadar by remember { mutableStateOf(false) }
     var recenterKey by remember { mutableStateOf(0) }
+    // В поездке без живого положения подсказываем, что происходит: ищем спутники, нет точного разрешения или выключена геолокация.
+    // Второе число — действие по нажатию: 1 — настройки приложения, 2 — настройки геолокации.
+    var gpsWait by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    LaunchedEffect(s.navigating) {
+        if (!s.navigating) { gpsWait = null; return@LaunchedEffect }
+        while (true) {
+            val d = ru.shturman.routing.Diag
+            gpsWait = when {
+                d.hasLiveFix(8000L) -> null
+                d.permission == "только примерное" -> "Разрешено только примерное местоположение, стрелка стоит. Нажмите и разрешите точное" to 1
+                d.permission == "нет" -> "Нет доступа к местоположению. Нажмите, чтобы разрешить" to 1
+                !d.locationOn -> "Геолокация выключена. Нажмите, чтобы включить" to 2
+                d.satSeen > 0 -> "Ищу спутники: видно ${d.satSeen}, в расчёте ${d.satUsed}. На открытом месте быстрее" to 0
+                else -> "Ищу сигнал GPS…" to 0
+            }
+            kotlinx.coroutines.delay(1000L)
+        }
+    }
     var startKey by remember { mutableStateOf(0) }
     val context = LocalContext.current
     val view = LocalView.current
@@ -274,6 +292,14 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         }
         if (s.navigating && s.notice != null) {
             pills += Triple(s.notice!!, ShColors.Accent, null)
+        }
+        gpsWait?.let { (text, action) ->
+            val click: (() -> Unit)? = when (action) {
+                1 -> ({ runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + context.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } })
+                2 -> ({ runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } })
+                else -> null
+            }
+            pills += Triple(text, ShColors.Sign3, click)
         }
         if (pills.isNotEmpty()) {
             Column(

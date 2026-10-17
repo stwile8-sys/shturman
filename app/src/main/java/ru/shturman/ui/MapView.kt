@@ -415,6 +415,19 @@ fun DarkMap(
     LaunchedEffect(startKey) {
         val m = map ?: return@LaunchedEffect
         if (startKey > 0 && m.locationComponent.isLocationComponentActivated) {
+            // Спутники ещё не поймались — ставим стрелку в начало маршрута (оттуда он и построен),
+            // чтобы камере было куда подлететь. Как придёт настоящее положение, стрелка переедет туда.
+            val r = currentRoute
+            if (!ru.shturman.routing.Diag.hasLiveFix() && r != null && r.size >= 2) {
+                runCatching {
+                    m.locationComponent.forceLocationUpdate(Location("route").apply {
+                        latitude = r[0].lat
+                        longitude = r[0].lon
+                        bearing = ru.shturman.routing.bearingDeg(r[0], r[1]).toFloat()
+                        time = System.currentTimeMillis()
+                    })
+                }
+            }
             delay(250)
             m.locationComponent.setCameraMode(
                 CameraMode.TRACKING_GPS, 2100L, START_ZOOM, null, MapCam.start, null
