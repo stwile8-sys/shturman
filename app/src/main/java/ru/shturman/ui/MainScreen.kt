@@ -12,6 +12,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -153,6 +158,14 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
     }
 
     val fx = remember { ru.shturman.ui.fx.FxController() }
+    // Высоты нижних блоков и карточки поворота: по ним ставятся остальные элементы, чтобы ничего не перекрывалось
+    val density = LocalDensity.current
+    var navBottomH by remember { mutableStateOf(0.dp) }
+    var pillH by remember { mutableStateOf(0.dp) }
+    var panelH by remember { mutableStateOf(0.dp) }
+    var skeletonH by remember { mutableStateOf(0.dp) }
+    var paceH by remember { mutableStateOf(0.dp) }
+    fun Modifier.measureH(set: (Dp) -> Unit) = this.onSizeChanged { set(with(density) { it.height.toDp() }) }
     // Режим «просто карта»: маршрута нет и он не строится — снизу строка «Куда едем?»
     val mapMode = !s.navigating && s.options.isEmpty() && !s.routeLoading && s.destination == null
     androidx.compose.runtime.CompositionLocalProvider(ru.shturman.ui.fx.LocalFx provides fx) {
@@ -175,6 +188,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             satellite = s.satellite,
             themeId = s.theme,
             map3d = s.map3d,
+            bottomInset = if (s.navigating) navBottomH else 0.dp,
             onFix = { here, speed, accuracy, course, altitude -> vm.onFix(here, speed, accuracy, course, altitude) }
         )
 
@@ -210,21 +224,6 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             }
         }
 
-        // Мелкие показания в правом нижнем углу: компас, высота, GPS, батарея, сеть, погода
-        HudCorner(
-            hud = s.hud,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(end = 12.dp, bottom = when {
-                    mapMode -> SearchPillReserve + 8.dp
-                    s.navigating -> 112.dp + 64.dp
-                    s.options.isNotEmpty() && LocalConfiguration.current.screenWidthDp >= 700 -> 24.dp + 64.dp
-                    s.options.isNotEmpty() -> (LocalConfiguration.current.screenHeightDp * 0.36f + 394f).dp
-                    else -> 24.dp + 64.dp
-                })
-        )
-
         // Раллийный дорожник: форма дороги впереди
         if (s.navigating) {
             val turn = s.turn
@@ -237,6 +236,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
+                    .measureH { paceH = it }
                     .padding(12.dp)
             )
         }
@@ -306,44 +306,54 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .statusBarsPadding()
-                    .padding(start = 72.dp, top = 12.dp, end = if (s.navigating) 190.dp else 12.dp),
+                    .padding(start = 80.dp, top = if (s.navigating) paceH + 4.dp else 12.dp, end = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 pills.forEach { (text, color, click) -> StatusPill(text = text, color = color, onClick = click) }
             }
         }
 
-        // Знак ограничения скорости
-        val limit = s.limitKmh
-        if (s.navigating && limit != null) {
-            SpeedLimitSign(
-                limit = limit,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .navigationBarsPadding()
-                    .padding(start = 12.dp, bottom = 112.dp)
-            )
+        // Высота занятого низа экрана в текущем режиме: над ним ставятся скорость, показания и «Где я»
+        val bottomUi = when {
+            s.navigating && route != null -> navBottomH
+            s.options.isNotEmpty() -> panelH
+            s.routeLoading -> skeletonH
+            mapMode -> pillH
+            else -> 0.dp
         }
 
-        // Текущая скорость
-        if (s.navigating || s.speedKmh >= 5) {
-            val over = s.limitKmh != null && s.speedKmh > s.limitKmh!! + 2
+        // Справа над нижним блоком: мелкие показания (компас, высота, GPS, батарея, сеть, погода) и «Где я»
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 12.dp, bottom = bottomUi + 8.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            HudCorner(hud = s.hud)
+            if (!mapMode) {
+                MapButton(
+                    icon = if (s.theme == 1) Icons.Filled.Favorite else Icons.Filled.LocationOn,
+                    description = "Где я",
+                    onClick = { recenterKey++ },
+                    index = 3
+                )
+            }
+        }
+
+        // Скорость без маршрута — слева над нижним блоком
+        if (!s.navigating && s.speedKmh >= 5) {
             SpeedReadout(
                 kmh = s.speedKmh,
-                over = over,
+                over = false,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .navigationBarsPadding()
-                    .padding(start = 12.dp, bottom = if (s.navigating) 180.dp else if (mapMode) SearchPillReserve else 24.dp)
+                    .padding(start = 12.dp, bottom = bottomUi + 8.dp)
             )
         }
 
-        val bottomPadding = when {
-            s.navigating -> 112.dp
-            s.options.isNotEmpty() && LocalConfiguration.current.screenWidthDp >= 700 -> 24.dp
-            s.options.isNotEmpty() -> (LocalConfiguration.current.screenHeightDp * 0.36f + 330f).dp
-            else -> 24.dp
-        }
         if (mapMode) {
             SearchPill(
                 onSearch = { showSearch = true },
@@ -351,37 +361,44 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
+                    .measureH { pillH = it }
                     .padding(start = 16.dp, end = 16.dp, bottom = 26.dp)
-            )
-        } else {
-            MapButton(
-                icon = if (s.theme == 1) Icons.Filled.Favorite else Icons.Filled.LocationOn,
-                description = "Где я",
-                onClick = { recenterKey++ },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(end = 12.dp, bottom = bottomPadding)
             )
         }
 
         if (s.navigating && route != null) {
+            // Низ в поездке — одна строка: слева знак ограничения над скоростью, справа карточка пути.
+            // Всё в одном ряду, поэтому ничего ни на что не налезает.
             val remainingSec = route.timeSec * (1.0 - progress)
-            ProgressCard(
+            val limit = s.limitKmh
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(12.dp),
-                progress = progress,
-                traveledKm = formatKm(traveled),
-                totalKm = formatKm(total),
-                eta = formatClock(System.currentTimeMillis() + (remainingSec * 1000).toLong()),
-                showPercent = s.cardPercent,
-                showDistance = s.cardDistance,
-                showEta = s.cardEta,
-                remaining = if (s.cardRemaining) "осталось ${formatDuration(remainingSec)} · ${formatKm(total - traveled)} км" else null,
-                fuel = if (s.cardFuel) fuelText(fuelLiters(route.lengthM, route.timeSec, s.consumption.toDouble()), s.fuelPrice.toDouble()) else null
-            )
+                    .measureH { navBottomH = it }
+                    .padding(12.dp)
+                    .widthIn(max = 760.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (limit != null) SpeedLimitSign(limit = limit)
+                    SpeedReadout(kmh = s.speedKmh, over = limit != null && s.speedKmh > limit + 2)
+                }
+                ProgressCard(
+                    modifier = Modifier.weight(1f),
+                    progress = progress,
+                    traveledKm = formatKm(traveled),
+                    totalKm = formatKm(total),
+                    eta = formatClock(System.currentTimeMillis() + (remainingSec * 1000).toLong()),
+                    showPercent = s.cardPercent,
+                    showDistance = s.cardDistance,
+                    showEta = s.cardEta,
+                    remaining = if (s.cardRemaining) "осталось ${formatDuration(remainingSec)} · ${formatKm(total - traveled)} км" else null,
+                    fuel = if (s.cardFuel) fuelText(fuelLiters(route.lengthM, route.timeSec, s.consumption.toDouble()), s.fuelPrice.toDouble()) else null
+                )
+            }
         } else if (s.options.isNotEmpty()) {
             RoutePanel(
                 options = s.options,
@@ -401,6 +418,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
+                    .measureH { panelH = it }
                     .padding(12.dp)
             )
         } else if (s.routeLoading) {
@@ -409,6 +427,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
+                    .measureH { skeletonH = it }
                     .padding(12.dp)
             )
         }
