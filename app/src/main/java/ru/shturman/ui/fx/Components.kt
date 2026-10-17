@@ -45,6 +45,7 @@ import ru.shturman.ui.themes.ThemeSounds
 fun glowButtonShape(): Shape = when (ShColors.L.flavor) {
     Flavor.TELEMETRY -> CutCornerShape(topEnd = 16.dp, bottomStart = 16.dp)
     Flavor.NEON -> RoundedCornerShape(15.dp)
+    Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
     else -> RoundedCornerShape(22.dp)
 }
 
@@ -84,7 +85,7 @@ fun GlowButton(
         Text(
             text = text,
             color = if (enabled) ShColors.OnAccent else ShColors.TextSecondary,
-            style = ShText.Button.copy(fontSize = 18.sp, letterSpacing = if (l.flavor == Flavor.GLASS) 0.3.sp else 1.2.sp)
+            style = ShText.Button.copy(fontSize = 18.sp, letterSpacing = when (l.flavor) { Flavor.GLASS -> 0.3.sp; Flavor.APEX -> 4.sp; else -> 1.2.sp })
         )
     }
 }
@@ -99,7 +100,11 @@ fun GrabHandle(modifier: Modifier = Modifier) {
 @Composable
 fun AccentTile(modifier: Modifier = Modifier, size: Dp = 54.dp, content: @Composable () -> Unit) {
     val l = ShColors.L
-    val shape = if (l.flavor == Flavor.TELEMETRY) CutCornerShape(topEnd = 12.dp, bottomStart = 12.dp) else RoundedCornerShape(size * 0.33f)
+    val shape = when (l.flavor) {
+        Flavor.TELEMETRY -> CutCornerShape(topEnd = 12.dp, bottomStart = 12.dp)
+        Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
+        else -> RoundedCornerShape(size * 0.33f)
+    }
     Box(
         modifier
             .size(size)

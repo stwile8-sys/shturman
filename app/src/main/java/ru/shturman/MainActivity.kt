@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // навигатор: экран не гаснет
+        ru.shturman.ui.themes.Shturman2.load(getSharedPreferences("settings", MODE_PRIVATE))
         ru.shturman.ui.theme.ShColors.themeId = ru.shturman.ui.themes.Themes.load(getSharedPreferences("settings", MODE_PRIVATE))
         ru.shturman.ui.themes.ThemeSounds.enabled = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("theme_sounds", true)
         ru.shturman.ui.themes.ThemeSounds.setTheme(this, ru.shturman.ui.theme.ShColors.themeId)
@@ -65,7 +66,9 @@ class MainActivity : ComponentActivity() {
         )
         ru.shturman.work.Background.schedule(applicationContext)
         // Приветствие голосом только при свежем запуске, не при повороте экрана
-        welcome = ru.shturman.routing.Welcome(this, ru.shturman.ui.theme.ShColors.T.splashRes)
+        // У APEX звук идёт из самого видео заставки
+        welcome = if (ru.shturman.ui.theme.ShColors.themeId == ru.shturman.ui.themes.Themes.APEX) null
+            else ru.shturman.routing.Welcome(this, ru.shturman.ui.theme.ShColors.T.splashRes)
         setContent {
             ShturmanTheme {
                 val context = LocalContext.current
@@ -106,7 +109,11 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     if (showSplash) ru.shturman.ui.themes.ThemeSplash(onPlaySound = { welcome?.play() }, onFinished = { welcome?.stop(); showSplash = false })
-                    ru.shturman.ui.UpdatePrompt(enabled = current != null && !showSplash)
+                    // «Штурман 2»: заставка APEX после открытия режима и по кнопке в скрытом разделе
+                    if (!showSplash && ru.shturman.ui.themes.Shturman2.introPending) {
+                        ru.shturman.ui.themes.ApexIntro(onFinished = { ru.shturman.ui.themes.Shturman2.introPending = false })
+                    }
+                    ru.shturman.ui.UpdatePrompt(enabled = current != null && !showSplash && !ru.shturman.ui.themes.Shturman2.introPending)
                 }
             }
         }

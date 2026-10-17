@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CutCornerShape
@@ -68,6 +69,7 @@ fun Modifier.themedEnter(index: Int = 0): Modifier {
             Flavor.NEON -> p.animateTo(1f, tween(420, easing = LinearEasing))
             Flavor.TELEMETRY -> p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.72f, stiffness = 520f))
             Flavor.DEPTH -> p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.58f, stiffness = 180f))
+            Flavor.APEX -> p.animateTo(1f, tween(480, easing = LinearEasing))
         }
     }
     val dust = ShColors.T.enter == EnterKind.SIDE_DUST
@@ -109,6 +111,8 @@ fun Modifier.themedEnter(index: Int = 0): Modifier {
                 rotationX = q * 70f
                 val sc = 0.9f + 0.1f * v; scaleX = sc; scaleY = sc
             }
+            // APEX: не выезжает, а загорается — три кадра мерцания, потом полный свет
+            Flavor.APEX -> alpha = ru.shturman.ui.fx.apexIgnite(v)
         }
     }
 }
@@ -119,7 +123,7 @@ fun Modifier.themedScreenEnter(): Modifier {
     val flavor = ShColors.L.flavor
     val p = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        p.animateTo(1f, if (flavor == Flavor.NEON) tween(360, easing = LinearEasing) else androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 260f))
+        p.animateTo(1f, if (flavor == Flavor.NEON || flavor == Flavor.APEX) tween(360, easing = LinearEasing) else androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 260f))
     }
     return this.graphicsLayer {
         val v = p.value
@@ -128,6 +132,7 @@ fun Modifier.themedScreenEnter(): Modifier {
         when (flavor) {
             Flavor.DEPTH -> { rotationX = (1f - v) * -18f; val sc = 0.92f + 0.08f * v; scaleX = sc; scaleY = sc }
             Flavor.TELEMETRY -> translationX = (1f - v) * size.width * 0.3f
+            Flavor.APEX -> alpha = ru.shturman.ui.fx.apexIgnite(v)
             else -> { val sc = 0.94f + 0.06f * v; scaleX = sc; scaleY = sc; translationY = (1f - v) * 24.dp.toPx() }
         }
     }
@@ -150,6 +155,20 @@ fun ThemedText(
         if (first) { first = false; return@LaunchedEffect }
         p.snapTo(0f)
         p.animateTo(1f, tween(if (kind == DigitKind.GLITCH) 180 else 260, easing = LinearEasing))
+    }
+    if (kind == DigitKind.SEGMENT) {
+        // Табло: под числом видны погасшие сегменты «8», новые цифры загораются за два кадра
+        val ghost = remember(text) { ru.shturman.ui.fx.apexGhost(text) }
+        Box(modifier) {
+            if (ghost != null) {
+                Text(text = ghost, color = color.copy(alpha = color.alpha * 0.09f), style = style, maxLines = maxLines, overflow = overflow)
+            }
+            Text(
+                text = text, color = color, style = style, maxLines = maxLines, overflow = overflow,
+                modifier = Modifier.graphicsLayer { alpha = ru.shturman.ui.fx.apexFlick(p.value) }
+            )
+        }
+        return
     }
     Text(
         text = text,
@@ -179,6 +198,7 @@ fun ThemedText(
                     translationX = sin(v * PI.toFloat() * 7f) * q * 3f * density
                 }
                 DigitKind.HAZE -> { alpha = 0.3f + 0.7f * v; scaleX = 1f + q * 0.08f; scaleY = 1f + q * 0.08f }
+                DigitKind.SEGMENT -> alpha = ru.shturman.ui.fx.apexFlick(v)
             }
         }
     )

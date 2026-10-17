@@ -75,8 +75,11 @@ fun MusicSheet(onDismiss: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = androidx.compose.ui.graphics.lerp(ShColors.Panel, androidx.compose.ui.graphics.Color.White, 0.06f).copy(alpha = 0.97f),
-        shape = if (ShColors.L.flavor == ru.shturman.ui.themes.Flavor.TELEMETRY) androidx.compose.foundation.shape.CutCornerShape(topEnd = 26.dp)
-            else androidx.compose.foundation.shape.RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp),
+        shape = when (ShColors.L.flavor) {
+            ru.shturman.ui.themes.Flavor.TELEMETRY -> androidx.compose.foundation.shape.CutCornerShape(topEnd = 26.dp)
+            ru.shturman.ui.themes.Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
+            else -> androidx.compose.foundation.shape.RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)
+        },
         contentColor = ShColors.TextPrimary,
         dragHandle = { BottomSheetDefaults.DragHandle(color = ShColors.Divider) }
     ) {

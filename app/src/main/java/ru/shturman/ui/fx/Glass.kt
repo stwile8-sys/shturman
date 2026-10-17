@@ -25,12 +25,14 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.SweepGradientShader
@@ -53,6 +55,7 @@ fun panelShape(radius: Dp = ShColors.T.panelRadius.dp.coerceAtLeast(18.dp)): Sha
     Flavor.NEON -> RoundedCornerShape(radius.coerceAtMost(18.dp))
     Flavor.GLASS -> RoundedCornerShape(radius.coerceAtLeast(26.dp))
     Flavor.DEPTH -> RoundedCornerShape(radius.coerceIn(20.dp, 24.dp))
+    Flavor.APEX -> RectangleShape
 }
 
 /** Форма кнопок и небольших плашек. */
@@ -61,6 +64,7 @@ fun chipShape(): Shape = when (ShColors.L.flavor) {
     Flavor.NEON -> RoundedCornerShape(14.dp)
     Flavor.GLASS -> RoundedCornerShape(18.dp)
     Flavor.DEPTH -> RoundedCornerShape(18.dp)
+    Flavor.APEX -> RectangleShape
 }
 
 // ---------- стеклянная панель ----------
@@ -81,6 +85,7 @@ fun Modifier.panel(
 ): Modifier = composed {
     val l = ShColors.L
     val accent = ShColors.Accent
+    if (l.flavor == Flavor.APEX) return@composed this.apexPanel(shape, elevation, glowing, alpha)
     val elev = if (l.flavor == Flavor.DEPTH) elevation * 1.6f else elevation
     var m = this.shadow(elev, shape, clip = false, ambientColor = Color.Black, spotColor = if (glowing) l.glow else Color.Black)
     if (l.flavor == Flavor.NEON) m = m.neonEdge(shape)
@@ -104,6 +109,21 @@ fun Modifier.panel(
     }
     m
 }
+
+/**
+ * Панель APEX: плоский асфальт почти без прозрачности, волосяная рамка, метки по углам и строки развёртки.
+ * Никакого стекла и бликов. У «горящей» панели (glowing) метки светятся мелом.
+ */
+private fun Modifier.apexPanel(shape: Shape, elevation: Dp, glowing: Boolean, alpha: Float): Modifier =
+    this.shadow(elevation * 0.6f, shape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
+        .clip(shape)
+        .background(Color(0xFF0B0B0A).copy(alpha = 0.92f * alpha))
+        .border(1.dp, ApexChalk.copy(alpha = 0.08f), shape)
+        .drawWithContent {
+            drawContent()
+            apexScanlines(0.14f)
+            apexTicks(if (glowing) ApexChalk.copy(alpha = 0.85f) else ApexTick)
+        }
 
 /** Неоновая обводка, по которой бежит градиент из двух цветов темы. Снаружи — мягкое свечение. */
 fun Modifier.neonEdge(shape: Shape, width: Dp = 1.5.dp): Modifier = composed {
@@ -142,12 +162,12 @@ fun Modifier.pressFx(): Modifier = composed {
     var tiltY by remember { mutableStateOf(0f) }
     val p by animateFloatAsState(
         if (pressed) 1f else 0f,
-        spring(dampingRatio = if (flavor == Flavor.TELEMETRY) 0.7f else 0.42f, stiffness = if (pressed) 900f else 380f),
+        spring(dampingRatio = if (flavor == Flavor.TELEMETRY || flavor == Flavor.APEX) 0.8f else 0.42f, stiffness = if (pressed) 900f else 380f),
         label = "press"
     )
     val glitch = remember { Animatable(0f) }
     LaunchedEffect(pressed) {
-        if (pressed && flavor == Flavor.NEON) {
+        if (pressed && (flavor == Flavor.NEON || flavor == Flavor.APEX)) {
             glitch.snapTo(1f); glitch.animateTo(0f, tween(220, easing = LinearEasing))
         }
     }
@@ -177,6 +197,12 @@ fun Modifier.pressFx(): Modifier = composed {
                 }
                 Flavor.TELEMETRY -> { translationX = 4f * density * p; val s = 1f - 0.05f * p; scaleX = s; scaleY = s }
                 Flavor.DEPTH -> { rotationX = tiltX * p; rotationY = tiltY * p; val s = 1f - 0.05f * p; scaleX = s; scaleY = s; translationY = 2f * density * p }
+                Flavor.APEX -> {
+                    // механический щелчок: короткое сжатие и мигание, как реле
+                    val s = 1f - 0.035f * p; scaleX = s; scaleY = s
+                    val g = glitch.value
+                    if (g > 0f) alpha = if ((g * 5).toInt() % 2 == 0) 0.55f else 1f
+                }
             }
         }
 }

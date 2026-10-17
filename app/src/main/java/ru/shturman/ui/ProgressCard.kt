@@ -97,7 +97,7 @@ private fun ProgressBar(progress: Float, flavor: Flavor) {
     val pulse by tr.animateFloat(0.35f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "pulse")
     val a = ShColors.Accent
     val b = ShColors.Accent2
-    val h = when (flavor) { Flavor.TELEMETRY -> 10.dp; Flavor.DEPTH -> 12.dp; Flavor.NEON -> 6.dp; Flavor.GLASS -> 8.dp }
+    val h = when (flavor) { Flavor.TELEMETRY -> 10.dp; Flavor.DEPTH -> 12.dp; Flavor.NEON -> 6.dp; Flavor.GLASS -> 8.dp; Flavor.APEX -> 12.dp }
     Canvas(Modifier.fillMaxWidth().height(h + 8.dp)) {
         val barH = h.toPx()
         val top = (size.height - barH) / 2
@@ -151,6 +151,21 @@ private fun ProgressBar(progress: Float, flavor: Flavor) {
                     drawCircle(Brush.radialGradient(listOf(a.copy(alpha = 0.55f + 0.25f * pulse), Color.Transparent), c, gr), gr, c)
                     drawCircle(Color.White, barH * 0.95f, c)
                 }
+            }
+            Flavor.APEX -> {
+                // линия мелом по шву, 12 делений, как на линейке, и светящаяся головка
+                val line = 2.dp.toPx()
+                val cy = top + barH / 2
+                drawRect(ru.shturman.ui.fx.ApexSeam, Offset(0f, cy - line / 2), Size(w, line))
+                if (fw > 0f) drawRect(a, Offset(0f, cy - line / 2), Size(fw, line))
+                for (i in 0 until 12) {
+                    val x = w * i / 12f
+                    drawRect(a.copy(alpha = if (x <= fw) 0.45f else 0.3f), Offset(x, top), Size(1.dp.toPx(), barH))
+                }
+                val c = Offset(fw.coerceIn(0f, w), cy)
+                val gr = barH * (1.1f + 0.5f * pulse)
+                drawCircle(Brush.radialGradient(listOf(a.copy(alpha = 0.55f), Color.Transparent), c, gr), gr, c)
+                drawCircle(a, 4.dp.toPx(), c)
             }
         }
     }

@@ -79,12 +79,15 @@ object MapStyle {
                 "dot" -> layer.setProperties(PropertyFactory.circleColor(c), PropertyFactory.circleStrokeColor(halo))
             }
         }
-        style.getLayer("route-line")?.setProperties(PropertyFactory.lineColor(hex(th.accent)))
         val look = ru.shturman.ui.themes.Looks.of(th.id)
+        style.getLayer("route-line")?.setProperties(PropertyFactory.lineColor(hex(th.accent)))
         style.getLayer("route-glow")?.setProperties(PropertyFactory.lineColor(hex(look.glow)))
         style.getLayer("comet-glow")?.setProperties(PropertyFactory.circleColor(hex(th.accent)))
-        style.getLayer("dest-pulse")?.setProperties(PropertyFactory.circleStrokeColor(hex(th.accent)))
-        style.getLayer("dest-pin")?.setProperties(PropertyFactory.circleColor(hex(th.accent)))
+        val dot = look.dot ?: th.accent
+        style.getLayer("dest-pulse")?.setProperties(PropertyFactory.circleStrokeColor(hex(dot)))
+        style.getLayer("dest-pin")?.setProperties(PropertyFactory.circleColor(hex(dot)))
+        // след за машиной: обычно дымчатый, у APEX — красный, как задние фонари на долгой выдержке
+        style.getLayer("trail-smoke")?.setProperties(PropertyFactory.circleColor(look.trail?.let { hex(it) } ?: "#A8BCC8"))
         // дома: внизу темнее, выше светлее и с оттенком темы (как в варианте «глубина»)
         style.getLayer("building-3d")?.setProperties(
             PropertyFactory.fillExtrusionColor(

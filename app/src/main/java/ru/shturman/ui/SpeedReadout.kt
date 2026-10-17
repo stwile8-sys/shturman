@@ -49,6 +49,7 @@ fun SpeedReadout(kmh: Int, over: Boolean, modifier: Modifier = Modifier) {
     val shape: Shape = when (l.flavor) {
         Flavor.DEPTH -> RoundedCornerShape(26.dp)
         Flavor.TELEMETRY -> CutCornerShape(topEnd = 14.dp, bottomStart = 14.dp)
+        Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
         else -> CircleShape
     }
     val frac by animateFloatAsState((kmh / 140f).coerceIn(0f, 1f), spring(dampingRatio = 0.7f, stiffness = 120f), label = "spd")
@@ -56,7 +57,7 @@ fun SpeedReadout(kmh: Int, over: Boolean, modifier: Modifier = Modifier) {
     val pulse by tr.animateFloat(0.3f, 1f, infiniteRepeatable(tween(420), RepeatMode.Reverse), label = "p")
     val accent = if (over) ShColors.Danger else ShColors.Accent
     val accent2 = if (over) ShColors.Danger else ShColors.Accent2
-    val boxSize = if (l.flavor == Flavor.TELEMETRY) 92.dp else 80.dp
+    val boxSize = when (l.flavor) { Flavor.TELEMETRY -> 92.dp; Flavor.APEX -> 86.dp; else -> 80.dp }
     Box(
         modifier = modifier
             .themedEnter()
@@ -64,6 +65,25 @@ fun SpeedReadout(kmh: Int, over: Boolean, modifier: Modifier = Modifier) {
             .panel(shape, elevation = 10.dp, glowing = over)
             .drawWithContent {
                 drawContent()
+                if (l.flavor == Flavor.APEX) {
+                    // APEX: вместо шкалы — линейка из 10 ламп внизу, последние две красные
+                    val n = 10
+                    val pad = 10.dp.toPx()
+                    val gap = 2.dp.toPx()
+                    val lh = 3.dp.toPx()
+                    val bw = (this.size.width - pad * 2 - gap * (n - 1)) / n
+                    val lit = kotlin.math.ceil(frac * n).toInt()
+                    for (i in 0 until n) {
+                        val col = when {
+                            i >= lit -> ru.shturman.ui.fx.ApexSeam
+                            i >= 8 -> ShColors.Danger
+                            else -> ShColors.TextPrimary
+                        }
+                        drawRect(col, Offset(pad + i * (bw + gap), this.size.height - pad - lh), Size(bw, lh))
+                    }
+                    if (over) drawRect(ShColors.Danger.copy(alpha = 0.16f * pulse))
+                    return@drawWithContent
+                }
                 if (l.flavor == Flavor.GLASS) {
                     if (over) drawCircle(accent.copy(alpha = 0.55f * pulse), this.size.minDimension / 2 - 2f, style = Stroke(3.dp.toPx()))
                     return@drawWithContent
@@ -96,9 +116,10 @@ fun SpeedReadout(kmh: Int, over: Boolean, modifier: Modifier = Modifier) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             ThemedText(
-                text = kmh.toString(),
+                // у табло APEX три разряда: погасшие сегменты видны и у пустых
+                text = if (l.flavor == Flavor.APEX) kmh.toString().padStart(3) else kmh.toString(),
                 color = if (over) ShColors.Danger else ShColors.TextPrimary,
-                style = ShText.Distance.copy(fontSize = if (l.flavor == Flavor.TELEMETRY) 20.sp else 24.sp)
+                style = ShText.Distance.copy(fontSize = when (l.flavor) { Flavor.TELEMETRY -> 20.sp; Flavor.APEX -> 28.sp; else -> 24.sp })
             )
             Text(text = stringResource(ru.shturman.R.string.s_fee7a82e), color = ShColors.TextSecondary, fontSize = 10.sp)
         }

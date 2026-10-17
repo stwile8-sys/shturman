@@ -32,6 +32,7 @@ fun signShape(): androidx.compose.ui.graphics.Shape = when (ShColors.T.btn) {
     ru.shturman.ui.themes.BtnKind.ROUND, ru.shturman.ui.themes.BtnKind.SOFT -> CircleShape
     ru.shturman.ui.themes.BtnKind.SLIM -> androidx.compose.foundation.shape.RoundedCornerShape(50)
     ru.shturman.ui.themes.BtnKind.GRAIN -> androidx.compose.foundation.shape.RoundedCornerShape(22)
+    ru.shturman.ui.themes.BtnKind.TICKS -> androidx.compose.ui.graphics.RectangleShape
     else -> androidx.compose.foundation.shape.RoundedCornerShape(12)
 }
 
