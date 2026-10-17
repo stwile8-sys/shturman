@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ru.shturman.ui.theme.ShColors
 import ru.shturman.ui.theme.ShText
 import ru.shturman.ui.themes.ThemedText
@@ -70,29 +71,30 @@ fun PaceCard(
     val shape = ru.shturman.ui.themes.themePanelShape()
     Column(
         modifier = modifier.themedEnter()
-            .widthIn(max = 260.dp)
-            .panel(shape, glowing = true)
-            .padding(start = 10.dp, end = 18.dp, top = 10.dp, bottom = 10.dp)
+            .widthIn(max = 210.dp)
+            // компактнее и на 30% прозрачнее: дорожник не закрывает карту, но читается
+            .panel(shape, elevation = 4.dp, glowing = true, alpha = 0.7f)
+            .padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
     ) {
         val first = notes.firstOrNull()
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.changeFx(first?.let { it.severity to it.isLeft })) {
             if (first == null) {
-                RallyArrow(severity = null, isLeft = false, boxSize = 60.dp)
+                RallyArrow(severity = null, isLeft = false, boxSize = 44.dp)
             } else {
-                RallyPacenote(severity = first.severity, isLeft = first.isLeft)
+                RallyPacenote(severity = first.severity, isLeft = first.isLeft, boxSize = 44.dp)
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(8.dp))
             Column {
                 ThemedText(
                     text = if (first == null) "Прямо" else formatDistance(first.distanceM),
                     color = ShColors.TextPrimary,
-                    style = ShText.Distance
+                    style = ShText.Distance.copy(fontSize = 20.sp)
                 )
                 if (street.isNotEmpty()) {
                     Text(
                         text = street,
                         color = ShColors.TextSecondary,
-                        style = ShText.Street,
+                        style = ShText.Street.copy(fontSize = 13.sp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -101,18 +103,18 @@ fun PaceCard(
         }
         if (notes.size > 1) {
             Row(
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 for (j in 1 until notes.size) {
                     val n = notes[j]
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        RallyPacenote(severity = n.severity, isLeft = n.isLeft, boxSize = 38.dp)
+                        RallyPacenote(severity = n.severity, isLeft = n.isLeft, boxSize = 28.dp)
                         Text(
                             text = formatDistance((n.distanceM - notes[j - 1].distanceM).coerceAtLeast(0.0)),
                             color = ShColors.TextSecondary,
-                            style = ShText.Street
+                            style = ShText.Street.copy(fontSize = 12.sp)
                         )
                     }
                 }
