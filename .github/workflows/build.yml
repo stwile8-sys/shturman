@@ -57,6 +57,20 @@ jobs:
           git commit -q -m "Build errors for ${GITHUB_SHA}"
           git push -f origin buildlog
 
+      - name: Test APK for the owner (night branch; the app never offers it to friends)
+        if: success() && github.ref == 'refs/heads/night'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="$RUNNER_TEMP/shturman-night-${{ github.run_number }}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+          for t in $(gh release list --repo "${{ github.repository }}" --limit 100 --json tagName -q '.[].tagName' | grep '^night-' || true); do
+            gh release delete "$t" --repo "${{ github.repository }}" --yes --cleanup-tag || true
+          done
+          gh release create "night-${{ github.run_number }}" "$APK" --repo "${{ github.repository }}" --prerelease \
+            --target "${{ github.sha }}" --title "Тестовая сборка ${{ github.run_number }} (только для владельца)" \
+            --notes "Тестовая сборка из ветки night. Обновлением друзьям не предлагается: приложение смотрит только релизы build-N."
+
       - name: Save warnings for review (night branch, successful builds)
         if: success() && github.ref == 'refs/heads/night'
         run: |
