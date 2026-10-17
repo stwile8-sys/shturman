@@ -196,7 +196,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         onProblem = { m -> _state.update { it.copy(voiceMessage = m) } },
         onFallback = { _state.update { it.copy(voiceFallbackKey = it.voiceFallbackKey + 1) } }
     )
-    private val speedStore = SpeedStore(app)
+    private val speedStore = SpeedStore.shared(app)
     private val recorder = SpeedRecorder(speedStore)
     private val stopRecorder = StopRecorder(speedStore)
     private val sharedSync = SharedSync(app, speedStore)

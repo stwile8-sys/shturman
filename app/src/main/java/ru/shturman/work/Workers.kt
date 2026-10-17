@@ -20,8 +20,7 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
     override suspend fun doWork(): Result {
         if (FirebaseAuth.getInstance().currentUser == null) return Result.success()
         return try {
-            val store = SpeedStore(applicationContext)
-            try { SharedSync(applicationContext, store).sync() } finally { runCatching { store.close() } }
+            SharedSync(applicationContext, SpeedStore.shared(applicationContext)).sync()
             Result.success()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -29,6 +28,14 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
             Errors.log("syncWorker", e)
             Result.retry()
         }
+    }
+}
+
+/** Сторож фонового сбора данных о дорогах: если система остановила службу, включает её снова. */
+class DriveWatchWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+    override suspend fun doWork(): Result {
+        if (!ru.shturman.service.DriveWatch.running) ru.shturman.service.DriveWatch.start(applicationContext)
+        return Result.success()
     }
 }
 
@@ -53,6 +60,10 @@ object Background {
             wm.enqueueUniquePeriodicWork(
                 "sync2h", ExistingPeriodicWorkPolicy.KEEP,
                 PeriodicWorkRequestBuilder<SyncWorker>(2, TimeUnit.HOURS).setConstraints(net).build()
+            )
+            wm.enqueueUniquePeriodicWork(
+                "drivewatch15m", ExistingPeriodicWorkPolicy.KEEP,
+                PeriodicWorkRequestBuilder<DriveWatchWorker>(15, TimeUnit.MINUTES).build()
             )
             wm.enqueueUniquePeriodicWork(
                 "cameras7d", ExistingPeriodicWorkPolicy.KEEP,
