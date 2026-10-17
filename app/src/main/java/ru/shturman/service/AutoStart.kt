@@ -38,6 +38,8 @@ class AutoStartReceiver : BroadcastReceiver() {
         runCatching {
             when (intent.action) {
                 BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                    // Подключились к машине — сразу проверяем, поехали ли, чтобы записать поездку с начала
+                    if (matches(context, intent) || isCar(intent)) DriveWatch.start(context, poke = true)
                     if (AutoPrefs.btAutostart(context) && matches(context, intent)) {
                         prompt(context, "Подключено к авто", "Открыть APEX и построить маршрут?")
                     }
@@ -51,6 +53,15 @@ class AutoStartReceiver : BroadcastReceiver() {
             }
         }
     }
+
+    /** Устройство похоже на машину: автомагнитола или громкая связь. */
+    @Suppress("DEPRECATION")
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun isCar(intent: Intent): Boolean = runCatching {
+        val dev = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE) ?: return false
+        val cls = dev.bluetoothClass?.deviceClass ?: return false
+        cls == android.bluetooth.BluetoothClass.Device.AUDIO_VIDEO_CAR_AUDIO || cls == android.bluetooth.BluetoothClass.Device.AUDIO_VIDEO_HANDSFREE
+    }.getOrDefault(false)
 
     @Suppress("DEPRECATION")
     private fun matches(ctx: Context, intent: Intent): Boolean {

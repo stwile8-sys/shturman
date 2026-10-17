@@ -1,4 +1,4 @@
-# Фоновый сбор данных о дорогах (в работе, ветка wip-roaddata)
+# Фоновый сбор данных о дорогах
 
 Решения владельца (17.10): данные обезличенные, как сейчас (скорости по квадратам + ожидание на светофорах, без имени и маршрутов);
 писать всегда, когда едет, даже при закрытом приложении; выключатель «Делиться данными» убрать.
@@ -7,7 +7,7 @@
 объект DriveWatch: start/poke/hasBackground/batteryFree/text; BootReceiver), SpeedStore.shared(), NavViewModel и SyncWorker на shared,
 DriveWatchWorker раз в 15 мин (Workers.kt), SharedSync.share = всегда true.
 
-Осталось:
+Сделано 17.10 после сброса лимита (пункты 1–7), выпуск — пункт 8:
 1. NavViewModel: удалить setShareData (share теперь val); в onFix: lastCarSpeedAt (скорость ≥ 6 м/с) и stopRecorder.add в навигации
    ИЛИ если быстрее 6 м/с ехали меньше 5 мин назад.
 2. SettingsSheet: подпись раздела «Сбор данных о дорогах · отчёт разработчику»; в PrivacyPage вместо SwitchRow — RoadDataCard():

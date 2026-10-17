@@ -28,6 +28,7 @@ object Report {
         val errs = Errors.text()
         if (errs.isNotEmpty()) sb.append("\n--- Пойманные ошибки ---\n").append(errs).append("\n")
         sb.append("\n--- Состояние ---\n").append(summary).append("\n").append(ru.shturman.routing.Diag.text()).append("\n")
+            .append(ru.shturman.service.DriveWatch.text(context)).append("\n")
         val crash = runCatching { File(context.filesDir, "crash_last.txt").takeIf { it.exists() }?.readText() }.getOrNull()
         if (crash != null) sb.append("\n--- Последний вылет ---\n").append(crash.take(4000)).append("\n")
         val log = runCatching {
