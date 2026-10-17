@@ -32,21 +32,21 @@ object AutoPrefs {
     fun isQuietHour(hour: Int) = hour >= 23 || hour < 7
 }
 
-/** Реагирует на подключение Bluetooth авто и зарядки: предлагает открыть Штурман; при отключении авто может остановить маршрут. */
+/** Реагирует на подключение Bluetooth авто и зарядки: предлагает открыть APEX; при отключении авто может остановить маршрут. */
 class AutoStartReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         runCatching {
             when (intent.action) {
                 BluetoothDevice.ACTION_ACL_CONNECTED -> {
                     if (AutoPrefs.btAutostart(context) && matches(context, intent)) {
-                        prompt(context, "Подключено к авто", "Открыть Штурман и построить маршрут?")
+                        prompt(context, "Подключено к авто", "Открыть APEX и построить маршрут?")
                     }
                 }
                 BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
                     if (AutoPrefs.btAutostop(context) && matches(context, intent)) NavService.onCancel?.invoke()
                 }
                 Intent.ACTION_POWER_CONNECTED -> {
-                    if (AutoPrefs.chargeAutostart(context)) prompt(context, "Зарядка подключена", "Открыть Штурман?")
+                    if (AutoPrefs.chargeAutostart(context)) prompt(context, "Зарядка подключена", "Открыть APEX?")
                 }
             }
         }
@@ -70,7 +70,7 @@ class AutoStartReceiver : BroadcastReceiver() {
         val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, "prompts") else Notification.Builder(ctx)
         nm.notify(
             4003,
-            b.setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentTitle(title).setContentText(text)
+            b.setSmallIcon(ru.shturman.R.drawable.ic_stat_apex).setContentTitle(title).setContentText(text)
                 .setContentIntent(open).setAutoCancel(true).build()
         )
     }

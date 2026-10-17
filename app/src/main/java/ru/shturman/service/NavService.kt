@@ -26,7 +26,7 @@ class NavService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val title = intent?.getStringExtra(EXTRA_TITLE) ?: "Штурман"
+        val title = intent?.getStringExtra(EXTRA_TITLE) ?: "APEX"
         val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Навигация"
         try {
             val n = build(this, title, text)
@@ -94,7 +94,7 @@ class NavService : Service() {
                 ctx, 1, Intent(ACTION_CANCEL).setPackage(ctx.packageName), flags
             )
             val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, CHANNEL) else Notification.Builder(ctx)
-            return b.setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            return b.setSmallIcon(ru.shturman.R.drawable.ic_stat_apex)
                 .setContentTitle(title)
                 .setContentText(text)
                 .setOngoing(true)
@@ -133,7 +133,7 @@ class NavService : Service() {
                 val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, CHANNEL) else Notification.Builder(ctx)
                 nm.notify(
                     4002,
-                    b.setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentTitle("Поездка завершена")
+                    b.setSmallIcon(ru.shturman.R.drawable.ic_stat_apex).setContentTitle("Поездка завершена")
                         .setContentText(text).setStyle(Notification.BigTextStyle().bigText(text)).setAutoCancel(true).build()
                 )
             }
@@ -146,7 +146,7 @@ class NavService : Service() {
                 ensureChannel(ctx)
                 val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, CHANNEL) else Notification.Builder(ctx)
-                nm.notify(4004, b.setSmallIcon(android.R.drawable.ic_menu_mylocation).setContentTitle(title).setContentText(text).setAutoCancel(true).build())
+                nm.notify(4004, b.setSmallIcon(ru.shturman.R.drawable.ic_stat_apex).setContentTitle(title).setContentText(text).setAutoCancel(true).build())
             }
         }
 

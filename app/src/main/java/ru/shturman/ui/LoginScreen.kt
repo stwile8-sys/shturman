@@ -59,13 +59,9 @@ fun LoginScreen() {
             modifier = Modifier.align(Alignment.Center).themedEnter(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = stringResource(ru.shturman.R.string.s_d246d2cf),
-                color = ShColors.TextPrimary,
-                fontFamily = NumberFont,
-                fontWeight = FontWeight.Bold,
-                fontSize = 44.sp
-            )
-            Spacer(Modifier.height(8.dp))
+            // Логотип APEX вместо текстового названия
+            ru.shturman.ui.themes.ApexWordmark(height = 40.dp, color = ShColors.TextPrimary)
+            Spacer(Modifier.height(16.dp))
             Text(text = stringResource(ru.shturman.R.string.s_ce99d0a6),
                 color = ShColors.TextSecondary,
                 style = ShText.Street,
