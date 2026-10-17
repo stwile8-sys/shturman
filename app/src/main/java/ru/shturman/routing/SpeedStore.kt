@@ -18,14 +18,6 @@ import kotlin.math.floor
  */
 class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null, 2) {
 
-    companion object {
-        @Volatile private var instance: SpeedStore? = null
-
-        /** Одна база на всё приложение: экран карты, фоновый сбор и синхронизация пишут в неё по очереди. */
-        fun shared(context: Context): SpeedStore =
-            instance ?: synchronized(this) { instance ?: SpeedStore(context.applicationContext).also { instance = it } }
-    }
-
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(STOPS_TABLE)
         db.execSQL(
@@ -259,6 +251,12 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
     }.getOrNull()
 
     companion object {
+        @Volatile private var instance: SpeedStore? = null
+
+        /** Одна база на всё приложение: экран карты, фоновый сбор и синхронизация пишут в неё по очереди. */
+        fun shared(context: Context): SpeedStore =
+            instance ?: synchronized(this) { instance ?: SpeedStore(context.applicationContext).also { instance = it } }
+
         private const val REPLACE_MS = 14L * 24 * 3600 * 1000
         private const val EXPIRE_MS = 28L * 24 * 3600 * 1000
 
