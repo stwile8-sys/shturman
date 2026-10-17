@@ -48,11 +48,11 @@ import ru.shturman.routing.Snap
 import ru.shturman.routing.lineGeoJson
 import ru.shturman.routing.pointGeoJson
 
-private const val FOLLOW_ZOOM = 17.0
+private const val FOLLOW_ZOOM = 16.8 // чуть дальше, чем было: впереди видно больше дороги
 private const val FOLLOW_TILT = 60.0
 
 // Камера в поездке: ближе и круче, чем при обычном слежении
-private const val START_ZOOM = 18.0
+private const val START_ZOOM = 16.8 // после «Поехали» камера останавливается там же, где ведёт в поездке
 private const val START_TILT = 64.0
 
 /** Наклон камеры: с 3D-картой — сильный (как в варианте «глубина»), без неё — умеренный. */
