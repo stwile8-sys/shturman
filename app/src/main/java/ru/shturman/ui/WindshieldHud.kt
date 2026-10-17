@@ -175,12 +175,11 @@ private fun HudPicture(s: NavState, modifier: Modifier) {
         val navigating = s.navigating && route != null
         val total = (route?.totalM ?: 0.0).coerceAtLeast(1.0)
         val traveled = (s.position?.traveledM ?: 0.0).coerceIn(0.0, total)
-        val footer = if (navigating && route != null) {
+        // Внизу: время прибытия и сколько осталось, а без маршрута — просто часы
+        val footer = route?.takeIf { navigating }?.let { r ->
             val left = (1.0 - traveled / total).coerceIn(0.0, 1.0)
-            "${formatClock(System.currentTimeMillis() + (route.timeSec * left * 1000).toLong())} · ${formatKm(total - traveled)} км"
-        } else {
-            formatClock(System.currentTimeMillis())
-        }
+            "${formatClock(System.currentTimeMillis() + (r.timeSec * left * 1000).toLong())} · ${formatKm(total - traveled)} км"
+        } ?: formatClock(System.currentTimeMillis())
         if (landscape) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 if (navigating) {
