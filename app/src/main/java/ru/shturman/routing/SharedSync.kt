@@ -16,9 +16,8 @@ class SharedSync(context: Context, private val store: SpeedStore) {
     /** Две синхронизации сразу (автоматическая и по кнопке) не запускаются: вторая ждёт первую. */
     private val lock = kotlinx.coroutines.sync.Mutex()
 
-    var share: Boolean
-        get() = prefs.getBoolean("share", true)
-        set(v) { prefs.edit().putBoolean("share", v).apply() }
+    /** Обезличенные данные о дорогах отправляют все пользователи (выключателя нет). */
+    val share: Boolean get() = true
 
     val lastSyncAt: Long get() = prefs.getLong("last_sync", 0L)
 

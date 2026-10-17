@@ -196,7 +196,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         onProblem = { m -> _state.update { it.copy(voiceMessage = m) } },
         onFallback = { _state.update { it.copy(voiceFallbackKey = it.voiceFallbackKey + 1) } }
     )
-    private val speedStore = SpeedStore(app)
+    private val speedStore = SpeedStore.shared(app)
     private val recorder = SpeedRecorder(speedStore)
     private val stopRecorder = StopRecorder(speedStore)
     private val sharedSync = SharedSync(app, speedStore)
@@ -509,6 +509,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
      */
     private var lastFix: LatLon? = null
     private var lastFixAt = 0L
+    private var lastCarSpeedAt = 0L
 
     fun onFix(here: LatLon, speedMps: Float = 0f, accuracyM: Float = 0f, courseDeg: Float = -1f, altitudeM: Float = Float.NaN): Snap? {
         lastFix = here
@@ -521,7 +522,11 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         if (s.navigating || speedMps > 3f) {
             recorder.add(here.lat, here.lon, speedMps.toDouble(), System.currentTimeMillis())
         }
-        if (s.navigating) stopRecorder.add(here, speedMps.toDouble(), System.currentTimeMillis())
+        // Остановки (светофоры) считаем в навигации и в любой поездке на машине: недавно ехали быстрее ~22 км/ч
+        if (speedMps >= 6f) lastCarSpeedAt = System.currentTimeMillis()
+        if (s.navigating || System.currentTimeMillis() - lastCarSpeedAt < 5 * 60_000L) {
+            stopRecorder.add(here, speedMps.toDouble(), System.currentTimeMillis())
+        }
         if (s.navigating && kmh > tripMaxKmh && kmh < 300) tripMaxKmh = kmh
         if (s.navigating) {
             if (speedMps > 1.5f) {
@@ -1238,10 +1243,6 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         clearRoute()
     }
 
-    fun setShareData(on: Boolean) {
-        sharedSync.share = on
-        _state.update { it.copy(shareData = on) }
-    }
 
     /** Кнопка «Синхронизировать» в настройках. */
     fun syncNow() {

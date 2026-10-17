@@ -65,6 +65,8 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         )
         ru.shturman.work.Background.schedule(applicationContext)
+        // Сбор обезличенных данных о дорогах во время поездок (служба сама дремлет, пока не едем)
+        ru.shturman.service.DriveWatch.start(applicationContext)
         // Приветствие голосом только при свежем запуске, не при повороте экрана
         // У APEX звук идёт из самого видео заставки
         welcome = if (ru.shturman.ui.theme.ShColors.themeId == ru.shturman.ui.themes.Themes.APEX) null
@@ -114,6 +116,7 @@ class MainActivity : ComponentActivity() {
                         ru.shturman.ui.themes.ApexIntro(onFinished = { ru.shturman.ui.themes.Shturman2.introPending = false })
                     }
                     ru.shturman.ui.UpdatePrompt(enabled = current != null && !showSplash && !ru.shturman.ui.themes.Shturman2.introPending)
+                    if (current != null && !showSplash) ru.shturman.ui.RoadDataPrompt()
                 }
             }
         }
