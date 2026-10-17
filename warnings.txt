@@ -1,0 +1,10 @@
+w: app/src/main/java/ru/shturman/NavViewModel.kt:253:101 Unchecked cast of 'List<Any>' to 'List<LatLon>'.
+w: app/src/main/java/ru/shturman/NavViewModel.kt:253:32 Unchecked cast of 'List<Any>' to 'List<Camera>'.
+w: app/src/main/java/ru/shturman/NavViewModel.kt:253:55 Unchecked cast of 'List<Any>' to 'List<LatLon>'.
+w: app/src/main/java/ru/shturman/NavViewModel.kt:253:78 Unchecked cast of 'List<Any>' to 'List<LatLon>'.
+w: app/src/main/java/ru/shturman/media/Music.kt:66:24 Condition is always 'true'.
+w: app/src/main/java/ru/shturman/service/AutoStart.kt:81:105 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+w: app/src/main/java/ru/shturman/service/NavService.kt:103:18 'fun addAction(p0: Int, p1: CharSequence!, p2: PendingIntent!): Notification.Builder!' is deprecated. Deprecated in Java.
+w: app/src/main/java/ru/shturman/service/NavService.kt:133:111 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+w: app/src/main/java/ru/shturman/service/NavService.kt:148:111 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+w: app/src/main/java/ru/shturman/service/NavService.kt:96:107 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
