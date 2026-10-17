@@ -107,6 +107,7 @@ fun DarkMap(
     ) { result ->
         hasPermission = result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (hasPermission) ru.shturman.service.DriveWatch.start(context)
     }
 
     // Уведомление о поездке (Android 13+): просим один раз, отказ не мешает работе
@@ -239,6 +240,9 @@ fun DarkMap(
             }
         }
         tracker.start()
+        // Пока экран карты сам получает положения, фоновая служба не пишет скорости второй раз
+        ru.shturman.service.DriveWatch.uiTracking = true
+        ru.shturman.service.DriveWatch.start(context)
 
         // Если во время поездки камеру сдвинули пальцем, через 8 секунд она сама возвращается к стрелке
         val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -266,6 +270,7 @@ fun DarkMap(
                     .putFloat("map_zoom", m.cameraPosition.zoom.toFloat()).apply()
             }
             tracker.stop()
+            ru.shturman.service.DriveWatch.uiTracking = false
             handler.removeCallbacks(back)
             runCatching { m.locationComponent.removeOnCameraTrackingChangedListener(trackListener) }
         }

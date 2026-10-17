@@ -238,7 +238,7 @@ private fun Home(user: UserInfo, s: NavState, vm: NavViewModel, isAdmin: Boolean
         ).joinToString(" · ").ifEmpty { "Итог поездки, тихие часы, автозапуск" }.replaceFirstChar { it.uppercase() }) { open(Page.NOTIF) }
     CategoryRow(Icons.Filled.Settings, Page.DATA.title, Page.DATA.ordinal, "Копия в аккаунте, кэш, сброс") { open(Page.DATA) }
     CategoryRow(Icons.Filled.Lock, Page.PRIVACY.title, Page.PRIVACY.ordinal,
-        (if (s.shareData) "Обучение включено" else "Обучение выключено") + " · отчёт разработчику") { open(Page.PRIVACY) }
+        "Сбор данных о дорогах · отчёт разработчику") { open(Page.PRIVACY) }
     if (isAdmin) CategoryRow(Icons.Filled.Edit, Page.ADMIN.title, Page.ADMIN.ordinal, "Коды активации") { open(Page.ADMIN) }
 
     Spacer(Modifier.height(12.dp))
@@ -613,11 +613,7 @@ private fun DataPage(vm: NavViewModel) {
 @Composable
 private fun PrivacyPage(user: UserInfo, s: NavState, vm: NavViewModel) {
     Section(stringResource(R.string.s_0899eda1))
-    SwitchRow(
-        "Участвовать в общем обучении",
-        "Уходят только обезличенные данные о дорогах. Ваши координаты — никогда.",
-        s.shareData, vm::setShareData
-    )
+    RoadDataCard()
     Spacer(Modifier.height(6.dp))
     Hint(stringResource(R.string.s_0f3468a4))
 
@@ -776,4 +772,91 @@ private fun NumberField(label: String, value: String, modifier: Modifier, intege
         colors = sheetFieldColors(),
         modifier = modifier
     )
+}
+
+/**
+ * Сбор данных о дорогах: что собирается, работает ли сейчас и что включить, чтобы сбор шёл в фоне.
+ * Выключателя нет: обезличенные скорости и ожидание на светофорах собираются у всех.
+ */
+@Composable
+private fun RoadDataCard() {
+    val ctx = LocalContext.current
+    var tick by remember { mutableStateOf(0) }
+    // статус обновляется сам: человек может вернуться из настроек телефона с новым разрешением
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1500L)
+            tick++
+        }
+    }
+    val bgLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) ru.shturman.service.DriveWatch.start(ctx) else openAppSettings(ctx)
+        tick++
+    }
+    // перечитываем состояние на каждом такте
+    val hasLoc = remember(tick) { ru.shturman.service.DriveWatch.hasLocation(ctx) }
+    val always = remember(tick) { ru.shturman.service.DriveWatch.hasBackground(ctx) }
+    val battery = remember(tick) { ru.shturman.service.DriveWatch.batteryFree(ctx) }
+    val running = remember(tick) { ru.shturman.service.DriveWatch.running }
+    val mode = remember(tick) { ru.shturman.service.DriveWatch.mode }
+
+    InfoCard(
+        "APEX записывает обезличенные данные о дорогах во время любой поездки на машине, даже когда приложение закрыто: " +
+            "с какой скоростью едут на участках дорог и сколько стоят на светофорах. Имя, аккаунт и маршруты не записываются " +
+            "и не отправляются. Пока идёт запись поездки, в шторке виден значок APEX. Так прогнозы времени в пути становятся точнее у всех."
+    )
+    val status = when {
+        !hasLoc -> "Сбор не работает: нет доступа к местоположению."
+        running && always && battery -> "Сбор работает в фоне: $mode."
+        running -> "Сбор работает, пока телефон не перезагрузят или система не остановит приложение: $mode."
+        else -> "Сбор сейчас остановлен."
+    }
+    Hint(status, Modifier.padding(top = 6.dp), if (running && always && battery) ShColors.Accent else ShColors.TextSecondary)
+    if (hasLoc && !always) {
+        WideButton("Разрешить местоположение «Всегда»") {
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                runCatching { bgLauncher.launch(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) }.onFailure { openAppSettings(ctx) }
+            } else openAppSettings(ctx)
+        }
+    }
+    if (hasLoc && !battery) {
+        WideButton("Не ограничивать работу в фоне") { askBatteryFree(ctx) }
+    }
+    if (hasLoc && !running) {
+        WideButton("Включить сбор") { ru.shturman.service.DriveWatch.start(ctx); tick++ }
+    }
+    val maker = android.os.Build.MANUFACTURER.lowercase()
+    if (maker.contains("huawei") || maker.contains("honor")) {
+        Hint(
+            "Huawei и Honor останавливают приложения в фоне. Откройте Настройки → Батарея → Запуск приложений → APEX, " +
+                "выберите «Управлять вручную» и включите все три пункта.",
+            Modifier.padding(top = 6.dp)
+        )
+    }
+}
+
+private fun openAppSettings(ctx: android.content.Context) {
+    runCatching {
+        ctx.startActivity(
+            android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + ctx.packageName))
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+}
+
+/** Просит Android не ограничивать APEX в фоне (иначе сбор могут остановить для экономии батареи). */
+@android.annotation.SuppressLint("BatteryLife")
+fun askBatteryFree(ctx: android.content.Context) {
+    if (ru.shturman.service.DriveWatch.batteryFree(ctx)) return
+    val direct = runCatching {
+        ctx.startActivity(
+            android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, android.net.Uri.parse("package:" + ctx.packageName))
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+    if (direct.isFailure) runCatching {
+        ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 }
