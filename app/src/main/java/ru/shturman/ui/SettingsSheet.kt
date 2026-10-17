@@ -117,7 +117,8 @@ fun SettingsSheet(
     isAdmin: Boolean,
     onOpenAdmin: () -> Unit,
     onSignOut: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onOpenHud: () -> Unit = {}
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -177,7 +178,7 @@ fun SettingsSheet(
                     when (current) {
                         Page.THEME -> ThemePage(s, vm)
                         Page.VOICE -> VoicePage(s, vm)
-                        Page.NAV -> NavPage(s, vm)
+                        Page.NAV -> NavPage(s, vm, onOpenHud)
                         Page.CAR -> CarPage(s, vm)
                         Page.TRIPS -> TripsPage(vm)
                         Page.CARAVAN -> CaravanPage(s, vm)
@@ -356,7 +357,7 @@ private fun VoicePage(s: NavState, vm: NavViewModel) {
 }
 
 @Composable
-private fun NavPage(s: NavState, vm: NavViewModel) {
+private fun NavPage(s: NavState, vm: NavViewModel, onOpenHud: () -> Unit) {
     Section(stringResource(R.string.s_edc3ad9b))
     Hint(stringResource(R.string.s_a626bf4b))
     Spacer(Modifier.height(8.dp))
@@ -379,6 +380,12 @@ private fun NavPage(s: NavState, vm: NavViewModel) {
     SwitchRow(stringResource(R.string.s_42fc7088), stringResource(R.string.s_d64dbd69), s.fullscreen, vm::setFullscreen)
     SwitchRow(stringResource(R.string.s_5b66acf3), stringResource(R.string.s_efc34ccd), s.satellite, vm::setSatellite)
     SwitchRow("3D-карта", "В поездке сильный наклон и объёмные дома. Если на магнитоле тормозит — выключите.", s.map3d, vm::setMap3d)
+
+    Section("Проекция на лобовое (HUD)")
+    Hint("Скорость, поворот и ограничение крупно на чёрном. Телефон кладут под лобовое стекло экраном вверх, " +
+        "верхом к себе — картинка отражается в стекле. Лучше всего видно в темноте. В поездке — кнопка справа над «Где я».")
+    WideButton("Включить проекцию", onClick = onOpenHud)
+    SwitchRow("Зеркальная картинка", "Для отражения в стекле. Выключите, чтобы смотреть прямо на экран.", s.hudMirror, vm::setHudMirror)
 
     Section(stringResource(R.string.s_4a9ccc8c))
     CheckRow("Проценты пути", s.cardPercent) { vm.setCardOption("percent", it) }

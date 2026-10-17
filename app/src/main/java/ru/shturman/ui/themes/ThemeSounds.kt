@@ -48,11 +48,14 @@ object ThemeSounds {
         runCatching { pool?.play(id, volume, volume, 1, 0, 1f) }
     }
 
-    /** Звук превышения скорости: повторяется не чаще раза в 3,5 секунды, громче при большем превышении. */
+    /**
+     * Один сигнал о превышении (когда звучать, решает routing/Overspeed.kt). Громче при большем превышении.
+     * Защита от двойного сигнала: не чаще раза в 2 секунды.
+     */
     fun speeding(excessKmh: Int) {
         val now = System.currentTimeMillis()
-        if (excessKmh <= 2 || now - lastSpeedAt < 3500L) return
+        if (now - lastSpeedAt < 2000L) return
         lastSpeedAt = now
-        play(ThemeSound.SPEED, (0.35f + (excessKmh - 2).coerceAtMost(40) / 40f * 0.65f))
+        play(ThemeSound.SPEED, (0.6f + (excessKmh - 15).coerceIn(0, 30) / 30f * 0.4f))
     }
 }

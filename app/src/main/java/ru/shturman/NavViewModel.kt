@@ -132,6 +132,8 @@ data class NavState(
     val turnVibro: Boolean = true,
     val map3d: Boolean = true,
     val overspeedSound: Boolean = true,
+    /** Проекция на лобовое: картинка зеркальная (для отражения в стекле). */
+    val hudMirror: Boolean = true,
     val nightVoice: Boolean = true,
     val radarOn: Boolean = true,
     val cardPercent: Boolean = true,
@@ -174,6 +176,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private val router = Router(roadData)
 
     private var limits: List<LimitSeg> = emptyList()
+    private val overspeed = ru.shturman.routing.OverspeedAlarm()
     private val cameraRepo = Cameras(app)
     private var cameraList: List<Camera> = emptyList()
     private val bumpRepo = OsmPoints.bumps(app)
@@ -219,6 +222,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         turnVibro = settings.getBoolean("turn_vibro", true),
         map3d = settings.getBoolean("map3d", true),
         overspeedSound = settings.getBoolean("overspeed", true),
+        hudMirror = settings.getBoolean("hud_mirror", true),
         nightVoice = settings.getBoolean("night_voice", true),
         radarOn = settings.getBoolean("radar", true),
         cardPercent = settings.getBoolean("card_percent", true),
@@ -473,6 +477,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         spokenLevel = -1
         lastTurnDistance = Double.MAX_VALUE
         stopRecorder.reset()
+        overspeed.reset()
         loadLimits(route)
         prepareHazards(route)
         _state.value.destination?.let { caravan.setDestination(it.title, it.position) }
@@ -560,7 +565,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         announceTurn(nextTurn(route, position))
         vibrateForTurn(nextTurn(route, position)?.distanceM)
         val limit = limits.firstOrNull { position.traveledM >= it.startM && position.traveledM < it.endM }?.kmh
-        if (s.overspeedSound && limit != null) ThemeSounds.speeding(kmh - limit)
+        // Один сигнал на одно превышение больше чем на 15 км/ч (routing/Overspeed.kt)
+        if (overspeed.update(kmh, limit) && s.overspeedSound && limit != null) ThemeSounds.speeding(kmh - limit)
         val hazards = checkHazards(position.traveledM, s)
         _state.update {
             it.copy(
@@ -875,6 +881,11 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setFullscreen(on: Boolean) { putBool("fullscreen", on); _state.update { it.copy(fullscreen = on) } }
     fun setSatellite(on: Boolean) { putBool("satellite", on); _state.update { it.copy(satellite = on) } }
+    fun setHudMirror(on: Boolean) {
+        putBool("hud_mirror", on)
+        _state.update { it.copy(hudMirror = on) }
+    }
+
     fun setOverspeedSound(on: Boolean) {
         putBool("overspeed", on)
         _state.update { it.copy(overspeedSound = on) }
@@ -1124,6 +1135,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             .remove("radar").remove("card_percent").remove("card_distance").remove("card_eta")
             .remove("card_remaining").remove("card_fuel").remove("consumption").remove("fuel_price")
             .remove("dev_level").remove("theme_sounds").remove("turn_vibro").remove("map3d")
+            .remove("hud_mirror")
             .apply()
         ThemeSounds.enabled = true
         deviation.level = DeviationLevel.MEDIUM
@@ -1132,7 +1144,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(
                 voiceOn = true, fullscreen = false, satellite = false, overspeedSound = true, nightVoice = true,
                 radarOn = true, cardPercent = true, cardDistance = true, cardEta = true, cardRemaining = false,
-                cardFuel = false, consumption = 8.0f, fuelPrice = 60.0f, devLevel = 1, turnVibro = true, map3d = true
+                cardFuel = false, consumption = 8.0f, fuelPrice = 60.0f, devLevel = 1, turnVibro = true, map3d = true,
+                hudMirror = true
             )
         }
     }

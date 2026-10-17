@@ -38,7 +38,7 @@
     <string name="s_6ac9c557">Статистика поездок</string>
     <string name="s_6d4183b7">Выйти из аккаунта</string>
     <string name="s_76e7af47">Уведомление со статистикой, когда поездка закончилась.</string>
-    <string name="s_774dfed6">Мягкое «вжжж», громче по мере превышения скорости.</string>
+    <string name="s_774dfed6">Один сигнал, когда скорость выше ограничения больше чем на 15 км/ч.</string>
     <string name="s_7be14764">Звуки темы</string>
     <string name="s_7e645147">Отозвать</string>
     <string name="s_7ef4135a">Остановка маршрута при отключении</string>
