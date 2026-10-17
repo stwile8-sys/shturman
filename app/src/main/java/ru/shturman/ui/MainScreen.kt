@@ -45,6 +45,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,6 +88,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
     var showAdmin by remember { mutableStateOf(false) }
     var showMusic by remember { mutableStateOf(false) }
     var showRadar by remember { mutableStateOf(false) }
+    // Проекция на лобовое (HUD): остаётся включённой и после поворота экрана
+    var hudOn by rememberSaveable { mutableStateOf(false) }
     var recenterKey by remember { mutableStateOf(0) }
     // В поездке без живого положения подсказываем, что происходит: ищем спутники, нет точного разрешения или выключена геолокация.
     // Второе число — действие по нажатию: 1 — настройки приложения, 2 — настройки геолокации.
@@ -110,13 +113,13 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
     val context = LocalContext.current
     val view = LocalView.current
 
-    // Полноэкранный режим: прячем системные панели Android (они выезжают свайпом от края)
-    LaunchedEffect(s.fullscreen) {
+    // Полноэкранный режим и проекция: прячем системные панели Android (они выезжают свайпом от края)
+    LaunchedEffect(s.fullscreen, hudOn) {
         var c: Context = context
         while (c is ContextWrapper && c !is Activity) c = c.baseContext
         val window = (c as? Activity)?.window ?: return@LaunchedEffect
         val controller = WindowCompat.getInsetsController(window, view)
-        if (s.fullscreen) {
+        if (s.fullscreen || hudOn) {
             controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             controller.hide(WindowInsetsCompat.Type.systemBars())
         } else {
@@ -338,6 +341,14 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             HudCorner(hud = s.hud)
+            if (s.navigating) {
+                MapButton(
+                    icon = ImageVector.vectorResource(R.drawable.ic_hud),
+                    description = "Проекция на лобовое",
+                    onClick = { hudOn = true },
+                    index = 4
+                )
+            }
             if (!mapMode) {
                 MapButton(
                     icon = if (s.theme == 1) Icons.Filled.Favorite else Icons.Filled.LocationOn,
@@ -390,7 +401,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (limit != null) SpeedLimitSign(limit = limit)
-                    SpeedReadout(kmh = s.speedKmh, over = limit != null && s.speedKmh > limit + 2)
+                    // красная — когда превышение больше допустимых 15 км/ч, как и сигнал
+                    SpeedReadout(kmh = s.speedKmh, over = limit != null && s.speedKmh > limit + ru.shturman.routing.OVERSPEED_TOLERANCE_KMH)
                 }
                 ProgressCard(
                     modifier = Modifier.weight(1f),
@@ -449,7 +461,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                     showSettings = false
                     onSignOut()
                 },
-                onDismiss = { showSettings = false }
+                onDismiss = { showSettings = false },
+                onOpenHud = { showSettings = false; hudOn = true }
             )
         }
 
@@ -478,6 +491,11 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
 
         StartOverlay(trigger = startKey)
         ru.shturman.ui.fx.FxHost(fx)
+
+        // Проекция на лобовое — поверх всего
+        if (hudOn) {
+            WindshieldHud(s = s, mirror = s.hudMirror, onMirror = vm::setHudMirror, onExit = { hudOn = false })
+        }
     }
     }
 }
