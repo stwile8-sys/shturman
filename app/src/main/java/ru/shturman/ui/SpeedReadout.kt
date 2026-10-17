@@ -10,7 +10,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Shadow
@@ -63,8 +62,8 @@ fun SpeedReadout(kmh: Int, over: Boolean, modifier: Modifier = Modifier) {
     val pulse by tr.animateFloat(0.3f, 1f, infiniteRepeatable(tween(420), RepeatMode.Reverse), label = "p")
     val accent = if (over) ShColors.Danger else ShColors.Accent
     val accent2 = if (over) ShColors.Danger else ShColors.Accent2
-    // Крупно и на плотном фоне: скорость должна читаться с одного взгляда, поверх любой карты
-    val boxSize = when (l.flavor) { Flavor.TELEMETRY -> 104.dp; else -> 96.dp }
+    // Прежний размер, но на плотном фоне: скорость читается поверх любой карты
+    val boxSize = when (l.flavor) { Flavor.TELEMETRY -> 92.dp; Flavor.APEX -> 86.dp; else -> 80.dp }
     Box(
         modifier = modifier
             .themedEnter()
@@ -125,20 +124,17 @@ fun SpeedReadout(kmh: Int, over: Boolean, modifier: Modifier = Modifier) {
             },
         contentAlignment = if (l.flavor == Flavor.TELEMETRY) Alignment.BottomCenter else Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = if (l.flavor == Flavor.TELEMETRY) Modifier.padding(bottom = 8.dp) else Modifier
-        ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             ThemedText(
                 // у табло APEX три разряда: погасшие сегменты видны и у пустых
                 text = if (l.flavor == Flavor.APEX) kmh.toString().padStart(3) else kmh.toString(),
                 color = if (over) ShColors.Danger else ShColors.TextPrimary,
                 style = ShText.Distance.copy(
-                    fontSize = when (l.flavor) { Flavor.TELEMETRY -> 30.sp; Flavor.APEX -> 32.sp; else -> 36.sp },
+                    fontSize = when (l.flavor) { Flavor.TELEMETRY -> 20.sp; Flavor.APEX -> 28.sp; else -> 24.sp },
                     shadow = Shadow(Color.Black.copy(alpha = 0.75f), Offset(0f, 2f), 6f)
                 )
             )
-            Text(text = stringResource(ru.shturman.R.string.s_fee7a82e), color = ShColors.TextSecondary, fontSize = 11.sp)
+            Text(text = stringResource(ru.shturman.R.string.s_fee7a82e), color = ShColors.TextSecondary, fontSize = 10.sp)
         }
     }
 }
