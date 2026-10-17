@@ -1,14 +1,22 @@
 package ru.shturman.routing
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import androidx.core.content.ContextCompat
+import androidx.core.location.GnssStatusCompat
+import androidx.core.location.LocationManagerCompat
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -16,48 +24,74 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 
 /**
- * Приём положения для стрелки. Основной источник — служба местоположения Google (она смешивает
- * GPS, ГЛОНАСС, Galileo и датчики телефона и точнее обычного GPS). Если её нет, берём чистый GPS.
- * Каждое положение проходит через фильтр Калмана, который гасит шум: стоя на месте стрелка
- * не дрожит, а в движении не скачет.
+ * Приём положения для стрелки. Если на телефоне есть службы Google, основной источник — их служба
+ * местоположения (смешивает GPS, ГЛОНАСС, Galileo и датчики). Параллельно всегда слушаем системный GPS,
+ * а пока его нет — сеть и системный «fused» (Android 12+): так положение приходит и на телефонах без
+ * служб Google (Huawei, Honor). Каждое положение проходит через фильтр Калмана, который гасит шум.
+ *
+ * Важно: приём GPS не перезапускаем, пока ждём первое положение. Спутникам нужно время (на холодную —
+ * до минуты), а частый перезапуск на части телефонов сбрасывает поиск, и положение не приходит вовсе.
  */
 class GpsTracker(
     context: Context,
     private val onFix: (Location) -> Unit
 ) {
-    private val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-    private val fused = LocationServices.getFusedLocationProviderClient(context)
+    private val appContext = context.applicationContext
+    private val manager = appContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    private val hasGoogle = runCatching {
+        GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(appContext) == ConnectionResult.SUCCESS
+    }.getOrDefault(false)
+    private val fused = if (hasGoogle) runCatching { LocationServices.getFusedLocationProviderClient(appContext) }.getOrNull() else null
     private val kalman = Kalman()
     private var lastGpsAt = 0L
-    private var fusedWorks = false
-    private var fallbackOn = false
+    private var lastFusedAt = 0L
     private var lastAcceptedAt = 0L
+    private var startedAt = 0L
+    private var lastKickAt = 0L
     private val handler = Handler(Looper.getMainLooper())
     private var stopped = false
 
-    /** Если положения перестали приходить, перезапускает приём: так стрелка не «замирает» в дороге. */
+    /**
+     * Сторож. Пока первого положения нет — только проверяет, что подписки живы (раз в 30 с), не трогая поиск спутников.
+     * Если положения шли и пропали больше чем на 12 с — мягко переподписывается (не чаще раза в 20 с).
+     */
     private val watchdog = object : Runnable {
         override fun run() {
             if (stopped) return
-            if (SystemClock.elapsedRealtime() - lastAcceptedAt > 6000L) {
-                Diag.restarts++
-                lastAcceptedAt = SystemClock.elapsedRealtime()
-                fusedWorks = false
-                runCatching { fused.removeLocationUpdates(fusedCallback) }
-                runCatching { manager.removeUpdates(listener) }
-                fallbackOn = false
-                begin()
-                startFallback()
+            val now = SystemClock.elapsedRealtime()
+            refreshState()
+            val everFixed = Diag.firstFixMs >= 0
+            val silentFor = now - lastAcceptedAt
+            if (everFixed && silentFor > 12_000L && now - lastKickAt > 20_000L) {
+                kick(withGps = true)
+            } else if (!everFixed && now - lastKickAt > 30_000L) {
+                // GPS ещё ищет спутники — его не трогаем, обновляем только запасные источники
+                kick(withGps = false)
             }
             handler.postDelayed(this, 3000L)
         }
     }
 
+    private fun kick(withGps: Boolean) {
+        lastKickAt = SystemClock.elapsedRealtime()
+        Diag.restarts++
+        // подписки обновляем поверх старых, без снятия: так поиск спутников не начинается заново
+        requestFused()
+        requestSystem(withGps)
+    }
+
     private fun accept(raw: Location) {
+        Diag.rawCount++
         // Бывают положения с пустыми (NaN) координатами: такие просто пропускаем
-        if (!raw.latitude.isFinite() || !raw.longitude.isFinite()) return
-        if (raw.hasAccuracy() && raw.accuracy > MAX_ACCURACY_M) return
-        lastAcceptedAt = SystemClock.elapsedRealtime()
+        if (!raw.latitude.isFinite() || !raw.longitude.isFinite()) { Diag.rejectedCount++; return }
+        if (raw.hasAccuracy() && raw.accuracy > MAX_ACCURACY_M) {
+            Diag.rejectedCount++
+            Diag.lastRejectedAccuracy = raw.accuracy
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        lastAcceptedAt = now
+        if (Diag.firstFixMs < 0) Diag.firstFixMs = now - startedAt
         Diag.fixCount++
         Diag.lastFixAt = System.currentTimeMillis()
         Diag.lastAccuracy = if (raw.hasAccuracy()) raw.accuracy else -1f
@@ -67,24 +101,29 @@ class GpsTracker(
 
     private val fusedCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
-            fusedWorks = true
+            lastFusedAt = SystemClock.elapsedRealtime()
             result.locations.forEach { accept(it) }
         }
     }
 
     private val listener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
-            if (fusedWorks) return
             val now = SystemClock.elapsedRealtime()
+            // Служба Google работает — она точнее, системные положения не нужны
+            if (now - lastFusedAt < 4000L) return
             if (location.provider == LocationManager.GPS_PROVIDER) {
                 lastGpsAt = now
-            } else if (lastGpsAt != 0L) {
+            } else if (now - lastGpsAt < 5000L) {
+                // свежий GPS есть — сеть и прочие источники только мешают
                 return
             }
             accept(location)
         }
 
-        override fun onProviderEnabled(provider: String) {}
+        override fun onProviderEnabled(provider: String) {
+            // геолокацию включили — сразу подписываемся заново
+            if (!stopped) handler.post { requestSystem(withGps = true) }
+        }
 
         override fun onProviderDisabled(provider: String) {}
 
@@ -92,50 +131,86 @@ class GpsTracker(
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
     }
 
+    private val gnssCallback = object : GnssStatusCompat.Callback() {
+        override fun onSatelliteStatusChanged(status: GnssStatusCompat) {
+            var used = 0
+            for (i in 0 until status.satelliteCount) if (status.usedInFix(i)) used++
+            Diag.satSeen = status.satelliteCount
+            Diag.satUsed = used
+        }
+    }
+
     @SuppressLint("MissingPermission")
     fun start() {
         stopped = false
-        lastAcceptedAt = SystemClock.elapsedRealtime()
-        begin()
-        handler.postDelayed(watchdog, 4000L)
-        val last = manager.getProviders(true)
-            .mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
-            .maxByOrNull { it.time }
+        startedAt = SystemClock.elapsedRealtime()
+        lastAcceptedAt = startedAt
+        lastKickAt = startedAt
+        Diag.firstFixMs = -1L
+        Diag.googleServices = hasGoogle
+        refreshState()
+        requestFused()
+        requestSystem(withGps = true)
+        if (hasFine()) runCatching { LocationManagerCompat.registerGnssStatusCallback(manager, ContextCompat.getMainExecutor(appContext), gnssCallback) }
+        handler.postDelayed(watchdog, 3000L)
+        // Свежее последнее известное положение — сразу, чтобы стрелка не ждала спутников
+        val last = runCatching {
+            manager.getProviders(true)
+                .mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
+                .maxByOrNull { it.time }
+        }.getOrNull()
         if (last != null && System.currentTimeMillis() - last.time < 120_000L) accept(last)
     }
 
     @SuppressLint("MissingPermission")
-    private fun begin() {
+    private fun requestFused() {
+        val client = fused ?: return
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500L)
             .setMinUpdateIntervalMillis(250L)
             .setWaitForAccurateLocation(false)
             .build()
         runCatching {
-            fused.requestLocationUpdates(request, fusedCallback, Looper.getMainLooper())
-                .addOnFailureListener { startFallback() }
-        }.onFailure { startFallback() }
-        // Если служба Google молчит, через 4 секунды включаем обычный GPS
-        Handler(Looper.getMainLooper()).postDelayed({ if (!fusedWorks) startFallback() }, 4000L)
+            client.requestLocationUpdates(request, fusedCallback, Looper.getMainLooper())
+                .addOnFailureListener { Diag.lastError = "службы Google: ${it.javaClass.simpleName}" }
+        }.onFailure { Diag.lastError = "службы Google: ${it.javaClass.simpleName}" }
     }
 
+    /** Системные источники: GPS всегда, сеть и «fused» Android 12+ — запасные. Повторный вызов обновляет подписку. */
     @SuppressLint("MissingPermission")
-    private fun startFallback() {
-        if (fallbackOn) return
-        fallbackOn = true
-        for (provider in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
-            if (manager.allProviders.contains(provider)) {
-                runCatching {
-                    manager.requestLocationUpdates(provider, 500L, 0f, listener, Looper.getMainLooper())
-                }
-            }
+    private fun requestSystem(withGps: Boolean) {
+        val list = mutableListOf(LocationManager.NETWORK_PROVIDER)
+        if (withGps) list += LocationManager.GPS_PROVIDER
+        if (Build.VERSION.SDK_INT >= 31) list += LocationManager.FUSED_PROVIDER
+        val all = runCatching { manager.allProviders }.getOrDefault(emptyList())
+        for (provider in list) {
+            if (!all.contains(provider)) continue
+            runCatching {
+                manager.requestLocationUpdates(provider, 500L, 0f, listener, Looper.getMainLooper())
+            }.onFailure { Diag.lastError = "$provider: ${it.javaClass.simpleName}" }
         }
+    }
+
+    private fun hasFine(): Boolean =
+        ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    /** Для отчёта: какое разрешение дано, включена ли геолокация и какие источники работают. */
+    private fun refreshState() {
+        val coarse = ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        Diag.permission = when {
+            hasFine() -> "точное"
+            coarse -> "только примерное"
+            else -> "нет"
+        }
+        Diag.locationOn = runCatching { LocationManagerCompat.isLocationEnabled(manager) }.getOrDefault(true)
+        Diag.providers = runCatching { manager.getProviders(true).joinToString(",") }.getOrDefault("")
     }
 
     fun stop() {
         stopped = true
         handler.removeCallbacks(watchdog)
-        runCatching { fused.removeLocationUpdates(fusedCallback) }
+        runCatching { fused?.removeLocationUpdates(fusedCallback) }
         runCatching { manager.removeUpdates(listener) }
+        runCatching { LocationManagerCompat.unregisterGnssStatusCallback(manager, gnssCallback) }
     }
 
     private companion object {
