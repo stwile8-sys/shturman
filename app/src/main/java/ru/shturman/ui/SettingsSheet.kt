@@ -8,6 +8,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,6 +65,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -98,7 +100,9 @@ private enum class Page(val title: String) {
     NOTIF("Уведомления и автозапуск"),
     DATA("Данные и резервная копия"),
     PRIVACY("Приватность и синхронизация"),
-    ADMIN("Для владельца")
+    ADMIN("Для владельца"),
+    /** Скрытый раздел «Штурман 2»: виден только после секретной комбинации. */
+    APEX("APEX")
 }
 
 private val LEVELS = listOf("Низкая", "Средняя", "Высокая")
@@ -118,12 +122,23 @@ fun SettingsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = androidx.compose.ui.graphics.lerp(ShColors.Panel, Color.White, 0.06f).copy(alpha = 0.97f),
-        shape = if (ShColors.L.flavor == ru.shturman.ui.themes.Flavor.TELEMETRY) androidx.compose.foundation.shape.CutCornerShape(topEnd = 26.dp)
-            else RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp),
+        shape = when (ShColors.L.flavor) {
+            ru.shturman.ui.themes.Flavor.TELEMETRY -> androidx.compose.foundation.shape.CutCornerShape(topEnd = 26.dp)
+            ru.shturman.ui.themes.Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
+            else -> RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)
+        },
         contentColor = ShColors.TextPrimary,
         dragHandle = { BottomSheetDefaults.DragHandle(color = ShColors.Divider) }
     ) {
         var pageName by rememberSaveable { mutableStateOf<String?>(null) }
+        val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+        // «Штурман 2»: комбинация набрана — открываем режим, включаем APEX и показываем заставку
+        val unlock = {
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+            vm.unlockShturman2()
+            ru.shturman.ui.themes.Shturman2.introPending = true
+            onDismiss()
+        }
         val page = pageName?.let { n -> Page.values().firstOrNull { it.name == n } }
         AnimatedContent(
             targetState = page,
@@ -138,6 +153,8 @@ fun SettingsSheet(
                             slideOutHorizontally(tween()) { w -> if (forward) -w else w }
                     ru.shturman.ui.themes.Flavor.NEON ->
                         fadeIn(androidx.compose.animation.core.tween(160)) togetherWith fadeOut(androidx.compose.animation.core.tween(120))
+                    ru.shturman.ui.themes.Flavor.APEX ->
+                        fadeIn(androidx.compose.animation.core.tween(90)) togetherWith fadeOut(androidx.compose.animation.core.tween(60))
                     else ->
                         (slideInHorizontally(androidx.compose.animation.core.spring(0.75f, 300f)) { w -> if (forward) w / 4 else -w / 4 } + fadeIn(tween())) togetherWith
                             (slideOutHorizontally(tween()) { w -> if (forward) -w / 4 else w / 4 } + fadeOut(tween()))
@@ -154,7 +171,7 @@ fun SettingsSheet(
                     .padding(bottom = 20.dp)
             ) {
                 if (current == null) {
-                    Home(user, s, vm, isAdmin, onSignOut) { pageName = it.name }
+                    Home(user, s, vm, isAdmin, onSignOut, unlock) { pageName = it.name }
                 } else {
                     PageHeader(current.title) { pageName = null }
                     when (current) {
@@ -168,6 +185,10 @@ fun SettingsSheet(
                         Page.DATA -> DataPage(vm)
                         Page.PRIVACY -> PrivacyPage(user, s, vm)
                         Page.ADMIN -> AdminPage(onOpenAdmin)
+                        Page.APEX -> ApexPage {
+                            ru.shturman.ui.themes.Shturman2.introPending = true
+                            onDismiss()
+                        }
                     }
                 }
             }
@@ -180,10 +201,17 @@ private fun <T> tween() = androidx.compose.animation.core.tween<T>(durationMilli
 // ---------- главный экран настроек ----------
 
 @Composable
-private fun Home(user: UserInfo, s: NavState, vm: NavViewModel, isAdmin: Boolean, onSignOut: () -> Unit, open: (Page) -> Unit) {
+private fun Home(user: UserInfo, s: NavState, vm: NavViewModel, isAdmin: Boolean, onSignOut: () -> Unit, onUnlock: () -> Unit, open: (Page) -> Unit) {
     val ctx = LocalContext.current
     val trips = remember { vm.tripCount() }
+    // Секретная комбинация: 5 касаний по «В дороге», затем 2 по «Система», всё за 10 секунд
+    val secret = remember { ru.shturman.ui.themes.SecretTaps() }
     Profile(user)
+
+    if (ru.shturman.ui.themes.Shturman2.unlocked) {
+        Group("Клан")
+        CategoryRow(ru.shturman.ui.themes.ApexMark, Page.APEX.title, 0, "Заставка") { open(Page.APEX) }
+    }
 
     Group("Внешний вид и голос")
     CategoryRow(Icons.Filled.Star, Page.THEME.title, Page.THEME.ordinal,
@@ -191,7 +219,7 @@ private fun Home(user: UserInfo, s: NavState, vm: NavViewModel, isAdmin: Boolean
     CategoryRow(Icons.Filled.PlayArrow, Page.VOICE.title, Page.VOICE.ordinal,
         (if (s.voiceOn) "Подсказки включены" else "Подсказки выключены") + if (s.nightVoice) " · ночной режим" else "") { open(Page.VOICE) }
 
-    Group("В дороге")
+    Group("В дороге") { if (secret.tap('A')) onUnlock() }
     CategoryRow(Icons.Filled.LocationOn, Page.NAV.title, Page.NAV.ordinal,
         "Съезд: ${LEVELS.getOrElse(s.devLevel) { "Средняя" }.lowercase()}" + (if (s.fullscreen) " · полный экран" else "") + (if (s.satellite) " · спутник" else "")) { open(Page.NAV) }
     CategoryRow(Icons.Filled.Build, Page.CAR.title, Page.CAR.ordinal,
@@ -201,7 +229,7 @@ private fun Home(user: UserInfo, s: NavState, vm: NavViewModel, isAdmin: Boolean
     CategoryRow(Icons.Filled.Place, Page.CARAVAN.title, Page.CARAVAN.ordinal,
         s.caravanCode?.let { "Код $it · на карте ${s.members.size}" } ?: "Вы не в караване") { open(Page.CARAVAN) }
 
-    Group("Система")
+    Group("Система") { if (secret.tap('B')) onUnlock() }
     CategoryRow(Icons.Filled.Notifications, Page.NOTIF.title, Page.NOTIF.ordinal,
         listOfNotNull(
             if (AutoPrefs.quietHours(ctx)) "тихие часы" else null,
@@ -241,9 +269,16 @@ private fun Profile(user: UserInfo) {
 }
 
 @Composable
-private fun Group(title: String) {
+private fun Group(title: String, onTap: (() -> Unit)? = null) {
     Spacer(Modifier.height(16.dp))
-    Text(text = title.uppercase(), color = ShColors.TextSecondary, fontSize = 12.sp, letterSpacing = 1.2.sp)
+    // Заголовок выглядит как обычный текст; касания по нему ловятся без отклика (для секретной комбинации)
+    val tap by androidx.compose.runtime.rememberUpdatedState(onTap)
+    Text(
+        text = title.uppercase(), color = ShColors.TextSecondary, fontSize = 12.sp, letterSpacing = 1.2.sp,
+        modifier = if (onTap == null) Modifier else Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) { detectTapGestures(onTap = { tap?.invoke() }) }
+    )
     Spacer(Modifier.height(6.dp))
 }
 
@@ -263,11 +298,15 @@ private fun CategoryRow(icon: ImageVector, title: String, index: Int, summary: S
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
+        val apex = ShColors.L.flavor == ru.shturman.ui.themes.Flavor.APEX
         Box(
             modifier = Modifier
                 .size(42.dp)
-                .clip(if (ShColors.L.flavor == ru.shturman.ui.themes.Flavor.TELEMETRY) ru.shturman.ui.fx.chipShape() else RoundedCornerShape(14.dp))
-                .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(ShColors.Accent.copy(alpha = 0.30f), ShColors.Accent2.copy(alpha = 0.12f)))),
+                .clip(if (ShColors.L.flavor == ru.shturman.ui.themes.Flavor.TELEMETRY || apex) ru.shturman.ui.fx.chipShape() else RoundedCornerShape(14.dp))
+                .then(
+                    if (apex) Modifier.border(1.dp, ShColors.Accent.copy(alpha = 0.18f), ru.shturman.ui.fx.chipShape())
+                    else Modifier.background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(ShColors.Accent.copy(alpha = 0.30f), ShColors.Accent2.copy(alpha = 0.12f))))
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(imageVector = icon, contentDescription = null, tint = ShColors.Accent, modifier = Modifier.size(22.dp))
@@ -602,6 +641,13 @@ private fun PrivacyPage(user: UserInfo, s: NavState, vm: NavViewModel) {
             ", голос: ${s.voiceMessage}, состояние голоса: ${s.voiceStatus}, услышано: ${s.heardText}, аккаунт: ${user.email}"
         ru.shturman.Report.send(ctx, sum)
     }
+}
+
+/** Скрытый раздел «Штурман 2». Сюда будут добавляться функции клана. */
+@Composable
+private fun ApexPage(onIntro: () -> Unit) {
+    Section("Заставка")
+    WideButton("Показать заставку APEX", onClick = onIntro)
 }
 
 @Composable

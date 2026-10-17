@@ -235,6 +235,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         downloadDataIfNeeded()
         startHudLoop()
         showGreeting()
+        ru.shturman.ui.themes.Shturman2.load(settings)
         ShColors.themeId = ru.shturman.ui.themes.Themes.load(settings)
         voice.princess = ShColors.themeId == 1
         ThemeSounds.enabled = settings.getBoolean("theme_sounds", true)
@@ -885,6 +886,12 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         voice.princess = id == 1
         ThemeSounds.setTheme(getApplication(), id)
         _state.update { it.copy(theme = id) }
+    }
+
+    /** «Штурман 2»: открывает скрытый режим навсегда и сразу включает тему APEX. */
+    fun unlockShturman2() {
+        ru.shturman.ui.themes.Shturman2.unlock(settings)
+        setTheme(ru.shturman.ui.themes.Themes.APEX)
     }
 
     fun setThemeSounds(on: Boolean) {

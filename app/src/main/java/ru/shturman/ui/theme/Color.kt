@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.Color
 import ru.shturman.ui.themes.ThemeSpec
 import ru.shturman.ui.themes.Themes
 
-// Все цвета приложения берутся из выбранной темы (ui/themes/AppTheme.kt). Все 8 тем тёмные.
+// Все цвета приложения берутся из выбранной темы (ui/themes/AppTheme.kt). Все темы тёмные.
 object ShColors {
     /** Номер выбранной темы. Меняется из настроек, и весь экран перекрашивается сам. */
     var themeId by mutableStateOf(0)
@@ -31,7 +31,11 @@ object ShColors {
     val Accent: Color get() = T.accent
     val Danger: Color get() = T.danger
     val Success: Color get() = T.third
-    val Gold: Color get() = if (themeId == 1) T.third else Color(0xFFFFD400)
+    val Gold: Color get() = when {
+        themeId == 1 -> T.third
+        L.flavor == ru.shturman.ui.themes.Flavor.APEX -> T.text
+        else -> Color(0xFFFFD400)
+    }
     val TextPrimary: Color get() = T.text
     val TextSecondary: Color get() = T.textSec
     val Divider: Color get() = T.divider

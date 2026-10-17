@@ -6,9 +6,10 @@ import androidx.compose.ui.graphics.Color
  * Характер оформления темы поверх общей «стеклянной» основы:
  * GLASS — чистое стекло и мягкие пружины; NEON — бегущая неоновая обводка, глитч, пиксели;
  * TELEMETRY — гоночная телеметрия: срезанные углы, полоса акцента, резкие въезды, стартовые огни;
- * DEPTH — глубина: объёмные тени, наклон от касания, карточки выезжают из глубины.
+ * DEPTH — глубина: объёмные тени, наклон от касания, карточки выезжают из глубины;
+ * APEX — табло и терминал: плоские панели с метками по углам, строки развёртки, элементы загораются с мерцанием.
  */
-enum class Flavor { GLASS, NEON, TELEMETRY, DEPTH }
+enum class Flavor { GLASS, NEON, TELEMETRY, DEPTH, APEX }
 
 /** Какие частицы разлетаются при нажатиях и на старте. */
 enum class Particle { HEART, PIXEL, SPARK, EMBER, DUST, SMOKE }
@@ -20,7 +21,11 @@ class ThemeLook(
     val particle: Particle,
     val particleColors: List<Color>,
     /** Цвет свечения вокруг панелей и кнопок. */
-    val glow: Color
+    val glow: Color,
+    /** Цвет «главной точки» (точка назначения на карте), если он не цвет акцента. */
+    val dot: Color? = null,
+    /** Цвет следа за машиной на карте, если не обычный дымчатый. */
+    val trail: Color? = null
 )
 
 object Looks {
@@ -40,7 +45,10 @@ object Looks {
         // Rally Gravel — стекло + телеметрия, пыль и гравий
         ThemeLook(Flavor.TELEMETRY, Color(0xFFFFB45A), Particle.DUST, listOf(Color(0xFFC79A66), Color(0xFFE8C9A0), Color(0xFF8A6A48)), Color(0xFFD97830)),
         // Drift Night — стекло + глубина, туман и дым
-        ThemeLook(Flavor.DEPTH, Color(0xFFB04BE8), Particle.SMOKE, listOf(Color(0xFFDDE2FF), Color(0xFFB8C0F0), Color(0xFF8A7BFF)), Color(0xFF6A5BFF))
+        ThemeLook(Flavor.DEPTH, Color(0xFFB04BE8), Particle.SMOKE, listOf(Color(0xFFDDE2FF), Color(0xFFB8C0F0), Color(0xFF8A7BFF)), Color(0xFF6A5BFF)),
+        // APEX — табло, мел и одна красная точка
+        ThemeLook(Flavor.APEX, Color(0xFFD9D6CC), Particle.PIXEL, listOf(Color(0xFFF3F1EA), Color(0xFFFF2B2B), Color(0xFFA6A39A)), Color(0xFFF3F1EA),
+            dot = Color(0xFFFF2B2B), trail = Color(0xFFFF2B2B))
     )
 
     fun of(id: Int): ThemeLook = all[id.coerceIn(0, all.size - 1)]

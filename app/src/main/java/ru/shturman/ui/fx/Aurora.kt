@@ -35,10 +35,29 @@ fun AuroraBackground(modifier: Modifier = Modifier) {
     val g = ShColors.L.glow
     val kind = ShColors.L.particle
     val cols = ShColors.L.particleColors
+    val apex = ShColors.L.flavor == ru.shturman.ui.themes.Flavor.APEX
     Canvas(modifier.fillMaxSize()) {
         val w = size.width; val h = size.height
         val tau = (2 * PI).toFloat()
         drawRect(bg)
+        if (apex) {
+            // APEX: тёмный экран старого монитора — строки развёртки, медленная светлая полоса и редкие пиксели
+            val band = h * 0.22f
+            val y = -band + ((t * 2.3f) % 1f) * (h + band * 2)
+            drawRect(Brush.verticalGradient(listOf(Color.Transparent, a.copy(alpha = 0.05f), Color.Transparent), y, y + band), Offset(0f, y), Size(w, band))
+            for (i in 0 until 18) {
+                val seed = (i * 0.618034f) % 1f
+                val blink = ((t * 40f + i * 7f).toInt() % 9) == 0
+                if (blink) continue
+                val px = w * seed
+                val py = h * ((i * 0.37f + 0.11f) % 1f)
+                val ps = 2f * density
+                drawRect((if (i % 6 == 0) ApexRed else ApexChalk).copy(alpha = 0.22f), Offset(px, py), Size(ps, ps))
+            }
+            apexScanlines(0.22f)
+            drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)), Offset(w / 2, h / 2), max(w, h) * 0.75f))
+            return@Canvas
+        }
         fun blob(cx: Float, cy: Float, r: Float, c: Color, alpha: Float) {
             drawCircle(Brush.radialGradient(listOf(c.copy(alpha = alpha), Color.Transparent), Offset(cx, cy), r), r, Offset(cx, cy))
         }

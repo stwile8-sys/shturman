@@ -64,6 +64,10 @@ fun ThemeSplash(onPlaySound: () -> Unit, onFinished: () -> Unit) {
         SplashOverlay(onPlaySound = onPlaySound, onFinished = onFinished)
         return
     }
+    if (th.id == Themes.APEX) {
+        ApexIntro(onFinished = onFinished)
+        return
+    }
     val peak = th.splashPeakMs.toFloat()
     SplashStage(
         totalMs = th.splashMs.toFloat(),

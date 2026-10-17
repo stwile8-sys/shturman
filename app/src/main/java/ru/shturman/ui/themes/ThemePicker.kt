@@ -40,17 +40,21 @@ import androidx.compose.ui.unit.sp
 import ru.shturman.ui.fx.pressFx
 
 /**
- * Раздел «Тема оформления»: восемь живых карточек. Слева — маленький макет экрана в стиле темы
+ * Раздел «Тема оформления»: живые карточки тем (APEX — только после открытия «Штурман 2»). Слева — маленький макет экрана в стиле темы
  * (карта, маршрут, стеклянная панель, её частицы), справа — название и характер. Выбор применяется сразу.
  */
 @Composable
 fun ThemePicker(selected: Int, onSelect: (Int) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-        for (th in Themes.all) {
+        for (th in Themes.visible()) {
             val look = Looks.of(th.id)
             val on = th.id == selected
             val lift by animateFloatAsState(if (on) 1f else 0f, spring(dampingRatio = 0.55f, stiffness = 300f), label = "lift")
-            val shape = if (look.flavor == Flavor.TELEMETRY) CutCornerShape(topEnd = 16.dp, bottomStart = 16.dp) else RoundedCornerShape(18.dp)
+            val shape = when (look.flavor) {
+                Flavor.TELEMETRY -> CutCornerShape(topEnd = 16.dp, bottomStart = 16.dp)
+                Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
+                else -> RoundedCornerShape(18.dp)
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -60,7 +64,7 @@ fun ThemePicker(selected: Int, onSelect: (Int) -> Unit) {
                     .pressFx()
                     .shadow((12f * lift).dp, shape, clip = false, ambientColor = look.glow, spotColor = look.glow)
                     .clip(shape)
-                    .background(Brush.linearGradient(listOf(th.bg, androidx.compose.ui.graphics.lerp(th.panel, th.accent, 0.08f))))
+                    .background(Brush.linearGradient(listOf(th.bg, androidx.compose.ui.graphics.lerp(th.panel, th.accent, if (look.flavor == Flavor.APEX) 0.02f else 0.08f))))
                     .border(if (on) 2.dp else 1.dp, if (on) th.accent else Color.White.copy(alpha = 0.08f), shape)
                     .clickable { onSelect(th.id) }
                     .padding(10.dp)
@@ -104,16 +108,27 @@ private fun DrawScope.miniScene(th: ThemeSpec, look: ThemeLook) {
     val route = Path().apply { moveTo(w * 0.5f, h); lineTo(w * 0.52f, h * 0.62f); lineTo(w * 0.36f, h * 0.45f); lineTo(w * 0.72f, h * 0.22f) }
     drawPath(route, look.glow.copy(alpha = 0.35f), style = Stroke(10f))
     drawPath(route, th.accent, style = Stroke(4f))
-    drawCircle(th.accent, 5f, Offset(w * 0.72f, h * 0.22f))
+    drawCircle(look.dot ?: th.accent, 5f, Offset(w * 0.72f, h * 0.22f))
     // стеклянная плашка сверху
     val pw = w * 0.62f; val ph = h * 0.2f
     val tl = Offset(w * 0.06f, h * 0.06f)
-    drawRoundRect(Color.White.copy(alpha = 0.16f), tl, Size(pw, ph), CornerRadius(if (look.flavor == Flavor.TELEMETRY) 2f else 10f))
+    drawRoundRect(Color.White.copy(alpha = 0.16f), tl, Size(pw, ph), CornerRadius(if (look.flavor == Flavor.TELEMETRY || look.flavor == Flavor.APEX) 0f else 10f))
     when (look.flavor) {
         Flavor.NEON -> drawRoundRect(Brush.linearGradient(listOf(th.accent, look.acc2)), tl, Size(pw, ph), CornerRadius(10f), style = Stroke(2.5f))
         Flavor.TELEMETRY -> drawRect(th.accent, tl, Size(5f, ph))
         Flavor.DEPTH -> drawRoundRect(Color.Black.copy(alpha = 0.35f), Offset(tl.x + 3f, tl.y + ph), Size(pw, 5f), CornerRadius(3f))
         Flavor.GLASS -> drawRoundRect(Color.White.copy(alpha = 0.35f), tl, Size(pw, ph), CornerRadius(10f), style = Stroke(1.2f))
+        Flavor.APEX -> {
+            // метки по углам плашки
+            val k = ph * 0.35f
+            for ((cx, cy, sx, sy) in listOf(
+                floatArrayOf(tl.x, tl.y, 1f, 1f), floatArrayOf(tl.x + pw, tl.y, -1f, 1f),
+                floatArrayOf(tl.x, tl.y + ph, 1f, -1f), floatArrayOf(tl.x + pw, tl.y + ph, -1f, -1f)
+            )) {
+                drawLine(th.text, Offset(cx, cy), Offset(cx + sx * k, cy), 1.5f)
+                drawLine(th.text, Offset(cx, cy), Offset(cx, cy + sy * k), 1.5f)
+            }
+        }
     }
     drawRoundRect(Brush.linearGradient(listOf(th.accent, look.acc2), tl, Offset(tl.x + ph, tl.y + ph)), Offset(tl.x + 5f, tl.y + 5f), Size(ph - 10f, ph - 10f), CornerRadius(6f))
     // частицы темы в углу

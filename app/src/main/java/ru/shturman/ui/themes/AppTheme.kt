@@ -11,13 +11,14 @@ import androidx.compose.ui.text.font.FontWeight
 import ru.shturman.R
 
 /** Форма кнопок. */
-enum class BtnKind { CHAMFER, ROUND, STRIPES, CARBON, SLIM, CONCRETE, GRAIN, SOFT }
+enum class BtnKind { CHAMFER, ROUND, STRIPES, CARBON, SLIM, CONCRETE, GRAIN, SOFT, TICKS }
 
 /** Как панели появляются на экране. */
-enum class EnterKind { RISE, FLOAT, SIDE_FAST, STICK_DOWN, EMERGE, DROP, SIDE_DUST, FOG }
+enum class EnterKind { RISE, FLOAT, SIDE_FAST, STICK_DOWN, EMERGE, DROP, SIDE_DUST, FOG, IGNITE }
 
 /** Как меняются цифры. */
-enum class DigitKind { GLITCH, ROLL, FLY, PRINT, BLUR, BOARD, KNOCK, HAZE }
+/** SEGMENT — цифры табло: под ними видны погасшие сегменты «8», новые загораются с мерцанием. */
+enum class DigitKind { GLITCH, ROLL, FLY, PRINT, BLUR, BOARD, KNOCK, HAZE, SEGMENT }
 
 private fun vf(res: Int, weight: Int): FontFamily =
     FontFamily(Font(res, FontWeight(weight), variationSettings = FontVariation.Settings(FontVariation.weight(weight))))
@@ -179,12 +180,39 @@ object Themes {
             enter = EnterKind.FOG, enterMs = 400, digit = DigitKind.HAZE, pressMs = 200, pressScale = 1f, transMs = 400,
             routeMs = 1300, routeJerky = false, vibrate = false,
             splashMs = 3850, splashPeakMs = 1250, splashRes = R.raw.splash_t8
+        ),
+        // 9. APEX — тема клана. Скрыта, пока не открыт «Штурман 2» (см. Shturman2.kt).
+        // Ночь, мел и одна красная точка; цифры как на табло, панели с метками по углам.
+        ThemeSpec(
+            id = 8, name = "APEX", vibe = "Ночные заезды на время по пустым дорогам",
+            bg = Color(0xFF060605), panel = Color(0xFF0F0F0E), accent = Color(0xFFF3F1EA), second = Color(0xFFA6A39A),
+            third = Color(0xFFF3F1EA), danger = Color(0xFFFF2B2B), text = Color(0xFFF3F1EA), textSec = Color(0xFFA6A39A),
+            divider = Color(0xFF2B2A27), search = Color(0xFF181816), iconTint = Color(0xFFF3F1EA), flash = Color(0xFFFF2B2B),
+            signs = listOf(Color(0xFFFF2B2B), Color(0xFFF3F1EA), Color(0xFFDCD9D0), Color(0xFFC2BFB6), Color(0xFFA6A39A)),
+            numFont = FontFamily(Font(R.font.apex_seg, FontWeight.Normal), Font(R.font.apex_seg, FontWeight.Medium), Font(R.font.apex_seg, FontWeight.Bold)),
+            textFont = FontFamily(
+                Font(R.font.apex_mono, FontWeight.Normal), Font(R.font.apex_mono, FontWeight.Medium),
+                Font(R.font.apex_mono_bold, FontWeight.SemiBold), Font(R.font.apex_mono_bold, FontWeight.Bold)
+            ),
+            letterSp = 0f,
+            btn = BtnKind.TICKS, btnRadius = 0, btnW = 50, btnH = 50, panelRadius = 0, borderW = 1f, border = Color(0xFF2B2A27),
+            enter = EnterKind.IGNITE, enterMs = 480, digit = DigitKind.SEGMENT, pressMs = 90, pressScale = 0.97f, transMs = 180,
+            routeMs = 1100, routeJerky = false, vibrate = true,
+            splashMs = 8000, splashPeakMs = 2600, splashRes = R.raw.welcome
         )
     )
 
+    /** Номер темы APEX. */
+    const val APEX = 8
+
+    /** Темы для выбора в настройках: APEX видна только после открытия «Штурман 2». */
+    fun visible(): List<ThemeSpec> = all.filter { it.id != APEX || Shturman2.unlocked }
+
     /** Номер сохранённой темы. Старая настройка «режим принцессы» превращается в тему №2. */
     fun load(prefs: SharedPreferences): Int {
-        if (prefs.contains(PREF)) return prefs.getInt(PREF, 0).coerceIn(0, all.size - 1)
-        return if (prefs.getBoolean("princess", false)) 1 else 0
+        val id = if (prefs.contains(PREF)) prefs.getInt(PREF, 0).coerceIn(0, all.size - 1)
+            else if (prefs.getBoolean("princess", false)) 1 else 0
+        // APEX без открытого «Штурман 2» не включается
+        return if (id == APEX && !prefs.getBoolean(Shturman2.PREF, false)) 0 else id
     }
 }

@@ -1,14 +1,21 @@
 package ru.shturman.ui.fx
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -28,6 +35,7 @@ import ru.shturman.ui.themes.Flavor
 fun mapButtonShape(): Shape = when (ShColors.L.flavor) {
     Flavor.TELEMETRY -> CutCornerShape(topEnd = 12.dp, bottomStart = 12.dp)
     Flavor.NEON -> RoundedCornerShape(17.dp)
+    Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
     else -> CircleShape
 }
 
@@ -35,6 +43,7 @@ fun mapButtonShape(): Shape = when (ShColors.L.flavor) {
 fun capsuleShape(): Shape = when (ShColors.L.flavor) {
     Flavor.TELEMETRY -> CutCornerShape(topEnd = 14.dp, bottomStart = 14.dp)
     Flavor.NEON -> RoundedCornerShape(18.dp)
+    Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
     else -> RoundedCornerShape(50)
 }
 
@@ -42,6 +51,7 @@ fun capsuleShape(): Shape = when (ShColors.L.flavor) {
 fun pillShape(): Shape = when (ShColors.L.flavor) {
     Flavor.TELEMETRY -> CutCornerShape(topEnd = 16.dp, bottomStart = 16.dp)
     Flavor.NEON -> RoundedCornerShape(17.dp)
+    Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
     else -> RoundedCornerShape(50)
 }
 
@@ -49,6 +59,7 @@ fun pillShape(): Shape = when (ShColors.L.flavor) {
 fun innerButtonShape(): Shape = when (ShColors.L.flavor) {
     Flavor.TELEMETRY -> CutCornerShape(topEnd = 9.dp, bottomStart = 9.dp)
     Flavor.NEON -> RoundedCornerShape(13.dp)
+    Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
     else -> CircleShape
 }
 
@@ -56,18 +67,27 @@ fun innerButtonShape(): Shape = when (ShColors.L.flavor) {
 fun choiceChipShape(): Shape = when (ShColors.L.flavor) {
     Flavor.TELEMETRY -> RoundedCornerShape(2.dp)
     Flavor.NEON -> RoundedCornerShape(11.dp)
+    Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
     else -> RoundedCornerShape(50)
 }
 
 /** Круглая кнопка-крестик в заголовках панелей. */
-fun closeButtonShape(): Shape = if (ShColors.L.flavor == Flavor.TELEMETRY) RoundedCornerShape(2.dp) else CircleShape
+fun closeButtonShape(): Shape = when (ShColors.L.flavor) {
+    Flavor.TELEMETRY -> RoundedCornerShape(2.dp)
+    Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
+    else -> CircleShape
+}
 
 /** Цвет иконок на стеклянных кнопках. */
 val ButtonIcon: Color get() = ShColors.TextPrimary
 
 /** Тонкий разделитель внутри капсулы. */
 val CapsuleDivider: Color get() =
-    if (ShColors.L.flavor == Flavor.NEON) ShColors.Accent.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.12f)
+    when (ShColors.L.flavor) {
+        Flavor.NEON -> ShColors.Accent.copy(alpha = 0.30f)
+        Flavor.APEX -> ApexChalk.copy(alpha = 0.08f)
+        else -> Color.White.copy(alpha = 0.12f)
+    }
 
 /**
  * Стеклянная кнопка: ровная заливка цветом панели сверху чуть светлее, тонкая кромка и мягкая тень.
@@ -78,6 +98,15 @@ fun Modifier.glassButton(shape: Shape, elevation: Dp = 10.dp): Modifier = compos
     val flavor = ShColors.L.flavor
     val panel = ShColors.Panel
     val acc = ShColors.Accent
+    if (flavor == Flavor.APEX) {
+        // APEX: плоский асфальт, волосяная рамка и метки по углам
+        return@composed this
+            .shadow(elevation * 0.6f, shape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
+            .clip(shape)
+            .background(Color(0xFF0B0B0A).copy(alpha = 0.92f))
+            .border(1.dp, ApexChalk.copy(alpha = 0.08f), shape)
+            .drawBehind { apexTicks(len = 8.dp.toPx()) }
+    }
     val fill = if (flavor == Flavor.DEPTH) {
         Brush.verticalGradient(
             listOf(lerp(panel, Color.White, 0.28f).copy(alpha = 0.95f), panel.copy(alpha = 0.93f), lerp(panel, Color.Black, 0.22f).copy(alpha = 0.93f))
@@ -105,4 +134,26 @@ fun Modifier.accentButton(shape: Shape, elevation: Dp = 10.dp, enabled: Boolean 
         .shadow(if (enabled) elevation else 0.dp, shape, clip = false, ambientColor = if (flavor == Flavor.TELEMETRY) Color.Black else glow, spotColor = if (flavor == Flavor.TELEMETRY) Color.Black else glow)
         .clip(shape)
         .background(if (enabled) accentBrush() else Brush.linearGradient(listOf(ShColors.Divider, ShColors.SearchField)))
+        .then(if (enabled && flavor == Flavor.APEX) Modifier.headlights() else Modifier)
+}
+
+/**
+ * APEX: по главной кнопке раз в 4 секунды проходит полоса света — как фары встречной машины по стене гаража.
+ */
+private fun Modifier.headlights(): Modifier = composed {
+    val tr = rememberInfiniteTransition(label = "lights")
+    val t by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(4000, easing = LinearEasing)), label = "t")
+    this.drawWithContent {
+        drawContent()
+        val k = (t / 0.3f).coerceIn(0f, 1f)
+        if (k <= 0f || k >= 1f) return@drawWithContent
+        val w = size.width
+        val x = -w * 0.4f + k * w * 1.8f
+        drawRect(
+            Brush.linearGradient(
+                listOf(Color.Transparent, Color.White.copy(alpha = 0.55f), Color.Transparent),
+                Offset(x - w * 0.18f, 0f), Offset(x + w * 0.18f, size.height)
+            )
+        )
+    }
 }

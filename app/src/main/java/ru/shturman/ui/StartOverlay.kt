@@ -7,6 +7,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,10 +30,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.shturman.ui.fx.LocalFx
+import ru.shturman.ui.fx.apexScanlines
 import ru.shturman.ui.fx.fxAnchor
 import ru.shturman.ui.fx.rememberFxAnchor
 import ru.shturman.ui.theme.NumberFont
@@ -55,13 +58,13 @@ private fun lin(t: Float, a: Float, b: Float) = ((t - a) / (b - a)).coerceIn(0f,
 @Composable
 fun StartOverlay(trigger: Int) {
     val flavor = ShColors.L.flavor
-    val dur = if (flavor == Flavor.TELEMETRY) 2300 else 1900
+    val dur = when (flavor) { Flavor.TELEMETRY -> 2300; Flavor.APEX -> 2100; else -> 1900 }
     val progress = remember { Animatable(0f) }
     var visible by remember { mutableStateOf(false) }
     val fx = LocalFx.current
     val anchor = rememberFxAnchor()
     // момент, когда появляется надпись (у телеметрии — после зелёного)
-    val textAt = if (flavor == Flavor.TELEMETRY) 0.6f else 0.1f
+    val textAt = when (flavor) { Flavor.TELEMETRY -> 0.6f; Flavor.APEX -> 0.34f; else -> 0.1f }
 
     LaunchedEffect(trigger) {
         if (trigger == 0) return@LaunchedEffect
@@ -102,16 +105,20 @@ fun StartOverlay(trigger: Int) {
                 Flavor.NEON -> drawNeon(p, out, accent, accent2, street)
                 Flavor.TELEMETRY -> drawLights(p, out, accent)
                 Flavor.DEPTH -> drawTunnel(p, out, accent, accent2)
+                Flavor.APEX -> drawApexGate(p, out, textAt)
             }
             // вспышка в момент появления надписи
             val f = lin(p, textAt, textAt + 0.16f)
             if (p >= textAt && f < 1f) drawRect(Color.White.copy(alpha = 0.24f * (1f - f) * (1f - f)))
         }
         KineticTitle(
-            text = if (flavor == Flavor.GLASS) "Поехали!" else "ПОЕХАЛИ!",
+            text = when (flavor) { Flavor.GLASS -> "Поехали!"; Flavor.APEX -> "ПОЕХАЛИ"; else -> "ПОЕХАЛИ!" },
             p = p, textAt = textAt, flavor = flavor, accent = accent, accent2 = accent2,
             modifier = Modifier.align(Alignment.Center)
         )
+        if (flavor == Flavor.APEX) {
+            ApexStopwatch(p = p, textAt = textAt, dur = dur, modifier = Modifier.align(Alignment.Center).padding(bottom = 150.dp))
+        }
     }
 }
 
@@ -127,7 +134,7 @@ private fun backOut(x: Float): Float {
  */
 @Composable
 private fun KineticTitle(text: String, p: Float, textAt: Float, flavor: Flavor, accent: Color, accent2: Color, modifier: Modifier) {
-    val italic = flavor != Flavor.GLASS
+    val italic = flavor != Flavor.GLASS && flavor != Flavor.APEX
     Row(modifier = modifier) {
         text.forEachIndexed { i, ch ->
             val a0 = textAt + i * 0.022f
@@ -153,7 +160,7 @@ private fun KineticTitle(text: String, p: Float, textAt: Float, flavor: Flavor, 
                     fontWeight = FontWeight.Bold,
                     fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
                     fontSize = 46.sp,
-                    letterSpacing = if (italic) 3.sp else 1.sp,
+                    letterSpacing = when { flavor == Flavor.APEX -> 6.sp; italic -> 3.sp; else -> 1.sp },
                     textAlign = TextAlign.Center,
                     modifier = Modifier.graphicsLayer {
                         cameraDistance = 14f * density
@@ -181,6 +188,11 @@ private fun KineticTitle(text: String, p: Float, textAt: Float, flavor: Flavor, 
                                 val s = (3f - 2f * ease(g)) * (1f + 2.2f * o * o)
                                 scaleX = s; scaleY = s
                                 rotationX = (1f - ease(g)) * 50f
+                            }
+                            Flavor.APEX -> {
+                                // буквы загораются, как лампы табло, каждая со своим сбоем; гаснут вразнобой
+                                al = ru.shturman.ui.fx.apexIgnite(g)
+                                if (o > 0f && ((o * 14f).toInt() + i) % 3 == 0) al *= 0.15f
                             }
                         }
                         alpha = al * (1f - ease(o))
@@ -281,4 +293,56 @@ private fun DrawScope.drawTunnel(p: Float, out: Float, a: Color, b: Color) {
         )
     }
     drawCircle(Brush.radialGradient(listOf(a.copy(alpha = 0.45f * out), Color.Transparent), c, size.minDimension * 0.6f), size.minDimension * 0.6f, c)
+}
+
+/** APEX: секундомер заезда стартует вместе с надписью. Погасшие сегменты видны под цифрами. */
+@Composable
+private fun ApexStopwatch(p: Float, textAt: Float, dur: Int, modifier: Modifier) {
+    if (p < textAt) return
+    val ms = ((p - textAt) * dur).toInt().coerceAtLeast(0)
+    val text = String.format(java.util.Locale.ROOT, "00:%02d.%02d", ms / 1000, (ms % 1000) / 10)
+    val a = ru.shturman.ui.fx.apexIgnite(lin(p, textAt, textAt + 0.12f)) * (1f - lin(p, 0.86f, 1f))
+    Box(modifier.graphicsLayer { alpha = a }) {
+        Text("88:88.88", color = Color.White.copy(alpha = 0.08f), fontFamily = NumberFont, fontWeight = FontWeight.Bold, fontSize = 34.sp)
+        Text(text, color = ru.shturman.ui.fx.ApexChalk, fontFamily = NumberFont, fontWeight = FontWeight.Bold, fontSize = 34.sp)
+    }
+}
+
+/**
+ * APEX: створ хронометража. По краям загораются стойки, между ними — красный луч; красная точка
+ * бежит по лучу, и в момент старта луч вспыхивает мелом и гаснет. Поверх — строки развёртки.
+ */
+private fun DrawScope.drawApexGate(p: Float, out: Float, textAt: Float) {
+    val chalk = ru.shturman.ui.fx.ApexChalk
+    val red = ru.shturman.ui.fx.ApexRed
+    drawRect(Color(0xFF060605).copy(alpha = 0.72f * lin(p, 0f, 0.06f) * out))
+    val y = size.height * 0.68f
+    val post = 30f * density
+    val pw = 3f * density
+    val m = 18f * density
+    val postA = ru.shturman.ui.fx.apexIgnite(lin(p, 0.02f, 0.12f)) * out
+    drawRect(chalk.copy(alpha = postA), Offset(m, y - post / 2), Size(pw, post))
+    drawRect(chalk.copy(alpha = postA), Offset(size.width - m - pw, y - post / 2), Size(pw, post))
+    val x0 = m + pw
+    val x1 = size.width - m - pw
+    val beamOn = ru.shturman.ui.fx.apexIgnite(lin(p, 0.08f, 0.2f))
+    val fire = lin(p, textAt, textAt + 0.14f)
+    if (beamOn > 0f && out > 0f) {
+        val col = if (p >= textAt) androidx.compose.ui.graphics.lerp(chalk, red, fire) else red
+        val a = beamOn * (if (p >= textAt) 1f - 0.85f * fire else 1f) * out
+        val gh = 16f * density
+        drawRect(
+            Brush.verticalGradient(listOf(Color.Transparent, col.copy(alpha = 0.35f * a), Color.Transparent), y - gh, y + gh),
+            Offset(x0, y - gh), Size(x1 - x0, gh * 2)
+        )
+        drawRect(col.copy(alpha = a), Offset(x0, y - density), Size(x1 - x0, 2f * density))
+    }
+    if (p < textAt && out > 0f) {
+        val k = lin(p, 0.14f, textAt)
+        val c = Offset(x0 + (x1 - x0) * k, y)
+        val gr = 22f * density
+        drawCircle(Brush.radialGradient(listOf(red.copy(alpha = 0.5f), Color.Transparent), c, gr), gr, c)
+        drawCircle(red, 5f * density, c)
+    }
+    apexScanlines(0.22f * out)
 }
