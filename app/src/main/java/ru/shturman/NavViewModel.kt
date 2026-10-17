@@ -481,7 +481,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(navigating = true, position = position, turn = nextTurn(route, position)) }
         lowResourcesNotice()
         ru.shturman.service.NavService.onCancel = { clearRoute() }
-        ru.shturman.service.NavService.start(getApplication(), "Штурман: поездка", "Маршрут запущен")
+        ru.shturman.service.NavService.start(getApplication(), "APEX: поездка", "Маршрут запущен")
         startGpsWatch()
         tripStartMs = System.currentTimeMillis()
         tripMaxKmh = 0
@@ -675,7 +675,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private fun pauseNav() {
         navPaused = true
         ru.shturman.service.NavService.setWake(getApplication(), false)
-        ru.shturman.service.NavService.update(getApplication(), "Штурман · пауза", "Стоите больше 5 минут. Тронетесь, и навигация продолжится")
+        ru.shturman.service.NavService.update(getApplication(), "APEX · пауза", "Стоите больше 5 минут. Тронетесь, и навигация продолжится")
         showNotice("Навигация на паузе: стоим больше 5 минут")
     }
 
@@ -709,7 +709,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         if (now - lastNotifAt < 2_000L) return
         lastNotifAt = now
         gpsLostShown = false
-        val title = "Штурман · $kmh км/ч"
+        val title = "APEX · $kmh км/ч"
         val left = ru.shturman.ui.formatDistance(leftM.coerceAtLeast(0.0))
         val text = if (turn != null) {
             val side = if (turn.isLeft) "налево" else "направо"
@@ -734,7 +734,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                     gpsLostShown = true
                     showNotice("Потерян сигнал GPS")
                     if (_state.value.voiceOn) voice.say("Потерян сигнал GPS", flush = false)
-                    ru.shturman.service.NavService.update(getApplication(), "Штурман · нет сигнала GPS", "Выедите на открытое место")
+                    ru.shturman.service.NavService.update(getApplication(), "APEX · нет сигнала GPS", "Выедите на открытое место")
                 }
             }
         }

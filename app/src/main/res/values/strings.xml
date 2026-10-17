@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Штурман</string>
+    <string name="app_name">APEX</string>
     <string name="s_05e54559">Выбрать Bluetooth авто</string>
     <string name="s_0899eda1">Приватность</string>
     <string name="s_0f3468a4">Вход через Google обязателен, анонимного режима нет.</string>
@@ -22,19 +22,19 @@
     <string name="s_42fc7088">Полноэкранный режим</string>
     <string name="s_4a9ccc8c">Нижняя карточка в поездке</string>
     <string name="s_4cd9559c">Когда выбранное Bluetooth авто отключается, маршрут отменяется.</string>
-    <string name="s_4da9d786">Чтобы показывать, что играет в Яндекс Музыке, и управлять ею, разрешите приложению «Штурман» доступ к уведомлениям. Ваши уведомления приложение не читает.</string>
+    <string name="s_4da9d786">Чтобы показывать, что играет в Яндекс Музыке, и управлять ею, разрешите приложению APEX доступ к уведомлениям. Ваши уведомления приложение не читает.</string>
     <string name="s_5191dcb3">Бензин</string>
     <string name="s_57d32d98">Техобслуживание</string>
     <string name="s_5ab71ea3">Ищу…</string>
     <string name="s_5b66acf3">Спутник</string>
     <string name="s_5bc7124d">ПОЕХАЛИ</string>
     <string name="s_63090ef7">GERTY AIRLINE</string>
-    <string name="s_63627b6b">Чтобы видеть его статус и останавливать его отсюда, разрешите «Штурману» доступ к уведомлениям.</string>
+    <string name="s_63627b6b">Чтобы видеть его статус и останавливать его отсюда, разрешите приложению APEX доступ к уведомлениям.</string>
     <string name="s_63a75375">Войти</string>
     <string name="s_63e3c45e">С 23:00 до 7:00 необязательные уведомления не показываются.</string>
     <string name="s_660b3295">Не сейчас</string>
     <string name="s_66efd4ed">Ночной режим голоса</string>
-    <string name="s_6789d352">Придёт предложение открыть Штурман, когда подключается зарядка.</string>
+    <string name="s_6789d352">Придёт предложение открыть APEX, когда подключается зарядка.</string>
     <string name="s_6ac9c557">Статистика поездок</string>
     <string name="s_6d4183b7">Выйти из аккаунта</string>
     <string name="s_76e7af47">Уведомление со статистикой, когда поездка закончилась.</string>
@@ -68,10 +68,10 @@
     <string name="s_c1c10eb5">Тихие часы</string>
     <string name="s_c8735bdd">Создать караван (я веду)</string>
     <string name="s_ca179901">Тема оформления</string>
-    <string name="s_ce0470a5">Когда телефон подключается к выбранному Bluetooth авто, придёт предложение открыть Штурман.</string>
+    <string name="s_ce0470a5">Когда телефон подключается к выбранному Bluetooth авто, придёт предложение открыть APEX.</string>
     <string name="s_ce99d0a6">Навигатор, который думает наперёд</string>
     <string name="s_cf1ae449">Проверяю доступ…</string>
-    <string name="s_d246d2cf">Штурман</string>
+    <string name="s_d246d2cf">APEX</string>
     <string name="s_d2e77ad1">Записать заправку</string>
     <string name="s_d36f16c1">Автозапуск при подключении зарядки</string>
     <string name="s_d64dbd69">Скрывает системные панели Android. Вернуть их можно свайпом от края.</string>

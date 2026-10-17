@@ -465,7 +465,7 @@ private fun TripsPage(vm: NavViewModel) {
         runCatching {
             val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                 type = "text/plain"
-                putExtra(android.content.Intent.EXTRA_SUBJECT, "Поездки Штурман (CSV)")
+                putExtra(android.content.Intent.EXTRA_SUBJECT, "Поездки APEX (CSV)")
                 putExtra(android.content.Intent.EXTRA_TEXT, vm.exportText())
             }
             ctx.startActivity(android.content.Intent.createChooser(send, "Экспорт поездок").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))

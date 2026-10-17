@@ -82,9 +82,9 @@ sealed class VoiceCommand {
     object Unknown : VoiceCommand()
 }
 
-/** Разбирает фразу вроде «Штурман, домой» или «поехали до Великих Лук». Слово «Штурман» необязательно. */
+/** Разбирает фразу вроде «Апекс, домой» или «поехали до Великих Лук». Обращение («Апекс», по-старому «Штурман») необязательно. */
 fun parseVoiceCommand(raw: String): VoiceCommand {
-    val text = raw.lowercase().replace("штурман", "").replace(",", " ").trim()
+    val text = raw.lowercase().replace(Regex("(^|\\s)(апекс|эйпекс|apex|штурман)"), " ").replace(",", " ").trim()
     return when {
         text.isEmpty() -> VoiceCommand.Unknown
         Regex("(^|\\s)(домой|дом)(\\s|$)").containsMatchIn(text) -> VoiceCommand.Home

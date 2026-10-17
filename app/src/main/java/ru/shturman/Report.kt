@@ -11,7 +11,7 @@ object Report {
         val text = build(context, summary)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "Отчёт Штурман")
+            putExtra(Intent.EXTRA_SUBJECT, "Отчёт APEX")
             putExtra(Intent.EXTRA_TEXT, text)
         }
         context.startActivity(Intent.createChooser(intent, "Отправить отчёт").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -19,7 +19,7 @@ object Report {
 
     private fun build(context: Context, summary: String): String {
         val sb = StringBuilder()
-        sb.append("=== Штурман: отчёт ===\n")
+        sb.append("=== APEX: отчёт ===\n")
         sb.append("Телефон: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}\n")
         runCatching {
             val pi = context.packageManager.getPackageInfo(context.packageName, 0)
