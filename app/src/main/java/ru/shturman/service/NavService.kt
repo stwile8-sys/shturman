@@ -105,6 +105,7 @@ class NavService : Service() {
         }
 
         fun start(ctx: Context, title: String, text: String) {
+            ru.shturman.AppState.navigating = true
             runCatching {
                 lastText = ""
                 ctx.startForegroundService(
@@ -151,6 +152,7 @@ class NavService : Service() {
         }
 
         fun stop(ctx: Context) {
+            ru.shturman.AppState.navigating = false
             runCatching { ctx.stopService(Intent(ctx, NavService::class.java)) }
         }
     }

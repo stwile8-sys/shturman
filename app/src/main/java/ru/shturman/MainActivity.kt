@@ -34,6 +34,18 @@ import ru.shturman.ui.theme.ShturmanTheme
 class MainActivity : ComponentActivity() {
     private var welcome: ru.shturman.routing.Welcome? = null
 
+    override fun onStart() {
+        super.onStart()
+        AppState.foreground = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        AppState.foreground = false
+        // Свернули приложение: если новая сборка уже скачана, она поставится через пару минут
+        if (!isChangingConfigurations) ru.shturman.update.AutoUpdate.onAppHidden(this)
+    }
+
     override fun onDestroy() {
         welcome?.release()
         welcome = null

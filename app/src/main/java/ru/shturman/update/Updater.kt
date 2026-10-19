@@ -50,11 +50,28 @@ object Updater {
         }.getOrNull()
     }
 
-    /** Скачивает APK во временную папку. onProgress получает долю от 0 до 1. */
+    /** Папка для скачанных сборок. */
+    fun dir(context: Context): File = File(context.cacheDir, "updates").apply { mkdirs() }
+
+    /** Уже полностью скачанная сборка новее установленной, если есть. */
+    fun readyFile(context: Context): File? = dir(context).listFiles()
+        ?.filter { it.name.endsWith(".apk") }
+        ?.maxByOrNull { it.name.substringAfter("-", "").substringBefore(".").toIntOrNull() ?: 0 }
+        ?.takeIf { (it.name.substringAfter("-", "").substringBefore(".").toIntOrNull() ?: 0) > BuildConfig.BUILD_NUMBER }
+
+    /**
+     * Скачивает APK во временную папку. onProgress получает долю от 0 до 1.
+     * Если эта сборка уже скачана целиком (например, в фоне), второй раз не качает.
+     */
     suspend fun download(context: Context, info: UpdateInfo, onProgress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
-        val dir = File(context.cacheDir, "updates").apply { mkdirs() }
+        val dir = dir(context)
+        val file = File(dir, "apex-${info.build}.apk")
+        if (file.exists() && info.size > 0 && file.length() == info.size) {
+            onProgress(1f)
+            return@withContext file
+        }
         dir.listFiles()?.forEach { runCatching { it.delete() } }
-        val file = File(dir, "shturman-${info.build}.apk")
+        val part = File(dir, "apex-${info.build}.part")
         val c = URL(info.url).openConnection() as HttpURLConnection
         c.connectTimeout = 15000
         c.readTimeout = 30000
@@ -62,7 +79,7 @@ object Updater {
         if (c.responseCode != 200) throw IllegalStateException("Сервер ответил ${c.responseCode}")
         val total = if (c.contentLengthLong > 0) c.contentLengthLong else info.size
         c.inputStream.use { input ->
-            file.outputStream().use { out ->
+            part.outputStream().use { out ->
                 val buf = ByteArray(64 * 1024)
                 var done = 0L
                 while (true) {
@@ -74,6 +91,11 @@ object Updater {
                 }
             }
         }
+        if (total > 0 && part.length() != total) {
+            part.delete()
+            throw IllegalStateException("Файл скачался не полностью")
+        }
+        if (!part.renameTo(file)) throw IllegalStateException("Не удалось сохранить файл обновления")
         file
     }
 

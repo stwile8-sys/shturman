@@ -3,6 +3,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Android 12+: приложение может обновить само себя без вопросов -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -85,6 +87,11 @@
 
         <receiver
             android:name=".service.NavActionReceiver"
+            android:exported="false" />
+
+        <!-- Ответ системы об установке обновления -->
+        <receiver
+            android:name=".update.UpdateResultReceiver"
             android:exported="false" />
 
         <!-- Фоновый сбор обезличенных данных о дорогах во время поездок -->
