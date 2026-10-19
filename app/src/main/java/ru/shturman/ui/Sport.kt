@@ -110,7 +110,7 @@ fun GlassButton(
  * расстояние крупно, полосы справа, улица капсом и тонкая линия до поворота (полная за 600 м).
  */
 @Composable
-fun ManeuverPanel(turn: NextTurn?, notes: List<PaceNote>, modifier: Modifier = Modifier, compact: Boolean = false) {
+fun ManeuverPanel(turn: NextTurn?, notes: List<PaceNote>, modifier: Modifier = Modifier, compact: Boolean = false, framed: Boolean = true) {
     val first = notes.firstOrNull()
     // Кольцо показываем, когда оно ближайшее (или мы уже на нём)
     val ring = turn?.takeIf {
@@ -125,10 +125,11 @@ fun ManeuverPanel(turn: NextTurn?, notes: List<PaceNote>, modifier: Modifier = M
     val lanes = turn?.takeIf { it.lanes.size > 1 && !it.onRoundabout && it.distanceM <= 800.0 }?.lanes
     val glyph = if (compact) 46.dp else 50.dp
     Column(
-        modifier
+        if (framed) modifier
             .themedEnter()
             .panel(RoundedCornerShape(14.dp), elevation = 8.dp)
             .padding(start = 14.dp, end = 16.dp, top = 14.dp, bottom = 16.dp)
+        else modifier
     ) {
         val key: Any? = ring?.let { "ring" to it.roundaboutExit } ?: first?.let { it.severity to it.isLeft }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.changeFx(key)) {
@@ -194,13 +195,14 @@ private fun SeverityDot(severity: Int, modifier: Modifier) {
 
 /** «ЗАТЕМ» и следующие изгибы с расстоянием между ними. */
 @Composable
-fun ThenPill(notes: List<PaceNote>, modifier: Modifier = Modifier) {
+fun ThenPill(notes: List<PaceNote>, modifier: Modifier = Modifier, framed: Boolean = true) {
     if (notes.size < 2) return
     Row(
-        modifier
+        if (framed) modifier
             .themedEnter(1)
             .panel(RoundedCornerShape(10.dp), elevation = 6.dp)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+        else modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {

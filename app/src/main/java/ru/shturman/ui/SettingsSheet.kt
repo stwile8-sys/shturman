@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -118,12 +119,16 @@ fun SettingsSheet(
     onOpenAdmin: () -> Unit,
     onSignOut: () -> Unit,
     onDismiss: () -> Unit,
-    onOpenHud: () -> Unit = {}
+    onOpenHud: () -> Unit = {},
+    onOpenMusic: () -> Unit = {},
+    onOpenRadar: () -> Unit = {}
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = androidx.compose.ui.graphics.lerp(ShColors.Panel, Color.White, 0.06f).copy(alpha = 0.97f),
+        containerColor = if (ShColors.premium) androidx.compose.ui.graphics.lerp(ShColors.Panel, Color.White, 0.012f)
+            else androidx.compose.ui.graphics.lerp(ShColors.Panel, Color.White, 0.06f).copy(alpha = 0.97f),
         shape = when (ShColors.L.flavor) {
+            ru.shturman.ui.themes.Flavor.PREMIUM -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
             ru.shturman.ui.themes.Flavor.TELEMETRY -> androidx.compose.foundation.shape.CutCornerShape(topEnd = 26.dp)
             ru.shturman.ui.themes.Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
             else -> RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)
@@ -172,6 +177,7 @@ fun SettingsSheet(
                     .padding(bottom = 20.dp)
             ) {
                 if (current == null) {
+                    QuickTiles(onOpenMusic, onOpenRadar, onOpenHud)
                     Home(user, s, vm, isAdmin, onSignOut, unlock) { pageName = it.name }
                 } else {
                     PageHeader(current.title) { pageName = null }
@@ -201,6 +207,35 @@ private fun <T> tween() = androidx.compose.animation.core.tween<T>(durationMilli
 
 // ---------- главный экран настроек ----------
 
+/** Быстрые плитки сверху настроек: музыка, антирадар и проекция на лобовое. */
+@Composable
+private fun QuickTiles(onMusic: () -> Unit, onRadar: () -> Unit, onHud: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for ((icon, label, click) in listOf(
+            Triple(ApexIcons.Music, "МУЗЫКА", onMusic),
+            Triple(ApexIcons.Radar, "АНТИРАДАР", onRadar),
+            Triple(ApexIcons.Hud, "ПРОЕКЦИЯ", onHud)
+        )) {
+            val shape = RoundedCornerShape(12.dp)
+            Column(
+                Modifier
+                    .weight(1f)
+                    .height(72.dp)
+                    .pressFx()
+                    .clip(shape)
+                    .background(ShColors.SearchField)
+                    .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
+                    .clickable(onClick = click)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Icon(icon, contentDescription = null, tint = ShColors.TextPrimary, modifier = Modifier.size(20.dp))
+                Text(label, color = ShColors.TextSecondary, style = ShText.Caps.copy(fontSize = 9.sp, letterSpacing = 1.5.sp), maxLines = 1)
+            }
+        }
+    }
+}
+
 @Composable
 private fun Home(user: UserInfo, s: NavState, vm: NavViewModel, isAdmin: Boolean, onSignOut: () -> Unit, onUnlock: () -> Unit, open: (Page) -> Unit) {
     val ctx = LocalContext.current
@@ -211,114 +246,117 @@ private fun Home(user: UserInfo, s: NavState, vm: NavViewModel, isAdmin: Boolean
 
     if (ru.shturman.ui.themes.Shturman2.unlocked) {
         Group("Клан")
-        CategoryRow(ru.shturman.ui.themes.ApexMark, Page.APEX.title, 0, "Заставка") { open(Page.APEX) }
+        SettingsCard { CategoryRow(ru.shturman.ui.themes.ApexMark, Page.APEX.title, 0, "Заставка", first = true) { open(Page.APEX) } }
     }
 
     Group("Внешний вид и голос")
-    CategoryRow(Icons.Filled.Star, Page.THEME.title, Page.THEME.ordinal,
-        (Themes.all.getOrNull(s.theme)?.name ?: "") + if (ru.shturman.ui.themes.ThemeSounds.enabled) " · звуки темы" else "") { open(Page.THEME) }
-    CategoryRow(Icons.Filled.PlayArrow, Page.VOICE.title, Page.VOICE.ordinal,
-        (if (s.voiceOn) "Подсказки включены" else "Подсказки выключены") + if (s.nightVoice) " · ночной режим" else "") { open(Page.VOICE) }
+    SettingsCard {
+        CategoryRow(ApexIcons.Look, Page.THEME.title, Page.THEME.ordinal,
+            (Themes.all.getOrNull(s.theme)?.name ?: "") + if (ru.shturman.ui.themes.ThemeSounds.enabled) " · звуки темы" else "", first = true) { open(Page.THEME) }
+        CategoryRow(ApexIcons.Sound, Page.VOICE.title, Page.VOICE.ordinal,
+            (if (s.voiceOn) "Подсказки включены" else "Подсказки выключены") + if (s.nightVoice) " · ночной режим" else "") { open(Page.VOICE) }
+    }
 
     Group("В дороге") { if (secret.tap('A')) onUnlock() }
-    CategoryRow(Icons.Filled.LocationOn, Page.NAV.title, Page.NAV.ordinal,
-        "Съезд: ${LEVELS.getOrElse(s.devLevel) { "Средняя" }.lowercase()}" + (if (s.fullscreen) " · полный экран" else "") + (if (s.satellite) " · спутник" else "")) { open(Page.NAV) }
-    CategoryRow(Icons.Filled.Build, Page.CAR.title, Page.CAR.ordinal,
-        "${trimNumber(s.consumption)} л/100 км · ${trimNumber(s.fuelPrice)} ₽/л · заправки и ТО") { open(Page.CAR) }
-    CategoryRow(Icons.Filled.DateRange, Page.TRIPS.title, Page.TRIPS.ordinal,
-        if (trips == 0) "Поездок пока нет" else "$trips ${plural(trips, "поездка", "поездки", "поездок")} за 3 месяца") { open(Page.TRIPS) }
-    CategoryRow(Icons.Filled.Place, Page.CARAVAN.title, Page.CARAVAN.ordinal,
-        s.caravanCode?.let { "Код $it · на карте ${s.members.size}" } ?: "Вы не в караване") { open(Page.CARAVAN) }
+    SettingsCard {
+        CategoryRow(ApexIcons.Locate, Page.NAV.title, Page.NAV.ordinal,
+            "Съезд: ${LEVELS.getOrElse(s.devLevel) { "Средняя" }.lowercase()}" + (if (s.fullscreen) " · полный экран" else "") + (if (s.satellite) " · спутник" else ""), first = true) { open(Page.NAV) }
+        CategoryRow(ApexIcons.Fuel, Page.CAR.title, Page.CAR.ordinal,
+            "${trimNumber(s.consumption)} л/100 км · ${trimNumber(s.fuelPrice)} ₽/л · заправки и ТО") { open(Page.CAR) }
+        CategoryRow(ApexIcons.Stats, Page.TRIPS.title, Page.TRIPS.ordinal,
+            if (trips == 0) "Поездок пока нет" else "$trips ${plural(trips, "поездка", "поездки", "поездок")} за 3 месяца") { open(Page.TRIPS) }
+        CategoryRow(ApexIcons.Caravan, Page.CARAVAN.title, Page.CARAVAN.ordinal,
+            s.caravanCode?.let { "Код $it · на карте ${s.members.size}" } ?: "Вы не в караване") { open(Page.CARAVAN) }
+    }
 
     Group("Система") { if (secret.tap('B')) onUnlock() }
-    CategoryRow(Icons.Filled.Notifications, Page.NOTIF.title, Page.NOTIF.ordinal,
-        listOfNotNull(
-            if (AutoPrefs.quietHours(ctx)) "тихие часы" else null,
-            if (AutoPrefs.btAutostart(ctx)) "Bluetooth" else null,
-            if (AutoPrefs.chargeAutostart(ctx)) "зарядка" else null,
-            if (ru.shturman.update.AutoUpdate.enabled(ctx)) "автообновление" else null
-        ).joinToString(" · ").ifEmpty { "Итог поездки, тихие часы, автозапуск" }.replaceFirstChar { it.uppercase() }) { open(Page.NOTIF) }
-    CategoryRow(Icons.Filled.Settings, Page.DATA.title, Page.DATA.ordinal, "Копия в аккаунте, кэш, сброс") { open(Page.DATA) }
-    CategoryRow(Icons.Filled.Lock, Page.PRIVACY.title, Page.PRIVACY.ordinal,
-        "Сбор данных о дорогах · отчёт разработчику") { open(Page.PRIVACY) }
-    if (isAdmin) CategoryRow(Icons.Filled.Edit, Page.ADMIN.title, Page.ADMIN.ordinal, "Коды активации") { open(Page.ADMIN) }
+    SettingsCard {
+        CategoryRow(ApexIcons.Update, Page.NOTIF.title, Page.NOTIF.ordinal,
+            listOfNotNull(
+                if (AutoPrefs.quietHours(ctx)) "тихие часы" else null,
+                if (AutoPrefs.btAutostart(ctx)) "Bluetooth" else null,
+                if (AutoPrefs.chargeAutostart(ctx)) "зарядка" else null,
+                if (ru.shturman.update.AutoUpdate.enabled(ctx)) "автообновление" else null
+            ).joinToString(" · ").ifEmpty { "Итог поездки, тихие часы, автозапуск" }.replaceFirstChar { it.uppercase() }, first = true) { open(Page.NOTIF) }
+        CategoryRow(ApexIcons.Data, Page.DATA.title, Page.DATA.ordinal, "Копия в аккаунте, кэш, сброс") { open(Page.DATA) }
+        CategoryRow(ApexIcons.Lock, Page.PRIVACY.title, Page.PRIVACY.ordinal,
+            "Сбор данных о дорогах · отчёт разработчику") { open(Page.PRIVACY) }
+        if (isAdmin) CategoryRow(ApexIcons.Edit, Page.ADMIN.title, Page.ADMIN.ordinal, "Коды активации") { open(Page.ADMIN) }
+    }
 
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(16.dp))
     TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-        Text(text = stringResource(R.string.s_6d4183b7), color = ShColors.TextSecondary, style = ShText.Small)
+        Text(text = stringResource(R.string.s_6d4183b7).uppercase(), color = ShColors.TextSecondary, style = ShText.Caps.copy(fontSize = 12.sp))
     }
 }
 
 @Composable
 private fun Profile(user: UserInfo) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) {
         Box(
-            modifier = Modifier.size(52.dp).clip(CircleShape).background(ShColors.Divider),
+            modifier = Modifier.size(52.dp).clip(CircleShape).background(ShColors.SearchField).border(1.dp, ShColors.Divider, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             if (user.photoUrl != null) {
                 AsyncImage(model = user.photoUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(52.dp))
             } else {
-                Icon(imageVector = Icons.Filled.Person, contentDescription = null, tint = ShColors.TextSecondary)
+                Icon(imageVector = ApexIcons.Profile, contentDescription = null, tint = ShColors.TextPrimary, modifier = Modifier.size(22.dp))
             }
         }
         Spacer(Modifier.width(14.dp))
         Column {
-            Text(text = user.name, color = ShColors.TextPrimary, style = ShText.Distance.copy(fontSize = 20.sp))
-            Text(text = user.email, color = ShColors.TextSecondary, style = ShText.Street)
+            Text(text = user.name, color = ShColors.TextPrimary, style = ShText.Title)
+            Text(text = user.email, color = ShColors.TextSecondary, style = ShText.Secondary)
         }
     }
 }
 
 @Composable
 private fun Group(title: String, onTap: (() -> Unit)? = null) {
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(14.dp))
     // Заголовок выглядит как обычный текст; касания по нему ловятся без отклика (для секретной комбинации)
     val tap by androidx.compose.runtime.rememberUpdatedState(onTap)
     Text(
-        text = title.uppercase(), color = ShColors.TextSecondary, fontSize = 12.sp, letterSpacing = 1.2.sp,
+        text = title.uppercase(), color = ShColors.Muted, style = ShText.Caps,
         modifier = if (onTap == null) Modifier else Modifier
             .fillMaxWidth()
             .pointerInput(Unit) { detectTapGestures(onTap = { tap?.invoke() }) }
     )
-    Spacer(Modifier.height(6.dp))
+    Spacer(Modifier.height(8.dp))
+}
+
+/** Карточка группы: строки разделами внутри одной рамки. */
+@Composable
+private fun SettingsCard(content: @Composable () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(ShColors.SearchField)
+            .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
+    ) { content() }
 }
 
 @Composable
-private fun CategoryRow(icon: ImageVector, title: String, index: Int, summary: String, onClick: () -> Unit) {
-    val shape = ru.shturman.ui.fx.chipShape()
+private fun CategoryRow(icon: ImageVector, title: String, index: Int, summary: String, first: Boolean = false, onClick: () -> Unit) {
+    if (!first) Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.06f)))
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .themedEnter(index)
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .pressFx()
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), shape)
+            .heightIn(min = 58.dp)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
-        val apex = ShColors.L.flavor == ru.shturman.ui.themes.Flavor.APEX
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .clip(if (ShColors.L.flavor == ru.shturman.ui.themes.Flavor.TELEMETRY || apex) ru.shturman.ui.fx.chipShape() else RoundedCornerShape(14.dp))
-                .then(
-                    if (apex) Modifier.border(1.dp, ShColors.Accent.copy(alpha = 0.18f), ru.shturman.ui.fx.chipShape())
-                    else Modifier.background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(ShColors.Accent.copy(alpha = 0.30f), ShColors.Accent2.copy(alpha = 0.12f))))
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = ShColors.Accent, modifier = Modifier.size(22.dp))
-        }
+        Icon(imageVector = icon, contentDescription = null, tint = ShColors.TextPrimary, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(text = title, color = ShColors.TextPrimary, style = ShText.Small)
-            Text(text = summary, color = ShColors.TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = title, color = ShColors.TextPrimary, style = ShText.Body)
+            Text(text = summary, color = ShColors.TextSecondary, style = ShText.Secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = ShColors.TextSecondary)
+        Icon(imageVector = ApexIcons.Chevron, contentDescription = null, tint = ShColors.Muted, modifier = Modifier.size(14.dp))
     }
 }
 
@@ -326,10 +364,10 @@ private fun CategoryRow(icon: ImageVector, title: String, index: Int, summary: S
 private fun PageHeader(title: String, onBack: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
         IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = ShColors.Accent)
+            Icon(imageVector = ApexIcons.Back, contentDescription = "Назад", tint = ShColors.TextPrimary, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(4.dp))
-        Text(text = title, color = ShColors.TextPrimary, style = ShText.Distance.copy(fontSize = 20.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(text = title, color = ShColors.TextPrimary, style = ShText.Title, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -385,16 +423,9 @@ private fun NavPage(s: NavState, vm: NavViewModel, onOpenHud: () -> Unit) {
 
     Section("Проекция на лобовое (HUD)")
     Hint("Скорость, поворот и ограничение крупно на чёрном. Телефон кладут под лобовое стекло экраном вверх, " +
-        "верхом к себе — картинка отражается в стекле. Лучше всего видно в темноте. В поездке — кнопка справа над «Где я».")
+        "верхом к себе — картинка отражается в стекле. Лучше всего видно в темноте. В поездке — плитка «Проекция» в меню.")
     WideButton("Включить проекцию", onClick = onOpenHud)
     SwitchRow("Зеркальная картинка", "Для отражения в стекле. Выключите, чтобы смотреть прямо на экран.", s.hudMirror, vm::setHudMirror)
-
-    Section(stringResource(R.string.s_4a9ccc8c))
-    CheckRow("Проценты пути", s.cardPercent) { vm.setCardOption("percent", it) }
-    CheckRow("Сколько проехали из скольких", s.cardDistance) { vm.setCardOption("distance", it) }
-    CheckRow("Время прибытия", s.cardEta) { vm.setCardOption("eta", it) }
-    CheckRow("Сколько осталось (время и км)", s.cardRemaining) { vm.setCardOption("remaining", it) }
-    CheckRow("Расход бензина и стоимость", s.cardFuel) { vm.setCardOption("fuel", it) }
 }
 
 @Composable
@@ -732,8 +763,8 @@ private fun InfoCard(text: String) {
 
 @Composable
 private fun Section(title: String) {
-    Spacer(Modifier.height(18.dp))
-    Text(text = title, color = ShColors.Accent, style = ShText.Button)
+    Spacer(Modifier.height(20.dp))
+    Text(text = title.uppercase(), color = ShColors.Muted, style = ShText.Caps)
     Spacer(Modifier.height(8.dp))
 }
 
@@ -751,7 +782,7 @@ private fun SwitchRow(title: String, subtitle: String?, checked: Boolean, onChan
         Switch(
             checked = checked,
             onCheckedChange = onChange,
-            colors = SwitchDefaults.colors(checkedThumbColor = ShColors.Background, checkedTrackColor = ShColors.Accent)
+            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = ShColors.Accent)
         )
     }
 }

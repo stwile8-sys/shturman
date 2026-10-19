@@ -4,6 +4,8 @@ package ru.shturman.routing
 object Diag {
     @Volatile var fixCount = 0
     @Volatile var lastFixAt = 0L
+    /** Последнее положение с GPS (для расстояний в поиске). */
+    @Volatile var lastPos: LatLon? = null
     @Volatile var lastAccuracy = -1f
     @Volatile var lastProvider = ""
     @Volatile var restarts = 0

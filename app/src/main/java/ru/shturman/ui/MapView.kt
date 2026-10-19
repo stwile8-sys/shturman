@@ -246,6 +246,7 @@ fun DarkMap(
         trail.setFrom(trail.currentPos(), LatLon(0.0, 0.0), false)
         val tracker = GpsTracker(context) { raw ->
             val here = LatLon(raw.latitude, raw.longitude)
+            ru.shturman.routing.Diag.lastPos = here
             val snap = currentOnFix(here, raw.speed, if (raw.hasAccuracy()) raw.accuracy else 0f, if (raw.hasBearing()) raw.bearing else -1f, if (raw.hasAltitude()) raw.altitude.toFloat() else Float.NaN)
 
             // Пройденная часть маршрута исчезает за стрелкой: линия рисуется только от стрелки вперёд
