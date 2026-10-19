@@ -39,12 +39,16 @@ class AutoStartReceiver : BroadcastReceiver() {
             when (intent.action) {
                 BluetoothDevice.ACTION_ACL_CONNECTED -> {
                     // Подключились к машине — сразу проверяем, поехали ли, чтобы записать поездку с начала
-                    if (matches(context, intent) || isCar(intent)) DriveWatch.start(context, poke = true)
+                    if (matches(context, intent) || isCar(intent)) {
+                        DriveWatch.carConnected = true
+                        DriveWatch.start(context, poke = true)
+                    }
                     if (AutoPrefs.btAutostart(context) && matches(context, intent)) {
                         prompt(context, "Подключено к авто", "Открыть APEX и построить маршрут?")
                     }
                 }
                 BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                    if (matches(context, intent) || isCar(intent)) DriveWatch.carConnected = false
                     if (AutoPrefs.btAutostop(context) && matches(context, intent)) NavService.onCancel?.invoke()
                 }
                 Intent.ACTION_POWER_CONNECTED -> {

@@ -557,7 +557,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         lastFix = here
         lastFixAt = System.currentTimeMillis()
         val s = _state.value
-        val kmh = (speedMps * 3.6f).toInt()
+        // округляем, а не отбрасываем дробную часть: 59,8 км/ч — это 60 (скорость уже сглажена в GpsTracker)
+        val kmh = ru.shturman.routing.SpeedMeter.kmh(speedMps.toDouble())
         if (kmh != s.speedKmh) _state.update { it.copy(speedKmh = kmh) }
         updateHud(courseDeg, altitudeM, accuracyM)
         // Запоминаем, как быстро здесь едут: всегда в поездке, а вне её только на скорости

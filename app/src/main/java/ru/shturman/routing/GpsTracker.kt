@@ -43,6 +43,7 @@ class GpsTracker(
     }.getOrDefault(false)
     private val fused = if (hasGoogle) runCatching { LocationServices.getFusedLocationProviderClient(appContext) }.getOrNull() else null
     private val kalman = Kalman()
+    private val meter = SpeedMeter()
     private var lastGpsAt = 0L
     private var lastFusedAt = 0L
     private var lastAcceptedAt = 0L
@@ -96,7 +97,13 @@ class GpsTracker(
         Diag.lastFixAt = System.currentTimeMillis()
         Diag.lastAccuracy = if (raw.hasAccuracy()) raw.accuracy else -1f
         Diag.lastProvider = raw.provider ?: ""
-        onFix(kalman.filter(raw))
+        val filtered = kalman.filter(raw)
+        // Скорость для экрана: от приёмника GPS (у сети она ненадёжна), сглаженная и без дрожания на месте
+        val fromReceiver = if (raw.hasSpeed() && raw.provider != LocationManager.NETWORK_PROVIDER) raw.speed else null
+        val fixMs = if (raw.elapsedRealtimeNanos > 0L) raw.elapsedRealtimeNanos / 1_000_000L else now
+        val acc = if (raw.hasAccuracy()) raw.accuracy else 999f
+        val v = meter.update(fixMs, filtered.latitude, filtered.longitude, acc, fromReceiver)
+        onFix(Location(filtered).apply { speed = v.toFloat() })
     }
 
     private val fusedCallback = object : LocationCallback() {
