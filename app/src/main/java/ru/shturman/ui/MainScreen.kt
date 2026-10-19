@@ -128,6 +128,15 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         if (arrived) vm.arrived()
     }
 
+    // «Поехать» из приложения «Заказы»: как только дорожные данные готовы — маршрут и ведение
+    val external by ru.shturman.api.ExternalTrip.pending.collectAsState()
+    LaunchedEffect(external, s.dataReady) {
+        val r = external ?: return@LaunchedEffect
+        if (!s.dataReady) return@LaunchedEffect
+        ru.shturman.api.ExternalTrip.pending.value = null
+        vm.startExternalTrip(r)
+    }
+
     val pills = buildPills(s, gpsWait, context, vm)
 
     val actions = MainActions(
@@ -177,6 +186,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                     onFix = { here, speed, accuracy, course, altitude -> vm.onFix(here, speed, accuracy, course, altitude) }
                 )
             }
+
+            NextOrderButton(orderId = s.nextOrderId, onDismiss = vm::dismissNextOrder)
 
             if (showSettings) {
                 SettingsSheet(
