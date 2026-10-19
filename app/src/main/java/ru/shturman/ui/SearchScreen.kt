@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -109,7 +110,8 @@ fun SearchScreen(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(ShColors.Background)) {
+    // касания не проходят сквозь окно на карту под ним
+    Box(Modifier.fillMaxSize().background(ShColors.Background).pointerInput(Unit) {}) {
         Column(
             modifier = Modifier
                 .fillMaxSize()

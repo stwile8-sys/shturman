@@ -30,7 +30,8 @@ class SpeedMeter {
         if (measured == null && dt in 1.0..10.0 && accuracyM <= 25f && lastAcc <= 25f) {
             measured = distanceM(LatLon(lastLat, lastLon), LatLon(lat, lon)) / dt
         }
-        if (dt != 0.0) {
+        // опорная точка для расчёта по пути: держим её, пока не прошла секунда (положения приходят 2–4 раза в секунду)
+        if (dt < 0.0 || dt >= 1.0) {
             lastMs = timeMs
             lastLat = lat
             lastLon = lon

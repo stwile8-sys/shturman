@@ -34,7 +34,9 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
 /** Сторож фонового сбора данных о дорогах: если система остановила службу, включает её снова. */
 class DriveWatchWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
-        if (!ru.shturman.service.DriveWatch.running) ru.shturman.service.DriveWatch.start(applicationContext)
+        val dw = ru.shturman.service.DriveWatch
+        // из фона Android 12+ запускать службу не даёт без снятого ограничения батареи — не пробуем зря
+        if (!dw.running && dw.canStartInBackground(applicationContext)) dw.start(applicationContext)
         return Result.success()
     }
 }

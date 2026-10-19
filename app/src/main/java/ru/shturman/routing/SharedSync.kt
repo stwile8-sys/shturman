@@ -13,8 +13,11 @@ import kotlinx.coroutines.tasks.await
 class SharedSync(context: Context, private val store: SpeedStore) {
     private val prefs = context.getSharedPreferences("sync", Context.MODE_PRIVATE)
     private val db get() = FirebaseFirestore.getInstance()
-    /** Две синхронизации сразу (автоматическая и по кнопке) не запускаются: вторая ждёт первую. */
-    private val lock = kotlinx.coroutines.sync.Mutex()
+    companion object {
+        /** Две синхронизации сразу (автоматическая, фоновая и по кнопке) не запускаются: вторая ждёт первую. */
+        private val lock = kotlinx.coroutines.sync.Mutex()
+        private const val HOUR = 3600_000L
+    }
 
     /** Обезличенные данные о дорогах отправляют все пользователи (выключателя нет). */
     val share: Boolean get() = true
@@ -22,14 +25,15 @@ class SharedSync(context: Context, private val store: SpeedStore) {
     val lastSyncAt: Long get() = prefs.getLong("last_sync", 0L)
 
     /** Отправляет свои новые данные (если разрешено) и забирает чужие. Возвращает короткий итог. */
-    suspend fun sync(): String = lock.withLock { syncLocked() }
+    suspend fun sync(): String = lock.withLock { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { syncLocked() } }
 
     private suspend fun syncLocked(): String {
         val started = System.currentTimeMillis()
         var pushed = 0
         if (share) {
             pushed += push("stops", { store.dirtyStops(prefs.getLong("push_stops", 0L), 300) }, "push_stops")
-            pushed += push("cells", { store.dirtyCells(prefs.getLong("push_cells", 0L), 300) }, "push_cells")
+            // ячейку с одним проездом не отправляем: по ней можно угадать чужую поездку; уйдёт, когда проедут ещё раз
+            pushed += push("cells", { store.dirtyCells(prefs.getLong("push_cells", 0L), 300) }, "push_cells") { it.n >= 2 }
         }
         val pulled = pull("stops", "pull_stops") + pull("cells", "pull_cells")
         val result = "Отправлено $pushed, получено $pulled"
@@ -40,9 +44,12 @@ class SharedSync(context: Context, private val store: SpeedStore) {
     /** Итог последней синхронизации («Отправлено 12, получено 340») или null, если её ещё не было. */
     val lastResult: String? get() = prefs.getString("last_result", null)
 
-    private suspend fun push(collection: String, rows: () -> List<SharedRow>, mark: String): Int {
+    private suspend fun push(collection: String, rows: () -> List<SharedRow>, mark: String, keep: (SharedRow) -> Boolean = { true }): Int {
         val list = rows()
-        for (r in list) {
+        for (r0 in list) {
+            if (!keep(r0)) continue
+            // время в общей базе — с точностью до часа, без минут и секунд проезда
+            val r = SharedRow(r0.key, r0.lat, r0.lon, r0.value, r0.n, r0.updated / HOUR * HOUR)
             val ref = db.collection(collection).document(r.key)
             db.runTransaction { tx ->
                 val snap = tx.get(ref)
@@ -67,12 +74,13 @@ class SharedSync(context: Context, private val store: SpeedStore) {
             }.await()
         }
         if (list.isNotEmpty()) prefs.edit().putLong(mark, list.maxOf { it.updated }).apply()
-        return list.size
+        return list.count(keep)
     }
 
     private suspend fun pull(collection: String, mark: String): Int {
         var count = 0
-        var since = prefs.getLong(mark, 0L)
+        // время в общей базе округлено до часа: берём с запасом в час, повторы при вливании отсекаются
+        var since = (prefs.getLong(mark, 0L) - HOUR).coerceAtLeast(0L)
         while (true) {
             val snap = db.collection(collection)
                 .whereGreaterThan("updated", since)

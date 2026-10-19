@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
@@ -171,7 +172,8 @@ fun MainLayout(
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             ThenPill(s.notes)
                             s.curveAdviceKmh?.let { AdvicePill(it) }
-                            pills.forEach { WarnChip(it.text, it.warn, onClick = it.onClick) }
+                            // не больше трёх сообщений: на маленьком экране они не налезут на кольцо скорости
+                            pills.take(3).forEach { WarnChip(it.text, it.warn, onClick = it.onClick) }
                         }
                         Spacer(Modifier.width(8.dp))
                         // кнопок столько, сколько влезает между панелью поворота и нижним блоком
@@ -302,16 +304,21 @@ private fun androidx.compose.foundation.layout.BoxScope.NavLandscape(
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            ManeuverPanel(s.turn, s.notes, framed = false, compact = true)
-            ThenPill(s.notes, framed = false)
-            s.curveAdviceKmh?.let { AdvicePill(it) }
-            pills.take(2).forEach { WarnChip(it.text, it.warn, onClick = it.onClick) }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(ShColors.GlassEdge))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                TripValue(eta, "ПРИБЫТИЕ", Modifier.weight(1f))
-                TripValue(kmLeft, "КМ · $minLeft", alignEnd = true)
+            // верх колонки прокручивается, если не влез; кнопки внизу всегда на месте
+            Column(
+                Modifier.weight(1f).verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                ManeuverPanel(s.turn, s.notes, framed = false, compact = true)
+                ThenPill(s.notes, framed = false)
+                s.curveAdviceKmh?.let { AdvicePill(it) }
+                pills.take(2).forEach { WarnChip(it.text, it.warn, onClick = it.onClick) }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(ShColors.GlassEdge))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                    TripValue(eta, "ПРИБЫТИЕ", Modifier.weight(1f))
+                    TripValue(kmLeft, "КМ · $minLeft", alignEnd = true)
+                }
             }
-            Spacer(Modifier.weight(1f))
             MiniPlayer(onOpen = a.openMusic)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 buttons.forEach { b ->

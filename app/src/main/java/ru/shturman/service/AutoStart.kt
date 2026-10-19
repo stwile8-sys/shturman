@@ -41,7 +41,7 @@ class AutoStartReceiver : BroadcastReceiver() {
                     // Подключились к машине — сразу проверяем, поехали ли, чтобы записать поездку с начала
                     if (matches(context, intent) || isCar(intent)) {
                         DriveWatch.carConnected = true
-                        DriveWatch.start(context, poke = true)
+                        if (DriveWatch.canStartInBackground(context)) DriveWatch.start(context, poke = true)
                     }
                     if (AutoPrefs.btAutostart(context) && matches(context, intent)) {
                         prompt(context, "Подключено к авто", "Открыть APEX и построить маршрут?")
@@ -64,7 +64,8 @@ class AutoStartReceiver : BroadcastReceiver() {
     private fun isCar(intent: Intent): Boolean = runCatching {
         val dev = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE) ?: return false
         val cls = dev.bluetoothClass?.deviceClass ?: return false
-        cls == android.bluetooth.BluetoothClass.Device.AUDIO_VIDEO_CAR_AUDIO || cls == android.bluetooth.BluetoothClass.Device.AUDIO_VIDEO_HANDSFREE
+        // только магнитола: «громкую связь» отдают и обычные Bluetooth-наушники
+        cls == android.bluetooth.BluetoothClass.Device.AUDIO_VIDEO_CAR_AUDIO
     }.getOrDefault(false)
 
     @Suppress("DEPRECATION")

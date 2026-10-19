@@ -176,6 +176,8 @@ fun RoutePanel(
         // Варианты маршрута
         Column(
             modifier = Modifier
+                // список ужимается первым: кнопка «Поехали» всегда видна (и на горизонтальном экране)
+                .weight(1f, fill = false)
                 .heightIn(max = (screenH * 0.34f).dp.coerceAtLeast(120.dp))
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp)

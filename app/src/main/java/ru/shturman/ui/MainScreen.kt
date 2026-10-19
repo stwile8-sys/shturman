@@ -123,7 +123,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
     val total = (route?.totalM ?: 0.0).coerceAtLeast(1.0)
     val traveled = (s.position?.traveledM ?: 0.0).coerceIn(0.0, total)
     val progress = (traveled / total).toFloat()
-    val arrived = s.navigating && route != null && progress >= 0.985f
+    // приехали — когда до цели осталось меньше 40 м (а не по доле пути: на 100 км 1,5 % — это 1,5 км)
+    val arrived = s.navigating && route != null && total - traveled < 40.0 && progress > 0.5f
 
     // Приехали: убираем маршрут
     LaunchedEffect(arrived) {
@@ -137,6 +138,13 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         if (!s.dataReady) return@LaunchedEffect
         ru.shturman.api.ExternalTrip.pending.value = null
         vm.startExternalTrip(r)
+    }
+
+    // Ведение началось (кнопкой «Поехали» или из «Заказов») — заставка старта и подлёт камеры к стрелке
+    var wasNavigating by remember { mutableStateOf(s.navigating) }
+    LaunchedEffect(s.navigating) {
+        if (s.navigating && !wasNavigating) startKey++
+        wasNavigating = s.navigating
     }
 
     val pills = buildPills(s, gpsWait, context, vm)
@@ -155,7 +163,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         openMusic = { showMusic = true },
         selectOption = vm::selectOption,
         setDeparture = vm::setDeparture,
-        start = { startKey++; vm.startNavigation() }
+        start = { vm.startNavigation() }
     )
 
     val fx = remember { ru.shturman.ui.fx.FxController() }
