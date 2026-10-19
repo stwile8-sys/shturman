@@ -113,6 +113,7 @@ fun MainLayout(
     val navigating = s.navigating && route != null
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
+        val screenH = maxHeight
         val landscape = maxWidth > maxHeight && maxWidth >= 560.dp
         val insets = when {
             navigating && landscape -> MapInsets(
@@ -174,7 +175,7 @@ fun MainLayout(
                         }
                         Spacer(Modifier.width(8.dp))
                         // кнопок столько, сколько влезает между панелью поворота и нижним блоком
-                        val avail = maxHeight - statusTop - 12.dp - maneuverH - 8.dp - navBar - navBottomH - 20.dp
+                        val avail = screenH - statusTop - 12.dp - maneuverH - 8.dp - navBar - navBottomH - 20.dp
                         val fit = ((avail + 8.dp) / (SportButtonSize + 8.dp)).toInt().coerceIn(1, buttons.size)
                         val keep = buttons.sortedBy { it.priority }.take(fit).toSet()
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
