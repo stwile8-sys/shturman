@@ -178,10 +178,23 @@ class Voice(context: Context) {
 }
 
 /**
- * Фраза для подсказки о повороте. level: 0 — заранее, 1 — близко, 2 — прямо сейчас.
+ * Фраза для подсказки о повороте. level: 0 — «через километр» (на скорости), 1 — заранее (до 600 м),
+ * 2 — близко, 3 — прямо сейчас. roundaboutExit > 0 — кольцо с номером съезда.
  * Текст точно совпадает с готовыми записями (VoiceClips): названия улиц в записи не входят.
  */
-fun turnPhrase(level: Int, distanceM: Double, isLeft: Boolean, severity: Int, street: String, short: Boolean = false): String {
+fun turnPhrase(level: Int, distanceM: Double, isLeft: Boolean, severity: Int, roundaboutExit: Int = 0): String {
+    val near = when (level) {
+        2 -> "Через ${roundMeters(distanceM, 50).coerceIn(50, 600)} метров"
+        else -> "Через ${roundMeters(distanceM, 100).coerceIn(50, 600)} метров"
+    }
+    if (roundaboutExit > 0) {
+        val exit = EXIT_WORDS.getOrNull(roundaboutExit - 1)?.let { "$it съезд" }
+        return when (level) {
+            3 -> if (exit != null) "На кольце $exit" else "Круговое движение"
+            0 -> "Через километр, круговое движение" + (exit?.let { ", $it" } ?: "")
+            else -> "$near, круговое движение" + (exit?.let { ", $it" } ?: "")
+        }
+    }
     val side = if (isLeft) "налево" else "направо"
     val how = when {
         severity <= 2 -> "резко $side"
@@ -189,11 +202,17 @@ fun turnPhrase(level: Int, distanceM: Double, isLeft: Boolean, severity: Int, st
         else -> side
     }
     return when (level) {
-        2 -> how.replaceFirstChar { it.uppercase() }
-        1 -> "Через ${roundMeters(distanceM, 50).coerceIn(50, 600)} метров, $how"
-        else -> "Через ${roundMeters(distanceM, 100).coerceIn(50, 600)} метров, $how"
+        3 -> how.replaceFirstChar { it.uppercase() }
+        0 -> "Через километр, $how"
+        else -> "$near, $how"
     }
 }
+
+/** Номера съездов с кольца, для которых есть записи. */
+private val EXIT_WORDS = listOf("первый", "второй", "третий", "четвёртый", "пятый")
+
+/** Совет сбавить скорость перед крутым поворотом: запись есть для 20…70 км/ч. */
+fun curvePhrase(adviceKmh: Int): String = "Впереди крутой поворот, сбавьте до ${adviceKmh.coerceIn(20, 70)}"
 
 private fun roundMeters(d: Double, step: Int): Int = (Math.round(d / step) * step).toInt().coerceAtLeast(step)
 

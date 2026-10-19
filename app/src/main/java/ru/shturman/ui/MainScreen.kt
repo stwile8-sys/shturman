@@ -198,8 +198,14 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             map3d = s.map3d,
             // стрелка — на высоте кнопки «Где я»: над нижней строкой отступ 8 dp и половина кнопки 28 dp
             markerFromBottom = if (s.navigating) navBottomH + 36.dp + navBarBottom else 0.dp,
+            speedKmh = s.speedKmh,
+            turnAheadM = s.turn?.distanceM ?: Double.MAX_VALUE,
             onFix = { here, speed, accuracy, course, altitude -> vm.onFix(here, speed, accuracy, course, altitude) }
         )
+        // Ночной экран: после заката карта темнее, чтобы не слепила (кнопки и карточки — как были)
+        if (s.night && !hudOn) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+        }
 
         Column(
             modifier = Modifier
@@ -242,6 +248,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             PaceCard(
                 notes = s.notes,
                 street = street,
+                turn = turn,
+                adviceKmh = s.curveAdviceKmh,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
@@ -285,9 +293,12 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         } else if (!s.navigating && s.options.isNotEmpty()) {
             if (weather != null) {
                 val extra = ((1.0 / weather.speedFactor - 1.0) * 100).toInt()
-                val text = "${weather.label}, ${weather.tempC}°" + (if (extra > 0) " · дольше на $extra%" else "") +
+                // До +3° на дороге может быть гололёд
+                val ice = weather.tempC <= 3 && weather.label != "Гололёд"
+                val text = "${weather.label}, ${weather.tempC}°" + (if (ice) " · возможен гололёд" else "") +
+                    (if (extra > 0) " · дольше на $extra%" else "") +
                     (s.seasonNote?.let { "\n$it" } ?: "")
-                pills += Triple(text, if (extra > 0 || s.seasonNote != null) ShColors.Sign3 else ShColors.TextSecondary, null)
+                pills += Triple(text, if (ice || extra > 0 || s.seasonNote != null) ShColors.Sign3 else ShColors.TextSecondary, null)
             } else if (s.seasonNote != null) {
                 pills += Triple(s.seasonNote!!, ShColors.Sign3, null)
             }
@@ -404,8 +415,11 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                     // красная — когда превышение больше допустимых 15 км/ч, как и сигнал
                     SpeedReadout(kmh = s.speedKmh, over = limit != null && s.speedKmh > limit + ru.shturman.routing.OVERSPEED_TOLERANCE_KMH)
                 }
+                // справа: мини-плеер (если играет музыка) над карточкой пути — рядом с высокой колонкой скорости
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                MiniPlayer(onOpen = { showMusic = true })
                 ProgressCard(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     progress = progress,
                     traveledKm = formatKm(traveled),
                     totalKm = formatKm(total),
@@ -416,6 +430,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                     remaining = if (s.cardRemaining) "осталось ${formatDuration(remainingSec)} · ${formatKm(total - traveled)} км" else null,
                     fuel = if (s.cardFuel) fuelText(fuelLiters(route.lengthM, route.timeSec, s.consumption.toDouble()), s.fuelPrice.toDouble()) else null
                 )
+                }
             }
         } else if (s.options.isNotEmpty()) {
             RoutePanel(

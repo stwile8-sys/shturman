@@ -55,6 +55,17 @@ private const val FOLLOW_TILT = 60.0
 private const val START_ZOOM = 16.8 // после «Поехали» камера останавливается там же, где ведёт в поездке
 private const val START_TILT = 64.0
 
+/**
+ * Масштаб камеры в поездке: до 50 км/ч — 16,8, дальше чем быстрее, тем дальше видно (130 км/ч — 15,6).
+ * Если поворот ближе 8 секунд пути (не меньше 120 м) и едем не быстрее 80 км/ч — на 0,4 ближе, чтобы разглядеть его.
+ */
+internal fun autoZoom(kmh: Int, turnAheadM: Double): Double {
+    val v = kmh.coerceIn(0, 150).toDouble()
+    val base = if (v <= 50.0) FOLLOW_ZOOM else (FOLLOW_ZOOM - (v - 50.0) / 80.0 * 1.2).coerceAtLeast(15.6)
+    val nearTurn = v < 80.0 && turnAheadM < maxOf(120.0, v / 3.6 * 8.0)
+    return if (nearTurn) base + 0.4 else base
+}
+
 /** Наклон камеры: с 3D-картой — сильный (как в варианте «глубина»), без неё — умеренный. */
 private object MapCam {
     var follow = FOLLOW_TILT
@@ -88,6 +99,10 @@ fun DarkMap(
     map3d: Boolean = true,
     /** Где держать стрелку в поездке: расстояние от низа экрана до её центра (0 — по центру, как обычно). */
     markerFromBottom: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(0f),
+    /** Скорость, км/ч: в поездке от неё зависит масштаб (быстрее — видно дальше). */
+    speedKmh: Int = 0,
+    /** До ближайшего поворота, м: перед поворотом камера чуть ближе. */
+    turnAheadM: Double = Double.MAX_VALUE,
     onFix: (LatLon, Float, Float, Float, Float) -> Snap? = { _, _, _, _, _ -> null }
 ) {
     val context = LocalContext.current
@@ -103,6 +118,10 @@ fun DarkMap(
     val currentOnFix by rememberUpdatedState(onFix)
     val currentNavigating by rememberUpdatedState(navigating)
     val currentRoute by rememberUpdatedState(route)
+    val currentSpeed by rememberUpdatedState(speedKmh)
+    val currentTurnAhead by rememberUpdatedState(turnAheadM)
+    // Когда пользователь последний раз сам двигал или масштабировал карту пальцами
+    val lastGestureAt = remember { longArrayOf(0L) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -155,6 +174,9 @@ fun DarkMap(
             addOnDidFailLoadingMapListener { if (!mapReady) mapFailed = true }
             getMapAsync { m ->
                 map = m
+                m.addOnCameraMoveStartedListener { reason ->
+                    if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) lastGestureAt[0] = System.currentTimeMillis()
+                }
                 // Долгое нажатие на карту копирует координаты точки
                 m.addOnMapLongClickListener { p ->
                     runCatching {
@@ -443,6 +465,23 @@ fun DarkMap(
             }
             if (!navigating) break
             delay(1500)
+        }
+    }
+
+    // Масштаб в поездке от скорости: в городе 16,8, на трассе дальше (до 15,6 на 130 км/ч);
+    // перед поворотом (ближе 8 секунд пути) — чуть ближе. Если масштаб меняли пальцами, 10 секунд не трогаем.
+    LaunchedEffect(map, navigating) {
+        val m = map ?: return@LaunchedEffect
+        if (!navigating) return@LaunchedEffect
+        delay(3000) // сначала подлёт камеры после «Поехали»
+        while (true) {
+            delay(1000)
+            val lc = m.locationComponent
+            if (!lc.isLocationComponentActivated || lc.cameraMode != CameraMode.TRACKING_GPS) continue
+            if (System.currentTimeMillis() - lastGestureAt[0] < 10_000L) continue
+            val target = autoZoom(currentSpeed, currentTurnAhead)
+            val now = m.cameraPosition.zoom
+            if (kotlin.math.abs(now - target) > 0.12) runCatching { lc.zoomWhileTracking(target, 1500L) }
         }
     }
 

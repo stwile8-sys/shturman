@@ -10,7 +10,9 @@ class PaceNote(
     val isLeft: Boolean,
     /** Сколько метров до начала изгиба. */
     val distanceM: Double,
-    val lengthM: Double
+    val lengthM: Double,
+    /** Радиус изгиба, м (чем меньше, тем круче). */
+    val radiusM: Double = 1000.0
 )
 
 private const val STEP_M = 10.0
@@ -59,7 +61,7 @@ fun paceNotes(route: RouteOption, traveledM: Double, aheadM: Double = 900.0, max
                 radius <= 140 -> 5
                 else -> 6
             }
-            if (radius <= 300) notes.add(PaceNote(severity, acc < 0, start * STEP_M, length))
+            if (radius <= 300) notes.add(PaceNote(severity, acc < 0, start * STEP_M, length, radius))
         }
         start = -1
         acc = 0.0
@@ -80,4 +82,26 @@ fun paceNotes(route: RouteOption, traveledM: Double, aheadM: Double = 900.0, max
     }
     close(heading.size - 2)
     return notes.take(maxNotes)
+}
+
+/** Боковое ускорение, при котором поворот проходится спокойно, м/с². */
+private const val COMFORT_LATERAL = 3.0
+
+/**
+ * Совет сбавить скорость перед крутым изгибом дороги: (скорость, км/ч, кратно 10; изгиб) или null.
+ * Безопасная скорость — из радиуса: v = √(a·R). Изгибы у самого манёвра (поворот на перекрёстке) пропускаем —
+ * о них и так скажет навигатор. Совет только на скорости от 40 км/ч, если едем быстрее совета больше чем на 10
+ * и изгиб ближе 8 секунд пути (не меньше 150 м).
+ */
+fun curveAdvice(notes: List<PaceNote>, turnDistanceM: Double?, kmh: Int): Pair<Int, PaceNote>? {
+    if (kmh < 40) return null
+    val reach = maxOf(150.0, kmh / 3.6 * 8.0)
+    for (n in notes) {
+        if (n.distanceM > reach) break
+        if (turnDistanceM != null && abs(n.distanceM - turnDistanceM) < 60.0) continue
+        val safe = Math.sqrt(COMFORT_LATERAL * n.radiusM) * 3.6
+        val advice = ((safe / 10.0).toInt() * 10).coerceAtLeast(20)
+        if (advice <= 70 && kmh > advice + 10) return advice to n
+    }
+    return null
 }
