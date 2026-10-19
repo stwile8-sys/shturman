@@ -121,7 +121,8 @@ fun SettingsSheet(
     onDismiss: () -> Unit,
     onOpenHud: () -> Unit = {},
     onOpenMusic: () -> Unit = {},
-    onOpenRadar: () -> Unit = {}
+    onOpenRadar: () -> Unit = {},
+    onOpenRoadData: () -> Unit = {}
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -191,7 +192,7 @@ fun SettingsSheet(
                         Page.NOTIF -> NotifPage()
                         Page.DATA -> DataPage(vm)
                         Page.PRIVACY -> PrivacyPage(user, s, vm)
-                        Page.ADMIN -> AdminPage(onOpenAdmin)
+                        Page.ADMIN -> AdminPage(onOpenAdmin, onOpenRoadData)
                         Page.APEX -> ApexPage {
                             ru.shturman.ui.themes.Shturman2.introPending = true
                             onDismiss()
@@ -281,7 +282,7 @@ private fun Home(user: UserInfo, s: NavState, vm: NavViewModel, isAdmin: Boolean
         CategoryRow(ApexIcons.Data, Page.DATA.title, Page.DATA.ordinal, "Копия в аккаунте, кэш, сброс") { open(Page.DATA) }
         CategoryRow(ApexIcons.Lock, Page.PRIVACY.title, Page.PRIVACY.ordinal,
             "Сбор данных о дорогах · отчёт разработчику") { open(Page.PRIVACY) }
-        if (isAdmin) CategoryRow(ApexIcons.Edit, Page.ADMIN.title, Page.ADMIN.ordinal, "Коды активации") { open(Page.ADMIN) }
+        if (isAdmin) CategoryRow(ApexIcons.Edit, Page.ADMIN.title, Page.ADMIN.ordinal, "Данные о дорогах, коды активации") { open(Page.ADMIN) }
     }
 
     Spacer(Modifier.height(16.dp))
@@ -535,18 +536,19 @@ private fun CaravanPage(s: NavState, vm: NavViewModel) {
     } else {
         EmptyState(EmptyKind.CARAVAN, "Вы не в караване", "Создайте караван и отправьте код друзьям или введите их код.")
         WideButton(stringResource(R.string.s_c8735bdd), onClick = vm::createCaravan)
+        Section("Войти по коду")
+        Hint("Введите 4 цифры, которые вам прислал ведущий.")
         Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            NumberField("Код из 4 цифр", code, Modifier.weight(1f), integer = true) { code = it.filter(Char::isDigit).take(4) }
-            Spacer(Modifier.width(10.dp))
-            Button(
-                onClick = { vm.joinCaravan(code) },
-                enabled = code.length == 4,
-                modifier = Modifier.height(48.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ShColors.Accent, contentColor = ShColors.Background)
-            ) { Text(stringResource(R.string.s_63a75375), style = ShText.Button) }
-        }
+        CodeInput(code) { code = it }
+        Spacer(Modifier.height(10.dp))
+        ru.shturman.ui.fx.GlowButton(
+            text = "Войти в караван",
+            onClick = { vm.joinCaravan(code) },
+            enabled = code.length == 4,
+            burst = 0f,
+            height = 52.dp,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
     s.caravanMessage?.let { Hint(it, Modifier.padding(top = 6.dp)) }
 }
@@ -703,7 +705,10 @@ private fun ApexPage(onIntro: () -> Unit) {
 }
 
 @Composable
-private fun AdminPage(onOpenAdmin: () -> Unit) {
+private fun AdminPage(onOpenAdmin: () -> Unit, onOpenRoadData: () -> Unit) {
+    Section("Данные о дорогах")
+    Hint("Насколько хорошо собраны пробки и светофоры: оценка, карта и цифры. Видно только вам.")
+    WideButton("Открыть «Данные о дорогах»", onClick = onOpenRoadData)
     Section(stringResource(R.string.s_f42d869a))
     WideButton(stringResource(R.string.s_1abf35b1), onClick = onOpenAdmin)
 }
@@ -803,17 +808,57 @@ private fun CheckRow(title: String, checked: Boolean, onChange: (Boolean) -> Uni
     }
 }
 
+/**
+ * Код каравана: четыре крупные клетки под цифры. Нажатие по клеткам открывает цифровую клавиатуру,
+ * текущая клетка подсвечена цветом темы.
+ */
+@Composable
+private fun CodeInput(value: String, onChange: (String) -> Unit) {
+    androidx.compose.foundation.text.BasicTextField(
+        value = value,
+        onValueChange = { onChange(it.filter(Char::isDigit).take(4)) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+        modifier = Modifier.fillMaxWidth(),
+        decorationBox = { inner ->
+            Box {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    for (i in 0 until 4) {
+                        val ch = value.getOrNull(i)
+                        val current = i == value.length.coerceAtMost(3)
+                        val shape = RoundedCornerShape(12.dp)
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(64.dp)
+                                .clip(shape)
+                                .background(Color.White.copy(alpha = 0.06f))
+                                .border(if (current) 1.5.dp else 1.dp, if (current) ShColors.Accent else Color.White.copy(alpha = 0.22f), shape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(ch?.toString() ?: "", color = ShColors.TextPrimary, style = ShText.Value.copy(fontSize = 30.sp, lineHeight = 34.sp))
+                        }
+                    }
+                }
+                // настоящее поле невидимо: цифры рисуют клетки, поле только принимает ввод
+                Box(Modifier.size(1.dp)) { inner() }
+            }
+        }
+    )
+}
+
+/** Поля ввода в настройках: заметная светлая подложка и линия снизу (цвета темы при вводе). */
 @Composable
 private fun sheetFieldColors() = TextFieldDefaults.colors(
-    focusedContainerColor = ShColors.SearchField,
-    unfocusedContainerColor = ShColors.SearchField,
+    focusedContainerColor = Color.White.copy(alpha = 0.08f),
+    unfocusedContainerColor = Color.White.copy(alpha = 0.06f),
     focusedTextColor = ShColors.TextPrimary,
     unfocusedTextColor = ShColors.TextPrimary,
     focusedLabelColor = ShColors.TextSecondary,
     unfocusedLabelColor = ShColors.TextSecondary,
     cursorColor = ShColors.Accent,
-    focusedIndicatorColor = Color.Transparent,
-    unfocusedIndicatorColor = Color.Transparent
+    focusedIndicatorColor = ShColors.Accent,
+    unfocusedIndicatorColor = Color.White.copy(alpha = 0.25f)
 )
 
 @Composable

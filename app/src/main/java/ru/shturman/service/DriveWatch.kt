@@ -41,8 +41,10 @@ import ru.shturman.routing.StopRecorder
  * Чтобы не сажать батарею, служба почти всё время «дремлет»:
  *  - ДРЕМЛЕТ: слушает чужие положения (пассивно), редкие экономные положения по сети и датчик движения;
  *  - ПРОВЕРЯЕТ: если похоже на поездку — включает GPS на 2 минуты и смотрит скорость;
- *  - ЗАПИСЫВАЕТ: едем быстрее ~22 км/ч — пишет скорости и остановки; 4 минуты стоим — снова дремлет.
- * Пока открыт экран карты, пишет само приложение, а служба только следит за режимом (без двойного счёта).
+ *  - ЗАПИСЫВАЕТ: едем быстрее 10 км/ч — пишет скорости и остановки; 5 минут стоим — снова дремлет.
+ * Чтобы велосипед и бег не портили пробки, точки сначала копятся в памяти и попадают в базу, когда ясно,
+ * что это машина: хоть раз быстрее 30 км/ч или телефон подключён к Bluetooth машины. Не ясно за 10 минут — забываем.
+ * Пока открыт экран APEX (навигатор включён), пишет само приложение как обычно, а служба только следит за режимом.
  */
 class DriveWatchService : Service() {
     private enum class Mode { IDLE, PROBE, DRIVE }
@@ -57,6 +59,12 @@ class DriveWatchService : Service() {
     private var lastMovingAt = 0L
     private var lastLoose: Location? = null
     private var failedProbes = 0
+    /** Поездка подтверждена как поездка на машине: точки идут прямо в базу. */
+    private var confirmed = false
+    private var driveStartedAt = 0L
+    private var fastHits = 0
+    /** Точки до подтверждения (до 20 минут при одном положении в секунду). */
+    private val pending = ArrayList<DoubleArray>()
     private var nextProbeAt = 0L
     private var nextLooseProbeAt = 0L
     private var lastGpsNanos = 0L
@@ -87,7 +95,15 @@ class DriveWatchService : Service() {
                     nextLooseProbeAt = now + 2 * 60_000L
                     enterIdle()
                 }
-                Mode.DRIVE -> if (now - lastMovingAt > STILL_MS) enterIdle()
+                Mode.DRIVE -> if (now - lastMovingAt > STILL_MS) {
+                    enterIdle()
+                } else if (!confirmed && now - driveStartedAt > CONFIRM_MS) {
+                    // за 10 минут ни разу не было похоже на машину (велосипед, бег) — ничего не записываем
+                    pending.clear()
+                    failedProbes++
+                    nextProbeAt = now + minOf(30L, 5L shl (failedProbes - 1).coerceIn(0, 3)) * 60_000L
+                    enterIdle()
+                }
                 Mode.IDLE -> Unit
             }
             handler.postDelayed(this, 5000L)
@@ -109,7 +125,7 @@ class DriveWatchService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!DriveWatch.hasLocation(this)) { stopSelf(); return START_NOT_STICKY }
         try {
-            val n = notification(this, mode == Mode.DRIVE)
+            val n = notification(this, mode == Mode.DRIVE && confirmed)
             if (Build.VERSION.SDK_INT >= 29) {
                 ServiceCompat.startForeground(this, ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
             } else {
@@ -147,7 +163,9 @@ class DriveWatchService : Service() {
     // ---------- режимы ----------
 
     private fun enterIdle() {
-        if (mode == Mode.DRIVE) flush()
+        if (mode == Mode.DRIVE && confirmed) flush()
+        pending.clear()
+        confirmed = false
         mode = Mode.IDLE
         DriveWatch.mode = "ждёт поездку"
         DriveWatch.recording = false
@@ -187,17 +205,39 @@ class DriveWatchService : Service() {
 
     private fun enterDrive() {
         mode = Mode.DRIVE
-        DriveWatch.mode = "записывает поездку"
         DriveWatch.recording = true
-        failedProbes = 0
-        nextProbeAt = 0L
         lastMovingAt = SystemClock.elapsedRealtime()
-        DriveWatch.drives++
-        DriveWatch.lastDriveAt = System.currentTimeMillis()
+        driveStartedAt = lastMovingAt
+        fastHits = 0
+        pending.clear()
+        confirmed = false
         stops.reset()
+        DriveWatch.mode = "проверяет, на машине ли"
+        // подключены к Bluetooth машины — это точно поездка на машине
+        if (DriveWatch.carConnected) confirmDrive()
         acquireWake()
         gpsOn()
         updateNotification()
+    }
+
+    /** Ясно, что едем на машине: копившиеся точки уходят в базу, дальше пишем сразу. */
+    private fun confirmDrive() {
+        if (confirmed) return
+        confirmed = true
+        failedProbes = 0
+        nextProbeAt = 0L
+        DriveWatch.mode = "записывает поездку"
+        DriveWatch.drives++
+        DriveWatch.lastDriveAt = System.currentTimeMillis()
+        for (p in pending) record(p[0], p[1], p[2], p[3].toLong())
+        pending.clear()
+        updateNotification()
+    }
+
+    private fun record(lat: Double, lon: Double, speed: Double, wall: Long) {
+        speeds.add(lat, lon, speed, wall)
+        stops.add(LatLon(lat, lon), speed, wall)
+        DriveWatch.points++
     }
 
     private fun gpsOn() {
@@ -229,12 +269,13 @@ class DriveWatchService : Service() {
                 lastGpsNanos = loc.elapsedRealtimeNanos
                 val speed = if (loc.hasSpeed()) loc.speed.toDouble() else 0.0
                 if (speed >= MOVING_MPS) lastMovingAt = now
+                // Два точных положения быстрее 30 км/ч — это машина, а не велосипед и не бег
+                if (!confirmed && speed >= CAR_MPS && acc <= 30f && ++fastHits >= 2) confirmDrive()
                 // Пока открыт экран карты, скорости пишет само приложение — второй раз не считаем
                 if (!DriveWatch.uiTracking && acc <= 30f) {
                     val wall = System.currentTimeMillis()
-                    speeds.add(loc.latitude, loc.longitude, speed, wall)
-                    stops.add(LatLon(loc.latitude, loc.longitude), speed, wall)
-                    DriveWatch.points++
+                    if (confirmed) record(loc.latitude, loc.longitude, speed, wall)
+                    else if (pending.size < 1200) pending += doubleArrayOf(loc.latitude, loc.longitude, speed, wall.toDouble())
                 }
             }
         }
@@ -296,7 +337,7 @@ class DriveWatchService : Service() {
     private fun updateNotification() {
         runCatching {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(ID, notification(this, mode == Mode.DRIVE))
+            nm.notify(ID, notification(this, mode == Mode.DRIVE && confirmed))
         }
     }
 
@@ -304,12 +345,16 @@ class DriveWatchService : Service() {
         private const val CHANNEL = "road_data"
         private const val ID = 4005
         const val ACTION_POKE = "ru.shturman.action.DRIVE_POKE"
-        /** Быстрее этого (≈22 км/ч) — это поездка на машине, а не пешком. */
-        private const val DRIVE_MPS = 6f
-        /** Быстрее этого (≈7 км/ч) считаем, что ещё едем (пробка, светофор не в счёт стоянки). */
-        private const val MOVING_MPS = 2.0
+        /** Быстрее 10 км/ч — начинаем запись поездки (пока навигатор не открыт). */
+        private const val DRIVE_MPS = 2.8f
+        /** Быстрее 30 км/ч — точно машина: копившиеся точки уходят в базу. */
+        private const val CAR_MPS = 8.3
+        /** Столько ждём подтверждения, что это машина; не дождались — ничего не пишем. */
+        private const val CONFIRM_MS = 10 * 60_000L
+        /** Быстрее этого (≈5 км/ч) считаем, что ещё едем (пробка, светофор не в счёт стоянки). */
+        private const val MOVING_MPS = 1.4
         private const val PROBE_MS = 120_000L
-        private const val STILL_MS = 4 * 60_000L
+        private const val STILL_MS = 5 * 60_000L
 
         private fun notification(ctx: Context, driving: Boolean): Notification {
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -343,6 +388,8 @@ object DriveWatch {
     @Volatile var mode = "выключена"
     /** Сейчас записывается поездка (её нельзя прерывать, например, обновлением). */
     @Volatile var recording = false
+    /** Телефон подключён к Bluetooth машины (магнитола или громкая связь). */
+    @Volatile var carConnected = false
     @Volatile var drives = 0
     @Volatile var points = 0
     @Volatile var lastDriveAt = 0L

@@ -32,9 +32,13 @@ class SharedSync(context: Context, private val store: SpeedStore) {
             pushed += push("cells", { store.dirtyCells(prefs.getLong("push_cells", 0L), 300) }, "push_cells")
         }
         val pulled = pull("stops", "pull_stops") + pull("cells", "pull_cells")
-        prefs.edit().putLong("last_sync", started).apply()
-        return "Отправлено $pushed, получено $pulled"
+        val result = "Отправлено $pushed, получено $pulled"
+        prefs.edit().putLong("last_sync", started).putString("last_result", result).apply()
+        return result
     }
+
+    /** Итог последней синхронизации («Отправлено 12, получено 340») или null, если её ещё не было. */
+    val lastResult: String? get() = prefs.getString("last_result", null)
 
     private suspend fun push(collection: String, rows: () -> List<SharedRow>, mark: String): Int {
         val list = rows()

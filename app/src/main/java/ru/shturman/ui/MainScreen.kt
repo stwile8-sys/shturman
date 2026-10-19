@@ -42,6 +42,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
     // Текст, продиктованный голосом: поиск откроется сразу с ним
     var searchText by remember { mutableStateOf("") }
     var showAdmin by remember { mutableStateOf(false) }
+    // «Данные о дорогах» — окно только для владельца
+    var showRoadData by remember { mutableStateOf(false) }
     var showMusic by remember { mutableStateOf(false) }
     var showRadar by remember { mutableStateOf(false) }
     // Проекция на лобовое (HUD): остаётся включённой и после поворота экрана
@@ -192,7 +194,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                     onDismiss = { showSettings = false },
                     onOpenHud = { showSettings = false; hudOn = true },
                     onOpenMusic = { showSettings = false; showMusic = true },
-                    onOpenRadar = { showSettings = false; showRadar = true }
+                    onOpenRadar = { showSettings = false; showRadar = true },
+                    onOpenRoadData = { showSettings = false; showRoadData = true }
                 )
             }
 
@@ -219,6 +222,9 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
             }
 
             if (showAdmin) AdminCodesScreen(onClose = { showAdmin = false })
+            if (showRoadData && user.email == ru.shturman.access.ADMIN_EMAIL) {
+                Box(Modifier.fillMaxSize().themedScreenEnter()) { RoadDataScreen(onClose = { showRoadData = false }) }
+            }
             if (showMusic) MusicSheet(onDismiss = { showMusic = false })
             if (showRadar) AntiRadarSheet(onDismiss = { showRadar = false })
 

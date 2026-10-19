@@ -150,6 +150,35 @@ class Shots {
     }
 
     @Test
+    fun roadData() = shot("12_road_data") {
+        // поддельная база: несколько «улиц» вокруг Пскова, разные часы и скорости
+        val now = System.currentTimeMillis()
+        val rnd = java.util.Random(7)
+        val cells = ArrayList<ru.shturman.routing.CellRow>()
+        val baseA = (57.81 / 0.0012).toLong()
+        val baseB = (28.33 / 0.0022).toLong()
+        for (street in 0 until 9) {
+            for (i in 0 until 40) {
+                val a = baseA + (if (street % 2 == 0) i - 20 else street * 4 - 18)
+                val b = baseB + (if (street % 2 == 0) street * 3 - 12 else i - 20)
+                repeat(1 + rnd.nextInt(6)) {
+                    val day = rnd.nextInt(7)
+                    val hour = listOf(7, 8, 8, 9, 13, 17, 18, 18, 19, 22)[rnd.nextInt(10)]
+                    cells += ru.shturman.routing.CellRow(a, b, day * 24 + hour, 2.0 + rnd.nextDouble() * 15.0, 1 + rnd.nextInt(6), now - rnd.nextInt(20) * 24L * 3600 * 1000)
+                }
+            }
+        }
+        val stops = (0 until 30).map {
+            ru.shturman.routing.StopRow(57.79 + rnd.nextDouble() * 0.04, 28.31 + rnd.nextDouble() * 0.06, 32, 20.0 + rnd.nextDouble() * 50, 2, now)
+        }
+        ru.shturman.ui.RoadDataContent(
+            stats = ru.shturman.routing.computeRoadStats(cells, stops, now),
+            info = ru.shturman.ui.CollectInfo("25 мин назад", "Отправлено 42, получено 1 380", "Фоновый сбор на этом телефоне: ждёт поездку. Обмен с общей базой — сам раз в 2 часа, когда есть интернет.", 3),
+            syncing = false, onSync = {}, onClose = {}
+        )
+    }
+
+    @Test
     fun hud() = shot("09_hud") {
         WindshieldHud(trip, mirror = false, onMirror = {}, onExit = {})
     }

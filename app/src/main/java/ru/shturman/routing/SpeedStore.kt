@@ -184,6 +184,46 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
         out
     }.getOrDefault(emptyList())
 
+    // ---------- сводка для владельца (окно «Данные о дорогах») ----------
+
+    /** Все записи о скорости: квадрат, час недели, скорость, число проездов, когда обновлено. */
+    @Synchronized
+    fun allCells(): List<CellRow> = runCatching {
+        val out = ArrayList<CellRow>()
+        readableDatabase.rawQuery("SELECT k, speed, n, updated FROM cells", null).use { c ->
+            while (c.moveToNext()) {
+                val p = c.getString(0).split(':')
+                if (p.size != 3) continue
+                val a = p[0].toLongOrNull() ?: continue
+                val b = p[1].toLongOrNull() ?: continue
+                val bucket = p[2].toIntOrNull() ?: continue
+                out += CellRow(a, b, bucket, c.getDouble(1), c.getInt(2), c.getLong(3))
+            }
+        }
+        out
+    }.getOrDefault(emptyList())
+
+    /** Все известные остановки (светофоры, заторы). */
+    @Synchronized
+    fun allStops(): List<StopRow> = runCatching {
+        val out = ArrayList<StopRow>()
+        readableDatabase.rawQuery("SELECT k, lat, lon, wait, n, updated FROM stops", null).use { c ->
+            while (c.moveToNext()) {
+                val bucket = c.getString(0).substringAfterLast(':').toIntOrNull() ?: continue
+                out += StopRow(c.getDouble(1), c.getDouble(2), bucket, c.getDouble(3), c.getInt(4), c.getLong(5))
+            }
+        }
+        out
+    }.getOrDefault(emptyList())
+
+    /** Сколько мест резкого торможения отмечено (хотя бы minCount раз). */
+    @Synchronized
+    fun dangerCount(minCount: Int = 1): Int = runCatching {
+        readableDatabase.rawQuery("SELECT COUNT(*) FROM danger WHERE n >= ?", arrayOf(minCount.toString())).use { c ->
+            if (c.moveToFirst()) c.getInt(0) else 0
+        }
+    }.getOrDefault(0)
+
     // ---------- обмен с общей базой ----------
 
     @Synchronized
