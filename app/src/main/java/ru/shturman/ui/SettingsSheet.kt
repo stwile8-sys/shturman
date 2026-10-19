@@ -235,7 +235,8 @@ private fun Home(user: UserInfo, s: NavState, vm: NavViewModel, isAdmin: Boolean
         listOfNotNull(
             if (AutoPrefs.quietHours(ctx)) "тихие часы" else null,
             if (AutoPrefs.btAutostart(ctx)) "Bluetooth" else null,
-            if (AutoPrefs.chargeAutostart(ctx)) "зарядка" else null
+            if (AutoPrefs.chargeAutostart(ctx)) "зарядка" else null,
+            if (ru.shturman.update.AutoUpdate.enabled(ctx)) "автообновление" else null
         ).joinToString(" · ").ifEmpty { "Итог поездки, тихие часы, автозапуск" }.replaceFirstChar { it.uppercase() }) { open(Page.NOTIF) }
     CategoryRow(Icons.Filled.Settings, Page.DATA.title, Page.DATA.ordinal, "Копия в аккаунте, кэш, сброс") { open(Page.DATA) }
     CategoryRow(Icons.Filled.Lock, Page.PRIVACY.title, Page.PRIVACY.ordinal,
@@ -568,6 +569,22 @@ private fun NotifPage() {
 
     Section("Зарядка")
     SwitchRow(stringResource(R.string.s_d36f16c1), stringResource(R.string.s_6789d352), nCharge) { nCharge = it; AutoPrefs.set(ctx, "charge_autostart", it) }
+
+    var autoUpdate by remember { mutableStateOf(ru.shturman.update.AutoUpdate.enabled(ctx)) }
+    var updateMobile by remember { mutableStateOf(ru.shturman.update.AutoUpdate.mobileAllowed(ctx)) }
+    Section("Обновления")
+    SwitchRow(
+        "Автообновление в фоне",
+        "Новая сборка скачивается сама и ставится, когда приложение закрыто и вы не в поездке. " +
+            "На Android 12 и новее — без вопросов, на старых — одно нажатие на уведомление.",
+        autoUpdate
+    ) { autoUpdate = it; ru.shturman.update.AutoUpdate.setEnabled(ctx, it) }
+    if (autoUpdate) {
+        SwitchRow("Скачивать и по мобильному интернету", "Сборка весит около 100 МБ. Выключено — только по Wi-Fi.", updateMobile) {
+            updateMobile = it
+            ru.shturman.update.AutoUpdate.setMobileAllowed(ctx, it)
+        }
+    }
 }
 
 @Composable

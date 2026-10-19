@@ -140,6 +140,7 @@ class DriveWatchService : Service() {
         releaseWake()
         DriveWatch.running = false
         DriveWatch.mode = "выключена"
+        DriveWatch.recording = false
         super.onDestroy()
     }
 
@@ -149,6 +150,7 @@ class DriveWatchService : Service() {
         if (mode == Mode.DRIVE) flush()
         mode = Mode.IDLE
         DriveWatch.mode = "ждёт поездку"
+        DriveWatch.recording = false
         releaseWake()
         runCatching { LocationManagerCompat.removeUpdates(lm, listener) }
         gpsOn = false
@@ -178,6 +180,7 @@ class DriveWatchService : Service() {
         if (cooldown && now < nextProbeAt) { armMotionLater(); return }
         mode = Mode.PROBE
         DriveWatch.mode = "проверяет, едем ли"
+        DriveWatch.recording = false
         probeUntil = now + PROBE_MS
         gpsOn()
     }
@@ -185,6 +188,7 @@ class DriveWatchService : Service() {
     private fun enterDrive() {
         mode = Mode.DRIVE
         DriveWatch.mode = "записывает поездку"
+        DriveWatch.recording = true
         failedProbes = 0
         nextProbeAt = 0L
         lastMovingAt = SystemClock.elapsedRealtime()
@@ -337,6 +341,8 @@ object DriveWatch {
     /** Экран карты сам получает положения и пишет скорости — службе не нужно считать их второй раз. */
     @Volatile var uiTracking = false
     @Volatile var mode = "выключена"
+    /** Сейчас записывается поездка (её нельзя прерывать, например, обновлением). */
+    @Volatile var recording = false
     @Volatile var drives = 0
     @Volatile var points = 0
     @Volatile var lastDriveAt = 0L
@@ -377,8 +383,12 @@ object DriveWatch {
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED, "android.intent.action.QUICKBOOT_POWERON" ->
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED, "android.intent.action.QUICKBOOT_POWERON" -> {
                 if (DriveWatch.hasBackground(context)) DriveWatch.start(context)
+                // после автообновления — «APEX обновлён» и снова проверка раз в 4 часа
+                if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) ru.shturman.update.AutoUpdate.onUpdated(context)
+                ru.shturman.update.AutoUpdate.schedule(context)
+            }
         }
     }
 }

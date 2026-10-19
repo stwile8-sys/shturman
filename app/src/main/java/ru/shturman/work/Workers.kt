@@ -70,5 +70,6 @@ object Background {
                 PeriodicWorkRequestBuilder<CamerasWorker>(7, TimeUnit.DAYS).setConstraints(net).build()
             )
         }.onFailure { Errors.log("background.schedule", it) }
+        ru.shturman.update.AutoUpdate.schedule(ctx)
     }
 }
