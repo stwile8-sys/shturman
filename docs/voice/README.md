@@ -3,6 +3,7 @@
 Все подсказки — готовые записи в `app/src/main/res/raw/v*.ogg` (на Huawei нет синтезатора речи).
 Голос — Piper, русская женская модель **irina (medium)**, `ru-irinia-medium.onnx` + `.onnx.json`
 (архив `voice-ru-irinia-medium.tar.gz` из релиза Piper v0.0.2, репозиторий rhasspy/piper). Другой моделью не заменять.
+Копия модели — в ветке `voice-model`: `git fetch origin voice-model && git show origin/voice-model:ru-irinia-medium.tar.gz > ru-irinia-medium.tar.gz`.
 Имя файла — `v` + первые 10 знаков md5 текста фразы; фраза и файл связаны в `routing/VoiceClips.kt`.
 
 Как сделаны (чтобы новые звучали так же, как прежние):

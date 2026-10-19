@@ -6,7 +6,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 Ты делаешь новые голосовые записи для навигатора APEX. Голос менять нельзя: все фразы — один голос Piper **irina (medium)** с теми же настройками, что прежние. На Huawei нет синтезатора речи, поэтому каждая фраза, которую говорит навигатор, должна быть готовой записью. Подробности — `docs/voice/README.md`, правила проекта — `CLAUDE.md`.
 
 ## Подготовка (если инструментов ещё нет)
-1. Модель голоса: `ru-irinia-medium.onnx` + `ru-irinia-medium.onnx.json` (архив `voice-ru-irinia-medium.tar.gz` из релиза Piper v0.0.2, репозиторий rhasspy/piper). Сначала посмотри `/tmp/voices/`. Если там нет — попробуй получить доступ к rhasspy/piper (add_repo, чтение) и скачать архив через `gh api`; Hugging Face из сеанса обычно закрыт. Не получилось — остановись и попроси модель у владельца. **Другую модель не подставляй** — голос будет чужим.
+1. Модель голоса лежит в ветке `voice-model` этого репозитория: `git fetch origin voice-model && git show origin/voice-model:ru-irinia-medium.tar.gz > ru-irinia-medium.tar.gz`, распакуй (`ru-irinia-medium.onnx` + `.onnx.json`) в рабочую папку вне репозитория. **Другую модель не подставляй** — голос будет чужим.
 2. espeak-ng из форка rhasspy (тот же, что в piper-phonemize): `git clone --depth 1 https://github.com/rhasspy/espeak-ng`, сборка CMake (команда в `docs/voice/README.md`), затем собрать `docs/voice/phon.c` той же командой из README.
 3. Python с numpy и onnxruntime, ffmpeg для ogg (обычно уже есть).
 Скопируй `docs/voice/*.py` и `phon.c` в рабочую папку вне репозитория и поправь пути в начале `say.py` (модель, `phon`, данные espeak).
