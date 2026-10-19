@@ -6,6 +6,10 @@ plugins {
     id("com.google.firebase.crashlytics")
 }
 
+// Снимки экранов (отдельный workflow shots.yml): gradle :app:testDebugUnitTest -Pshots --tests 'ru.shturman.shots.*'
+// Без -Pshots ничего из этого в сборку не попадает.
+val shots = project.hasProperty("shots")
+
 android {
     namespace = "ru.shturman"
     compileSdk = 36
@@ -45,6 +49,14 @@ android {
         compose = true
         buildConfig = true
     }
+    if (shots) {
+        testOptions.unitTests.isIncludeAndroidResources = true
+        sourceSets.getByName("test").java.srcDir("src/shots/kotlin")
+    }
+}
+
+tasks.withType<Test>().configureEach {
+    if (shots) systemProperty("roborazzi.test.record", "true")
 }
 
 kotlin {
@@ -88,4 +100,14 @@ dependencies {
 
     // Аватарка из Google-аккаунта
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    if (shots) {
+        testImplementation(composeBom)
+        testImplementation("androidx.compose.ui:ui-test-junit4")
+        testImplementation("androidx.test.ext:junit:1.2.1")
+        testImplementation("org.robolectric:robolectric:4.14.1")
+        testImplementation("io.github.takahirom.roborazzi:roborazzi:1.36.0")
+        testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.36.0")
+        debugImplementation("androidx.compose.ui:ui-test-manifest")
+    }
 }
