@@ -23,6 +23,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import kotlinx.coroutines.delay
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -232,11 +233,15 @@ fun DarkMap(
         }
     }
 
+    // Свёрнутое приложение без поездки GPS не держит (батарея); в поездке приём идёт и в свёрнутом виде
+    val lifeState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val trackGps = navigating || lifeState.isAtLeast(Lifecycle.State.STARTED)
+
     // Включаем стрелку и свой приём GPS, когда есть и стиль, и разрешение
-    DisposableEffect(map, style, hasPermission) {
+    DisposableEffect(map, style, hasPermission, trackGps) {
         val m = map
         val st = style
-        if (m == null || st == null || !hasPermission) {
+        if (m == null || st == null || !hasPermission || !trackGps) {
             return@DisposableEffect onDispose { }
         }
         enableLocation(context, m, st)
@@ -492,7 +497,14 @@ fun DarkMap(
                     runCatching { m.locationComponent.paddingWhileTracking(doubleArrayOf(left.toDouble(), top.toDouble(), 0.0, 0.0), 400L, null) }
                 }
             }
-            if (!navigating) break
+            if (!navigating) {
+                // поездка закончилась: снимаем сдвиг стрелки, даже если камера сейчас не следит
+                val pad = runCatching { m.cameraPosition.padding }.getOrNull()
+                if (pad != null && (kotlin.math.abs(pad.getOrNull(1) ?: 0.0) > 2.0 || kotlin.math.abs(pad.getOrNull(0) ?: 0.0) > 2.0)) {
+                    runCatching { m.moveCamera(CameraUpdateFactory.paddingTo(0.0, 0.0, 0.0, 0.0)) }
+                }
+                break
+            }
             delay(1500)
         }
     }

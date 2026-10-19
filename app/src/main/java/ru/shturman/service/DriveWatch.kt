@@ -43,7 +43,7 @@ import ru.shturman.routing.StopRecorder
  *  - ПРОВЕРЯЕТ: если похоже на поездку — включает GPS на 2 минуты и смотрит скорость;
  *  - ЗАПИСЫВАЕТ: едем быстрее 10 км/ч — пишет скорости и остановки; 5 минут стоим — снова дремлет.
  * Чтобы велосипед и бег не портили пробки, точки сначала копятся в памяти и попадают в базу, когда ясно,
- * что это машина: хоть раз быстрее 30 км/ч или телефон подключён к Bluetooth машины. Не ясно за 10 минут — забываем.
+ * что это машина: хоть раз быстрее 30 км/ч или телефон подключён к Bluetooth машины. Не ясно за 20 минут — забываем.
  * Пока открыт экран APEX (навигатор включён), пишет само приложение как обычно, а служба только следит за режимом.
  */
 class DriveWatchService : Service() {
@@ -59,6 +59,7 @@ class DriveWatchService : Service() {
     private var lastMovingAt = 0L
     private var lastLoose: Location? = null
     private var failedProbes = 0
+    private var wakeAt = 0L
     /** Поездка подтверждена как поездка на машине: точки идут прямо в базу. */
     private var confirmed = false
     private var driveStartedAt = 0L
@@ -97,8 +98,11 @@ class DriveWatchService : Service() {
                 }
                 Mode.DRIVE -> if (now - lastMovingAt > STILL_MS) {
                     enterIdle()
+                } else if (now - wakeAt > 3 * 3600_000L) {
+                    // долгая поездка: блокировку сна берём заново, пока она не истекла
+                    releaseWake(); acquireWake()
                 } else if (!confirmed && now - driveStartedAt > CONFIRM_MS) {
-                    // за 10 минут ни разу не было похоже на машину (велосипед, бег) — ничего не записываем
+                    // за 20 минут ни разу не было похоже на машину (велосипед, бег) — ничего не записываем
                     pending.clear()
                     failedProbes++
                     nextProbeAt = now + minOf(30L, 5L shl (failedProbes - 1).coerceIn(0, 3)) * 60_000L
@@ -175,9 +179,9 @@ class DriveWatchService : Service() {
         val all = runCatching { lm.allProviders }.getOrDefault(emptyList())
         // чужие положения — бесплатно; сеть и системный fused — редко и экономно, без GPS
         request(LocationManager.PASSIVE_PROVIDER, 0L, LocationRequestCompat.QUALITY_LOW_POWER)
-        if (all.contains(LocationManager.NETWORK_PROVIDER)) request(LocationManager.NETWORK_PROVIDER, 60_000L, LocationRequestCompat.QUALITY_LOW_POWER)
+        if (all.contains(LocationManager.NETWORK_PROVIDER)) request(LocationManager.NETWORK_PROVIDER, 180_000L, LocationRequestCompat.QUALITY_LOW_POWER)
         if (Build.VERSION.SDK_INT >= 31 && all.contains(LocationManager.FUSED_PROVIDER)) {
-            request(LocationManager.FUSED_PROVIDER, 60_000L, LocationRequestCompat.QUALITY_LOW_POWER)
+            request(LocationManager.FUSED_PROVIDER, 180_000L, LocationRequestCompat.QUALITY_LOW_POWER)
         }
         armMotionLater()
         updateNotification()
@@ -255,7 +259,7 @@ class DriveWatchService : Service() {
         val acc = if (loc.hasAccuracy()) loc.accuracy else 999f
         when (mode) {
             Mode.IDLE -> {
-                if (gps && loc.hasSpeed() && loc.speed >= DRIVE_MPS && acc <= 50f) {
+                if (gps && loc.hasSpeed() && loc.speed >= DRIVE_MPS && acc <= 50f && now >= nextProbeAt) {
                     // кто-то другой (например, Яндекс) уже включил GPS, и мы едем
                     enterDrive()
                 } else if (!gps && looseSaysDriving(loc) && now >= nextLooseProbeAt) {
@@ -326,6 +330,7 @@ class DriveWatchService : Service() {
         runCatching {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "apex:drive").also { it.acquire(4 * 60 * 60 * 1000L) }
+            wakeAt = SystemClock.elapsedRealtime()
         }
     }
 
@@ -350,7 +355,7 @@ class DriveWatchService : Service() {
         /** Быстрее 30 км/ч — точно машина: копившиеся точки уходят в базу. */
         private const val CAR_MPS = 8.3
         /** Столько ждём подтверждения, что это машина; не дождались — ничего не пишем. */
-        private const val CONFIRM_MS = 10 * 60_000L
+        private const val CONFIRM_MS = 20 * 60_000L
         /** Быстрее этого (≈5 км/ч) считаем, что ещё едем (пробка, светофор не в счёт стоянки). */
         private const val MOVING_MPS = 1.4
         private const val PROBE_MS = 120_000L
@@ -408,6 +413,10 @@ object DriveWatch {
     fun batteryFree(ctx: Context): Boolean = runCatching {
         (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
     }.getOrDefault(false)
+
+    /** Можно ли запустить службу из фона: нужно «всегда» и (на Android 12+) снятое ограничение батареи. */
+    fun canStartInBackground(ctx: Context): Boolean =
+        hasBackground(ctx) && (Build.VERSION.SDK_INT < 31 || batteryFree(ctx))
 
     /** Включает сбор. poke — сразу проверить, едем ли (подключились к машине). Ошибки фонового запуска не страшны. */
     fun start(ctx: Context, poke: Boolean = false) {

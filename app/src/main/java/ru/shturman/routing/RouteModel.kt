@@ -70,8 +70,9 @@ class RoutePosition(val index: Int, val traveledM: Double)
 fun locateOnRoute(route: RouteOption, here: LatLon, fromIndex: Int): RoutePosition {
     val pts = route.points
     if (pts.isEmpty()) return RoutePosition(0, 0.0)
-    val start = (fromIndex - 5).coerceAtLeast(0)
-    val end = (fromIndex + 400).coerceAtMost(pts.size - 1)
+    // fromIndex мог остаться от прежнего, более длинного маршрута — не выходим за границы нового
+    val start = (fromIndex - 5).coerceIn(0, pts.size - 1)
+    val end = (fromIndex + 400).coerceIn(start, pts.size - 1)
     var best = start
     var bestD = Double.MAX_VALUE
     for (i in start..end) {

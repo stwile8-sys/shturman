@@ -73,7 +73,8 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
                 put("k", key)
                 put("speed", newSpeed)
                 put("n", newN)
-                put("updated", atMs)
+                // время записи, а не проезда: иначе точки, записанные задним числом, не попадут в общую базу
+                put("updated", maxOf(atMs, System.currentTimeMillis(), updated))
             }
             db.insertWithOnConflict("cells", null, values, SQLiteDatabase.CONFLICT_REPLACE)
         }
@@ -108,7 +109,7 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
                 values.put("wait", old[2] + alpha * (waitSec - old[2]))
                 values.put("n", minOf(n + 1, 20.0).toInt())
             }
-            values.put("updated", atMs)
+            values.put("updated", maxOf(atMs, System.currentTimeMillis(), updated))
             db.insertWithOnConflict("stops", null, values, SQLiteDatabase.CONFLICT_REPLACE)
         }
     }
@@ -259,6 +260,9 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
             db.rawQuery("SELECT lat, lon, wait, n, updated FROM stops WHERE k = ?", arrayOf(r.key)).use { c ->
                 if (c.moveToFirst()) mine = SharedRow(r.key, c.getDouble(0), c.getDouble(1), c.getDouble(2), c.getInt(3), c.getLong(4))
             }
+            // ту же строку из общей базы второй раз не вливаем — иначе число проездов удвоится
+            if (mine?.updated == r.updated) return@runCatching
+            if (mine?.updated == r.updated) return@runCatching
             val m = mine?.let { combineRows(it, r) } ?: r
             val v = ContentValues().apply {
                 put("k", m.key); put("lat", m.lat); put("lon", m.lon); put("wait", m.value); put("n", m.n); put("updated", m.updated)

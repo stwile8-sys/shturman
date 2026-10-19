@@ -223,6 +223,12 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private var iceWarned = false
     private var lastTurnDistance = Double.MAX_VALUE
     private var rerouting = false
+    /** Номер текущего маршрута: ответ движка на устаревший запрос (сменили цель, отменили) отбрасывается. */
+    private var routeGen = 0
+    private var limitsJob: kotlinx.coroutines.Job? = null
+    /** Сколько проехали в этой поездке до последнего перестроения (перестроение начинает счёт маршрута с нуля). */
+    private var tripDoneM = 0.0
+    private var vibeKey = -1
     private var lastRerouteAt = 0L
 
     private val _state = MutableStateFlow(NavState(dataReady = roadData.isReady(), shareData = sharedSync.share, voiceOn = settings.getBoolean("voice", true),
@@ -353,6 +359,12 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     fun chooseDestination(place: Place) {
         ru.shturman.api.ExternalTrip.active = null
         autoStart = false
+        // новая цель посреди поездки: прежнее ведение заканчиваем (поездка записывается), маршрут строится заново
+        if (_state.value.navigating) {
+            finishTrip()
+            stopNavService()
+            _state.update { it.copy(navigating = false, position = null, turn = null, notes = emptyList(), limitKmh = null, hazard = null, cameraAhead = null) }
+        }
         _state.update { it.copy(destination = place, results = emptyList(), searchError = null) }
         buildRoute()
     }
@@ -397,6 +409,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         _state.update { it.copy(routeLoading = true, routeError = null) }
+        val gen = ++routeGen
         viewModelScope.launch {
             try {
                 val departAt = Date(System.currentTimeMillis() + s.departOffsetMin * 60_000L)
@@ -433,6 +446,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 val advice = fastest?.let { f ->
                     withContext(Dispatchers.Default) { runCatching { departureAdvice(f, departAt.time, weather) }.getOrNull() }
                 }
+                // пока считали, цель сменили или маршрут отменили — этот ответ уже не нужен
+                if (gen != routeGen || _state.value.destination != destination) return@launch
                 _state.update {
                     it.copy(
                         weather = weather,
@@ -448,7 +463,10 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                     autoStart = false
                     if (_state.value.route != null) startNavigation()
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (gen != routeGen) return@launch
                 autoStart = false
                 ru.shturman.Errors.log("route", e)
                 ThemeSounds.play(ThemeSound.ERROR)
@@ -526,6 +544,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         ru.shturman.service.NavService.start(getApplication(), "APEX: поездка", "Маршрут запущен")
         startGpsWatch()
         tripStartMs = System.currentTimeMillis()
+        tripDoneM = 0.0
         tripMaxKmh = 0
         if (tripLog.serviceDue()) {
             viewModelScope.launch {
@@ -588,7 +607,11 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         var closest = near
         if (snap == null) {
             // Не нашли рядом с прошлым местом: ищем дальше вперёд по всему маршруту, чтобы не застрять
-            val wide = snapToRoute(route, here, fromIndex, window = route.points.size)
+            // ищем дальше, но не дальше 2 км вперёд: иначе на дороге «туда-обратно» стрелку может унести к концу
+            val fromM = route.cumM.getOrElse(fromIndex.coerceIn(0, route.cumM.size - 1)) { 0.0 }
+            var ahead = fromIndex.coerceAtLeast(0)
+            while (ahead < route.cumM.size - 1 && route.cumM[ahead] - fromM < 2000.0) ahead++
+            val wide = snapToRoute(route, here, fromIndex, window = (ahead - fromIndex).coerceAtLeast(150))
             closest = wide ?: near
             snap = wide?.takeIf { it.offsetM <= SNAP_MAX_M }
             if (snap == null) ru.shturman.routing.Diag.snapMisses++
@@ -716,6 +739,9 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             distM <= 300.0 -> 0
             else -> -1
         }
+        // новый поворот — вибрации заново, даже если он близко за прошлым
+        val key = _state.value.turn?.key ?: -1
+        if (key != vibeKey) { vibeKey = key; vibeLevel = -1 }
         if (level < 0) { vibeLevel = -1; return }
         if (level <= vibeLevel) return
         vibeLevel = level
@@ -832,12 +858,17 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             showNotice(phrase)
             if (_state.value.voiceOn) voice.say(phrase)
         }
+        val gen = routeGen
+        // выбранный вариант сохраняем: после съезда с «Без камер» новый путь тоже объезжает камеры
+        val label = _state.value.route?.label ?: ""
+        val cams = if (label.startsWith("Без камер")) cameraList.map { it.position } else emptyList()
         viewModelScope.launch {
             try {
-                val result = router.route(here, destination.position, Date())
-                if (result.options.isNotEmpty() && _state.value.navigating) {
-                    val fresh = result.options[0]
+                val result = router.route(here, destination.position, Date(), cams)
+                if (result.options.isNotEmpty() && _state.value.navigating && gen == routeGen && _state.value.destination == destination) {
+                    val fresh = result.options.firstOrNull { label.isNotEmpty() && it.label == label.substringBefore(" +") } ?: result.options[0]
                     val position = RoutePosition(0, 0.0)
+                    tripDoneM += _state.value.position?.traveledM ?: 0.0
                     loadLimits(fresh)
                     prepareHazards(fresh)
                     _state.update {
@@ -867,9 +898,11 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     /** Узнаёт у движка ограничения скорости вдоль маршрута (в фоне). */
     private fun loadLimits(route: RouteOption) {
         limits = emptyList()
-        viewModelScope.launch {
+        limitsJob?.cancel()
+        limitsJob = viewModelScope.launch {
             val found = runCatching { router.speedLimits(route.points) }.getOrDefault(emptyList())
-            limits = found
+            // ответ для прежнего маршрута не подставляем к новому
+            if (_state.value.route === route) limits = found
         }
     }
 
@@ -1033,7 +1066,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private fun finishTrip() {
         val s = _state.value
         if (!s.navigating || tripStartMs == 0L) return
-        val traveled = s.position?.traveledM ?: 0.0
+        val traveled = tripDoneM + (s.position?.traveledM ?: 0.0)
+        tripDoneM = 0.0
         if (traveled < 300.0) { tripStartMs = 0L; return }
         val dur = ((System.currentTimeMillis() - tripStartMs) / 1000).coerceAtLeast(1)
         val km = traveled / 1000.0
@@ -1374,6 +1408,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearRoute() {
+        routeGen++
         ru.shturman.api.ExternalTrip.active = null
         autoStart = false
         finishTrip()

@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -115,6 +116,7 @@ fun RoadDataScreen(onClose: () -> Unit) {
         onSync = {
             syncing = true
             scope.launch {
+                // обмен идёт не в главном потоке (sync сам уходит в фон), экран не замирает
                 runCatching { SharedSync(context, SpeedStore.shared(context)).sync() }
                 syncing = false
                 reloadKey++
@@ -127,7 +129,8 @@ fun RoadDataScreen(onClose: () -> Unit) {
 /** Само окно по готовым цифрам (без базы) — так его можно снять в тестах. */
 @Composable
 fun RoadDataContent(stats: RoadStats?, info: CollectInfo?, syncing: Boolean, onSync: () -> Unit, onClose: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(ShColors.Background)) {
+    // касания не проходят сквозь окно на карту под ним
+    Box(Modifier.fillMaxSize().background(ShColors.Background).pointerInput(Unit) {}) {
         Column(
             Modifier
                 .fillMaxSize()

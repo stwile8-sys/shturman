@@ -39,7 +39,7 @@ fun BoxScope.NextOrderButton(orderId: Long?, onDismiss: () -> Unit) {
         visible = orderId != null,
         enter = fadeIn() + slideInVertically { it / 2 },
         exit = fadeOut() + slideOutVertically { it / 2 },
-        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp)
+        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 186.dp) // над карточками «Дом»/«Работа» и строкой поиска
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(18.dp),
