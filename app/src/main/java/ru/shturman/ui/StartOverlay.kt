@@ -58,13 +58,13 @@ private fun lin(t: Float, a: Float, b: Float) = ((t - a) / (b - a)).coerceIn(0f,
 @Composable
 fun StartOverlay(trigger: Int) {
     val flavor = ShColors.L.flavor
-    val dur = when (flavor) { Flavor.TELEMETRY -> 2300; Flavor.APEX -> 2100; else -> 1900 }
+    val dur = when (flavor) { Flavor.TELEMETRY -> 2300; Flavor.APEX -> 2100; Flavor.PREMIUM -> 1500; else -> 1900 }
     val progress = remember { Animatable(0f) }
     var visible by remember { mutableStateOf(false) }
     val fx = LocalFx.current
     val anchor = rememberFxAnchor()
     // момент, когда появляется надпись (у телеметрии — после зелёного)
-    val textAt = when (flavor) { Flavor.TELEMETRY -> 0.6f; Flavor.APEX -> 0.34f; else -> 0.1f }
+    val textAt = when (flavor) { Flavor.TELEMETRY -> 0.6f; Flavor.APEX -> 0.34f; Flavor.PREMIUM -> 0.12f; else -> 0.1f }
 
     LaunchedEffect(trigger) {
         if (trigger == 0) return@LaunchedEffect
@@ -91,7 +91,7 @@ fun StartOverlay(trigger: Int) {
             .graphicsLayer {
                 // короткая тряска в момент старта
                 val k = lin(p, textAt, textAt + 0.14f)
-                if (k > 0f && k < 1f && flavor != Flavor.GLASS) {
+                if (k > 0f && k < 1f && flavor != Flavor.GLASS && flavor != Flavor.PREMIUM) {
                     val amp = 5f * density * (1f - k) * (1f - k)
                     translationX = sin(k * 47f) * amp
                     translationY = sin(k * 61f + 1f) * amp * 0.7f
@@ -106,13 +106,14 @@ fun StartOverlay(trigger: Int) {
                 Flavor.TELEMETRY -> drawLights(p, out, accent)
                 Flavor.DEPTH -> drawTunnel(p, out, accent, accent2)
                 Flavor.APEX -> drawApexGate(p, out, textAt)
+                Flavor.PREMIUM -> drawPremium(p, out, accent)
             }
-            // вспышка в момент появления надписи
+            // вспышка в момент появления надписи (в новом оформлении без вспышки)
             val f = lin(p, textAt, textAt + 0.16f)
-            if (p >= textAt && f < 1f) drawRect(Color.White.copy(alpha = 0.24f * (1f - f) * (1f - f)))
+            if (flavor != Flavor.PREMIUM && p >= textAt && f < 1f) drawRect(Color.White.copy(alpha = 0.24f * (1f - f) * (1f - f)))
         }
         KineticTitle(
-            text = when (flavor) { Flavor.GLASS -> "Поехали!"; Flavor.APEX -> "ПОЕХАЛИ"; else -> "ПОЕХАЛИ!" },
+            text = when (flavor) { Flavor.GLASS -> "Поехали!"; Flavor.APEX, Flavor.PREMIUM -> "ПОЕХАЛИ"; else -> "ПОЕХАЛИ!" },
             p = p, textAt = textAt, flavor = flavor, accent = accent, accent2 = accent2,
             modifier = Modifier.align(Alignment.Center)
         )
@@ -134,7 +135,7 @@ private fun backOut(x: Float): Float {
  */
 @Composable
 private fun KineticTitle(text: String, p: Float, textAt: Float, flavor: Flavor, accent: Color, accent2: Color, modifier: Modifier) {
-    val italic = flavor != Flavor.GLASS && flavor != Flavor.APEX
+    val italic = flavor != Flavor.GLASS && flavor != Flavor.APEX && flavor != Flavor.PREMIUM
     Row(modifier = modifier) {
         text.forEachIndexed { i, ch ->
             val a0 = textAt + i * 0.022f
@@ -157,10 +158,10 @@ private fun KineticTitle(text: String, p: Float, textAt: Float, flavor: Flavor, 
                     text = ch.toString(),
                     color = Color.White,
                     fontFamily = NumberFont,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = if (flavor == Flavor.PREMIUM) FontWeight.Light else FontWeight.Bold,
                     fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
-                    fontSize = 46.sp,
-                    letterSpacing = when { flavor == Flavor.APEX -> 6.sp; italic -> 3.sp; else -> 1.sp },
+                    fontSize = if (flavor == Flavor.PREMIUM) 34.sp else 46.sp,
+                    letterSpacing = when { flavor == Flavor.PREMIUM -> 8.sp; flavor == Flavor.APEX -> 6.sp; italic -> 3.sp; else -> 1.sp },
                     textAlign = TextAlign.Center,
                     modifier = Modifier.graphicsLayer {
                         cameraDistance = 14f * density
@@ -189,6 +190,10 @@ private fun KineticTitle(text: String, p: Float, textAt: Float, flavor: Flavor, 
                                 scaleX = s; scaleY = s
                                 rotationX = (1f - ease(g)) * 50f
                             }
+                            Flavor.PREMIUM -> {
+                                // буквы проявляются по очереди с коротким подъёмом и так же спокойно уходят
+                                translationY = (1f - ease(g)) * 10f * density - ease(o) * 8f * density
+                            }
                             Flavor.APEX -> {
                                 // буквы загораются, как лампы табло, каждая со своим сбоем; гаснут вразнобой
                                 al = ru.shturman.ui.fx.apexIgnite(g)
@@ -201,6 +206,15 @@ private fun KineticTitle(text: String, p: Float, textAt: Float, flavor: Flavor, 
             }
         }
     }
+}
+
+/** Новое оформление: лёгкое затемнение и тонкая линия акцентом, которая растягивается от центра под надписью. */
+private fun DrawScope.drawPremium(p: Float, out: Float, a: Color) {
+    drawRect(Color.Black.copy(alpha = 0.45f * lin(p, 0f, 0.12f) * out))
+    val k = ease(lin(p, 0.08f, 0.55f))
+    val half = size.width * 0.3f * k
+    val y = size.height / 2f + 34f * density
+    if (half > 0f) drawRect(a.copy(alpha = out), Offset(size.width / 2f - half, y), Size(half * 2f, 2f * density))
 }
 
 private fun DrawScope.drawGlass(p: Float, out: Float, a: Color, b: Color) {

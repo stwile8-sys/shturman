@@ -43,6 +43,7 @@ import ru.shturman.ui.themes.ThemeSounds
 
 /** Форма главной кнопки по характеру темы. */
 fun glowButtonShape(): Shape = when (ShColors.L.flavor) {
+    Flavor.PREMIUM -> RoundedCornerShape(10.dp)
     Flavor.TELEMETRY -> CutCornerShape(topEnd = 16.dp, bottomStart = 16.dp)
     Flavor.NEON -> RoundedCornerShape(15.dp)
     Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
@@ -77,23 +78,32 @@ fun GlowButton(
             .accentButton(glowButtonShape(), elevation = 14.dp, enabled = enabled)
             .clickable(interactionSource = source, indication = null, enabled = enabled) {
                 ThemeSounds.play(ThemeSound.TAP)
-                if (burst > 0f) fx.burst(anchor.center, burst)
+                if (burst > 0f && l.flavor != Flavor.PREMIUM) fx.burst(anchor.center, burst)
                 onClick()
             },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = text,
-            color = if (enabled) ShColors.OnAccent else ShColors.TextSecondary,
-            style = ShText.Button.copy(fontSize = 18.sp, letterSpacing = when (l.flavor) { Flavor.GLASS -> 0.3.sp; Flavor.APEX -> 4.sp; else -> 1.2.sp })
-        )
+        if (l.flavor == Flavor.PREMIUM) {
+            // «ПОЕХАЛИ»: капсом с широкой разрядкой, как на макете
+            Text(
+                text = text.uppercase(),
+                color = if (enabled) ShColors.OnAccent else ShColors.TextSecondary,
+                style = ShText.Button.copy(fontSize = 14.sp, letterSpacing = 5.sp)
+            )
+        } else {
+            Text(
+                text = text,
+                color = if (enabled) ShColors.OnAccent else ShColors.TextSecondary,
+                style = ShText.Button.copy(fontSize = 18.sp, letterSpacing = when (l.flavor) { Flavor.GLASS -> 0.3.sp; Flavor.APEX -> 4.sp; else -> 1.2.sp })
+            )
+        }
     }
 }
 
 /** Ручка-хваталка сверху шторок и панелей. */
 @Composable
 fun GrabHandle(modifier: Modifier = Modifier) {
-    Box(modifier.width(40.dp).height(5.dp).clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha = 0.28f)))
+    Box(modifier.width(40.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(if (ShColors.premium) ShColors.Divider else Color.White.copy(alpha = 0.28f)))
 }
 
 /** Плитка с градиентом темы под иконку (поворот, разделы настроек). */
@@ -103,6 +113,7 @@ fun AccentTile(modifier: Modifier = Modifier, size: Dp = 54.dp, content: @Compos
     val shape = when (l.flavor) {
         Flavor.TELEMETRY -> CutCornerShape(topEnd = 12.dp, bottomStart = 12.dp)
         Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
+        Flavor.PREMIUM -> RoundedCornerShape(10.dp)
         else -> RoundedCornerShape(size * 0.33f)
     }
     Box(

@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import ru.shturman.ui.themes.ThemeSpec
 import ru.shturman.ui.themes.Themes
 
@@ -20,8 +21,22 @@ object ShColors {
     /** Второй цвет градиентов темы. */
     val Accent2: Color get() = L.acc2
 
-    /** Цвет текста на заливке акцентом. */
-    val OnAccent: Color get() = T.bg
+    /** Цвет текста на заливке акцентом: на светлом акценте — тёмный, на тёмном и красном — белый. */
+    val OnAccent: Color get() = if (T.accent.luminance() > 0.3f) T.bg else Color.White
+
+    /** Новое оформление (все темы, кроме APEX). */
+    val premium: Boolean get() = L.flavor == ru.shturman.ui.themes.Flavor.PREMIUM
+
+    /** Янтарный цвет предупреждений (гололёд, поиск спутников, совет скорости) — одинаковый у всех тем. */
+    val Warning: Color get() = Color(0xFFF2C14E)
+    val WarningEdge: Color get() = Color(0xFFE0A100)
+
+    /** Стекло панелей поверх карты: цвет панели темы почти непрозрачный, тонкая светлая рамка. */
+    val Glass: Color get() = T.panel.copy(alpha = 0.80f)
+    val GlassEdge: Color get() = Color.White.copy(alpha = 0.08f)
+
+    /** Подписи капсом и неактивные значки. */
+    val Muted: Color get() = Color(0xFF8E8E93)
 
     /** Старое имя: «принцесса» — это тема №2. */
     val princess: Boolean get() = themeId == 1

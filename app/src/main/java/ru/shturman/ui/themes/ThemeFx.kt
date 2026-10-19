@@ -70,6 +70,7 @@ fun Modifier.themedEnter(index: Int = 0): Modifier {
             Flavor.TELEMETRY -> p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.72f, stiffness = 520f))
             Flavor.DEPTH -> p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.58f, stiffness = 180f))
             Flavor.APEX -> p.animateTo(1f, tween(480, easing = LinearEasing))
+            Flavor.PREMIUM -> p.animateTo(1f, tween(280, easing = androidx.compose.animation.core.FastOutSlowInEasing))
         }
     }
     val dust = ShColors.T.enter == EnterKind.SIDE_DUST
@@ -113,6 +114,8 @@ fun Modifier.themedEnter(index: Int = 0): Modifier {
             }
             // APEX: не выезжает, а загорается — три кадра мерцания, потом полный свет
             Flavor.APEX -> alpha = ru.shturman.ui.fx.apexIgnite(v)
+            // новое оформление: прозрачность и короткий подъём на 12 dp, без пружин
+            Flavor.PREMIUM -> { alpha = v.coerceIn(0f, 1f); translationY = q * 12.dp.toPx() }
         }
     }
 }
@@ -148,6 +151,11 @@ fun ThemedText(
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip
 ) {
+    if (ShColors.premium) {
+        // новое оформление: цифры меняются сразу, без эффектов — спокойно читается на ходу
+        Text(text = text, color = color, style = style, maxLines = maxLines, overflow = overflow, modifier = modifier)
+        return
+    }
     val kind = ShColors.T.digit
     val p = remember { Animatable(1f) }
     var first by remember { mutableStateOf(true) }

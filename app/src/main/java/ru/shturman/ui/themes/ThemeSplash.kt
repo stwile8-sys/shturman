@@ -60,7 +60,8 @@ private fun fmod(a: Float, b: Float): Float = ((a % b) + b) % b
 @Composable
 fun ThemeSplash(onPlaySound: () -> Unit, onFinished: () -> Unit) {
     val th = ShColors.T
-    if (th.id == 0) {
+    // «Спорт-премиум» берёт заставку «Классики»: самолёт и welcome.ogg
+    if (th.id == 0 || th.id == Themes.PREMIUM) {
         SplashOverlay(onPlaySound = onPlaySound, onFinished = onFinished)
         return
     }

@@ -76,6 +76,7 @@ fun MusicSheet(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         containerColor = androidx.compose.ui.graphics.lerp(ShColors.Panel, androidx.compose.ui.graphics.Color.White, 0.06f).copy(alpha = 0.97f),
         shape = when (ShColors.L.flavor) {
+            ru.shturman.ui.themes.Flavor.PREMIUM -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
             ru.shturman.ui.themes.Flavor.TELEMETRY -> androidx.compose.foundation.shape.CutCornerShape(topEnd = 26.dp)
             ru.shturman.ui.themes.Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
             else -> androidx.compose.foundation.shape.RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)

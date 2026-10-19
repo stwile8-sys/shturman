@@ -52,7 +52,8 @@ class FxController {
 
     /** Взрыв частиц темы в точке экрана. power: 1 — нажатие кнопки, 2–3 — старт поездки. */
     fun burst(at: Offset, power: Float = 1f, kind: Particle = ShColors.L.particle, colors: List<Color> = ShColors.L.particleColors) {
-        if (at == Offset.Unspecified) return
+        // в новом оформлении частиц нет: спокойно и без «салюта»
+        if (at == Offset.Unspecified || ShColors.premium) return
         val n = (10 * power).toInt().coerceIn(6, 60)
         val d = density
         for (i in 0 until n) {
@@ -71,7 +72,7 @@ class FxController {
 
     /** Только кольцо, без частиц. */
     fun ring(at: Offset, color: Color = ShColors.Accent, radiusDp: Float = 90f) {
-        if (at == Offset.Unspecified) return
+        if (at == Offset.Unspecified || ShColors.premium) return
         rings += Ring(at.x, at.y, color, radiusDp * density, 0.6f)
         running = true
     }

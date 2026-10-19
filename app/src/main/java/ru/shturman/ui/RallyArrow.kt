@@ -47,7 +47,9 @@ fun RallyArrow(
     isLeft: Boolean,
     modifier: Modifier = Modifier,
     boxSize: Dp = 56.dp,
-    color: Color = signColor(severity ?: 6)
+    color: Color = signColor(severity ?: 6),
+    /** Толщина линии в долях размера: 0,13 — прежние знаки, 0,09 — тонкие знаки нового оформления. */
+    stroke: Float = 0.13f
 ) {
     Canvas(modifier = modifier.size(boxSize)) {
         val total = if (severity == null) 0f else Math.toRadians(bendDegrees(severity)).toFloat()
@@ -106,7 +108,7 @@ fun RallyArrow(
             path = line,
             color = color,
             style = Stroke(
-                width = this.size.minDimension * 0.13f,
+                width = this.size.minDimension * stroke,
                 cap = StrokeCap.Round,
                 join = StrokeJoin.Round
             )

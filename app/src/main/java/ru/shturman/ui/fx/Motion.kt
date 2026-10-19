@@ -27,7 +27,8 @@ fun Modifier.changeFx(key: Any?): Modifier {
     LaunchedEffect(key) {
         if (first) { first = false; return@LaunchedEffect }
         r.snapTo(1f)
-        if (flavor == Flavor.NEON || flavor == Flavor.APEX) r.animateTo(0f, tween(if (flavor == Flavor.APEX) 300 else 260, easing = LinearEasing))
+        if (flavor == Flavor.PREMIUM) r.animateTo(0f, tween(220))
+        else if (flavor == Flavor.NEON || flavor == Flavor.APEX) r.animateTo(0f, tween(if (flavor == Flavor.APEX) 300 else 260, easing = LinearEasing))
         else r.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 320f))
     }
     return this.graphicsLayer {
@@ -41,6 +42,8 @@ fun Modifier.changeFx(key: Any?): Modifier {
             Flavor.GLASS -> { val s = 1f - 0.08f * v; scaleX = s; scaleY = s; alpha = 1f - 0.4f * v.coerceIn(0f, 1f) }
             // APEX: новое показание загорается, как лампа на приборной панели
             Flavor.APEX -> alpha = apexIgnite(1f - v).coerceAtLeast(0.15f)
+            // новое оформление: новое показание мягко проявляется с коротким подъёмом
+            Flavor.PREMIUM -> { alpha = 1f - 0.6f * v.coerceIn(0f, 1f); translationY = 6f * density * v }
         }
     }
 }

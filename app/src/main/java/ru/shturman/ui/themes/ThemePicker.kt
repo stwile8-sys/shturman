@@ -118,6 +118,7 @@ private fun DrawScope.miniScene(th: ThemeSpec, look: ThemeLook) {
         Flavor.TELEMETRY -> drawRect(th.accent, tl, Size(5f, ph))
         Flavor.DEPTH -> drawRoundRect(Color.Black.copy(alpha = 0.35f), Offset(tl.x + 3f, tl.y + ph), Size(pw, 5f), CornerRadius(3f))
         Flavor.GLASS -> drawRoundRect(Color.White.copy(alpha = 0.35f), tl, Size(pw, ph), CornerRadius(10f), style = Stroke(1.2f))
+        Flavor.PREMIUM -> drawRoundRect(Color.White.copy(alpha = 0.18f), tl, Size(pw, ph), CornerRadius(8f), style = Stroke(1f))
         Flavor.APEX -> {
             // метки по углам плашки
             val k = ph * 0.35f

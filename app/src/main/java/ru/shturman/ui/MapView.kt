@@ -103,6 +103,16 @@ fun DarkMap(
     speedKmh: Int = 0,
     /** До ближайшего поворота, м: перед поворотом камера чуть ближе. */
     turnAheadM: Double = Double.MAX_VALUE,
+    /** Отступ стрелки слева (горизонтальный экран: стрелка по центру свободной части справа от колонки). */
+    markerFromLeft: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(0f),
+    /** Поля при показе маршрута целиком: сверху кнопки, снизу шторка вариантов, слева колонка (горизонтально). */
+    previewTop: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(130f),
+    previewBottom: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(330f),
+    previewLeft: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(32f),
+    /** Каждый раз, когда число растёт, в поездке показывается весь оставшийся путь; через 12 секунд — обратно к стрелке. */
+    overviewKey: Int = 0,
+    /** Камера едет за стрелкой (true) или её сдвинули пальцем / показан весь путь (false). */
+    onFollowChanged: (Boolean) -> Unit = {},
     onFix: (LatLon, Float, Float, Float, Float) -> Snap? = { _, _, _, _, _ -> null }
 ) {
     val context = LocalContext.current
@@ -122,6 +132,10 @@ fun DarkMap(
     val currentTurnAhead by rememberUpdatedState(turnAheadM)
     // Когда пользователь последний раз сам двигал или масштабировал карту пальцами
     val lastGestureAt = remember { longArrayOf(0L) }
+    // Где стрелка на линии маршрута (номер точки): обзор показывает путь отсюда до конца
+    val lastSnapIndex = remember { intArrayOf(0) }
+    val currentOnFollow by rememberUpdatedState(onFollowChanged)
+    val densityNow = androidx.compose.ui.platform.LocalDensity.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -213,7 +227,8 @@ fun DarkMap(
         val src = style?.getSourceAs<GeoJsonSource>("trail") ?: return@LaunchedEffect
         while (true) {
             kotlinx.coroutines.delay(90)
-            src.setGeoJson(trail.tick())
+            // в новом оформлении следа за стрелкой нет
+            if (!ru.shturman.ui.theme.ShColors.premium) src.setGeoJson(trail.tick())
         }
     }
 
@@ -236,6 +251,7 @@ fun DarkMap(
             // Пройденная часть маршрута исчезает за стрелкой: линия рисуется только от стрелки вперёд
             val nowMs = System.currentTimeMillis()
             val r = currentRoute
+            if (snap != null) lastSnapIndex[0] = snap.index
             if (snap != null && currentNavigating && r != null && nowMs - lastTrimAt > 400L) {
                 lastTrimAt = nowMs
                 val rest = ArrayList<LatLon>(maxOf(r.size - snap.index, 1))
@@ -283,7 +299,9 @@ fun DarkMap(
                     handler.postDelayed(back, 8000L)
                 }
             }
-            override fun onCameraTrackingChanged(currentMode: Int) {}
+            override fun onCameraTrackingChanged(currentMode: Int) {
+                currentOnFollow(currentMode != CameraMode.NONE)
+            }
         }
         runCatching { m.locationComponent.addOnCameraTrackingChangedListener(trackListener) }
         onDispose {
@@ -355,6 +373,8 @@ fun DarkMap(
     // Тема оформления: цвета карты и маршрута
     LaunchedEffect(style, themeId) {
         style?.let { MapStyle.applyTheme(it, ru.shturman.ui.theme.ShColors.T) }
+        val m = map ?: return@LaunchedEffect
+        runCatching { if (m.locationComponent.isLocationComponentActivated) m.locationComponent.applyStyle(puckOptions(context)) }
     }
     LaunchedEffect(style, destination) {
         style?.getSourceAs<GeoJsonSource>("dest")?.setGeoJson(pointGeoJson(destination))
@@ -375,12 +395,14 @@ fun DarkMap(
     }
 
     // Просмотр маршрута: по линии бежит светящаяся точка; точка назначения пульсирует кольцом
-    LaunchedEffect(style, route, navigating, destination) {
+    LaunchedEffect(style, route, navigating, destination, themeId) {
         val st = style ?: return@LaunchedEffect
         val comet = st.getSourceAs<GeoJsonSource>("comet")
         val pulse = st.getLayer("dest-pulse")
         comet?.setGeoJson(pointsGeoJson(emptyList()))
         if (destination == null) return@LaunchedEffect
+        // новое оформление: без бегущей точки и пульса, точка назначения спокойная
+        if (ru.shturman.ui.theme.ShColors.premium) return@LaunchedEffect
         val pts = route
         val cum = if (pts != null && pts.size >= 2) DoubleArray(pts.size).also { c ->
             for (i in 1 until pts.size) c[i] = c[i - 1] + ru.shturman.routing.distanceM(pts[i - 1], pts[i])
@@ -423,10 +445,11 @@ fun DarkMap(
                 .includes(route.map { LatLng(it.lat, it.lon) })
                 .build()
             val d = context.resources.displayMetrics.density
+            runCatching { m.moveCamera(CameraUpdateFactory.paddingTo(0.0, 0.0, 0.0, 0.0)) }
             m.animateCamera(
                 CameraUpdateFactory.newLatLngBounds(
                     bounds, 0.0, if (map3d) 32.0 else 0.0,
-                    (32 * d).toInt(), (130 * d).toInt(), (32 * d).toInt(), (330 * d).toInt()
+                    (previewLeft.value * d).toInt(), (previewTop.value * d).toInt(), (32 * d).toInt(), (previewBottom.value * d).toInt()
                 ),
                 900
             )
@@ -444,23 +467,28 @@ fun DarkMap(
     // от низа экрана): впереди видно больше дороги и поворотов. Камера сдвигается отступом сверху:
     // центр кадра = (высота + отступ) / 2. Подлёт камеры при старте и возврат к стрелке могут сбить отступ,
     // поэтому в поездке он проверяется каждые полторы секунды и при необходимости ставится заново.
-    val densityNow = androidx.compose.ui.platform.LocalDensity.current
-    LaunchedEffect(map, style, hasPermission, navigating, markerFromBottom) {
+    LaunchedEffect(map, style, hasPermission, navigating, markerFromBottom, markerFromLeft) {
         val m = map ?: return@LaunchedEffect
         var tries = 0
         while (!m.locationComponent.isLocationComponentActivated && tries < 40) { delay(250); tries++ }
         if (!m.locationComponent.isLocationComponentActivated) return@LaunchedEffect
         val fromBottom = with(densityNow) { markerFromBottom.toPx() }
+        val fromLeft = with(densityNow) { markerFromLeft.toPx() }
         while (true) {
             val h = mapView.height.toFloat()
-            if (h > 0f) {
+            val w = mapView.width.toFloat()
+            if (h > 0f && m.locationComponent.cameraMode != CameraMode.NONE) {
                 val top = if (navigating && fromBottom > 0f) {
                     val y = (h - fromBottom).coerceAtLeast(h * 0.5f)
                     (2f * y - h).coerceIn(0f, h * 0.7f)
                 } else 0f
-                val current = runCatching { m.cameraPosition.padding?.getOrNull(1) }.getOrNull() ?: 0.0
-                if (kotlin.math.abs(current - top) > 2.0) {
-                    runCatching { m.locationComponent.paddingWhileTracking(doubleArrayOf(0.0, top.toDouble(), 0.0, 0.0), 400L, null) }
+                // слева: центр свободной части справа от колонки (горизонтальный экран)
+                val left = if (navigating && fromLeft > 0f) fromLeft.coerceIn(0f, w * 0.6f) else 0f
+                val pad = runCatching { m.cameraPosition.padding }.getOrNull()
+                val curTop = pad?.getOrNull(1) ?: 0.0
+                val curLeft = pad?.getOrNull(0) ?: 0.0
+                if (kotlin.math.abs(curTop - top) > 2.0 || kotlin.math.abs(curLeft - left) > 2.0) {
+                    runCatching { m.locationComponent.paddingWhileTracking(doubleArrayOf(left.toDouble(), top.toDouble(), 0.0, 0.0), 400L, null) }
                 }
             }
             if (!navigating) break
@@ -506,6 +534,32 @@ fun DarkMap(
             m.locationComponent.setCameraMode(
                 CameraMode.TRACKING_GPS, 2100L, START_ZOOM, null, MapCam.start, null
             )
+        }
+    }
+
+    // «Обзор»: весь оставшийся путь на экране, через 12 секунд камера сама возвращается к стрелке
+    LaunchedEffect(overviewKey) {
+        val m = map ?: return@LaunchedEffect
+        val r = currentRoute
+        if (overviewKey == 0 || r == null || r.size < 2) return@LaunchedEffect
+        val lc = m.locationComponent
+        if (lc.isLocationComponentActivated) lc.cameraMode = CameraMode.NONE
+        val from = lastSnapIndex[0].coerceIn(0, r.size - 2)
+        val d = context.resources.displayMetrics.density
+        runCatching {
+            val bounds = LatLngBounds.Builder().includes(r.subList(from, r.size).map { LatLng(it.lat, it.lon) }).build()
+            m.moveCamera(CameraUpdateFactory.paddingTo(0.0, 0.0, 0.0, 0.0))
+            m.animateCamera(
+                CameraUpdateFactory.newLatLngBounds(
+                    bounds, 0.0, 0.0,
+                    (previewLeft.value * d).toInt(), (previewTop.value * d).toInt(), (32 * d).toInt(), (previewBottom.value * d).toInt()
+                ),
+                900
+            )
+        }
+        delay(12_000)
+        if (currentNavigating && lc.isLocationComponentActivated && lc.cameraMode == CameraMode.NONE) {
+            lc.setCameraMode(CameraMode.TRACKING_GPS, 800L, FOLLOW_ZOOM, null, MapCam.follow, null)
         }
     }
 
@@ -594,24 +648,37 @@ private fun hasLocationPermission(context: Context): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
 
+/**
+ * Значок «я здесь»: в новом оформлении — белая стрелка с тёмной обводкой (res/drawable/puck_premium.xml),
+ * у APEX — прежняя голубая (puck_arrow.xml). Бледный круг точности GPS — цветом акцента темы.
+ */
+private fun puckOptions(context: Context): LocationComponentOptions {
+    val premium = ru.shturman.ui.theme.ShColors.premium
+    val icon = if (premium) R.drawable.puck_premium else R.drawable.puck_arrow
+    val accuracy = if (premium) android.graphics.Color.argb(255,
+        (ru.shturman.ui.theme.ShColors.Accent.red * 255).toInt(),
+        (ru.shturman.ui.theme.ShColors.Accent.green * 255).toInt(),
+        (ru.shturman.ui.theme.ShColors.Accent.blue * 255).toInt()) else 0xFF3DDCFF.toInt()
+    return LocationComponentOptions.builder(context)
+        .pulseEnabled(false)
+        .accuracyAlpha(if (premium) 0.12f else 0.16f) // бледный круг показывает, насколько GPS сам не уверен в месте
+        .accuracyColor(accuracy)
+        .elevation(0f)
+        .enableStaleState(false)
+        .gpsDrawable(icon)
+        .foregroundDrawable(icon)
+        .bearingDrawable(icon)
+        .minZoomIconScale(0.35f) // размер стрелки при отдалении
+        .maxZoomIconScale(0.55f) // размер стрелки при приближении
+        .build()
+}
+
 @SuppressLint("MissingPermission")
 private fun enableLocation(context: Context, map: MapLibreMap, style: Style) {
     val component = map.locationComponent
     if (component.isLocationComponentActivated) return
 
-    // Все значки положения — одна и та же голубая стрелка (res/drawable/puck_arrow.xml)
-    val options = LocationComponentOptions.builder(context)
-        .pulseEnabled(false)
-        .accuracyAlpha(0.16f) // бледный круг показывает, насколько GPS сам не уверен в месте
-        .accuracyColor(0xFF3DDCFF.toInt())
-        .elevation(0f)
-        .enableStaleState(false)
-        .gpsDrawable(R.drawable.puck_arrow)
-        .foregroundDrawable(R.drawable.puck_arrow)
-        .bearingDrawable(R.drawable.puck_arrow)
-        .minZoomIconScale(0.35f) // размер стрелки при отдалении
-        .maxZoomIconScale(0.55f) // размер стрелки при приближении
-        .build()
+    val options = puckOptions(context)
 
     component.activateLocationComponent(
         LocationComponentActivationOptions.builder(context, style)
