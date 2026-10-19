@@ -35,6 +35,7 @@ jobs:
           dl roboto_condensed.ttf 'robotocondensed/RobotoCondensed%5Bwght%5D.ttf'
           dl racing_sans_one.ttf 'racingsansone/RacingSansOne-Regular.ttf'
           dl oswald.ttf 'oswald/Oswald%5Bwght%5D.ttf'
+          dl montserrat.ttf 'montserrat/Montserrat%5Bwght%5D.ttf'
           ls -la app/src/main/res/font
 
       - name: Build debug APK

@@ -56,6 +56,7 @@ fun panelShape(radius: Dp = ShColors.T.panelRadius.dp.coerceAtLeast(18.dp)): Sha
     Flavor.GLASS -> RoundedCornerShape(radius.coerceAtLeast(26.dp))
     Flavor.DEPTH -> RoundedCornerShape(radius.coerceIn(20.dp, 24.dp))
     Flavor.APEX -> RectangleShape
+    Flavor.PREMIUM -> RoundedCornerShape(14.dp)
 }
 
 /** Форма кнопок и небольших плашек. */
@@ -65,6 +66,7 @@ fun chipShape(): Shape = when (ShColors.L.flavor) {
     Flavor.GLASS -> RoundedCornerShape(18.dp)
     Flavor.DEPTH -> RoundedCornerShape(18.dp)
     Flavor.APEX -> RectangleShape
+    Flavor.PREMIUM -> RoundedCornerShape(10.dp)
 }
 
 // ---------- стеклянная панель ----------
@@ -86,6 +88,7 @@ fun Modifier.panel(
     val l = ShColors.L
     val accent = ShColors.Accent
     if (l.flavor == Flavor.APEX) return@composed this.apexPanel(shape, elevation, glowing, alpha)
+    if (l.flavor == Flavor.PREMIUM) return@composed this.premiumGlass(shape, elevation, alpha)
     val elev = if (l.flavor == Flavor.DEPTH) elevation * 1.6f else elevation
     var m = this.shadow(elev, shape, clip = false, ambientColor = Color.Black, spotColor = if (glowing) l.glow else Color.Black)
     if (l.flavor == Flavor.NEON) m = m.neonEdge(shape)
@@ -125,6 +128,16 @@ private fun Modifier.apexPanel(shape: Shape, elevation: Dp, glowing: Boolean, al
             apexTicks(if (glowing) ApexChalk.copy(alpha = 0.85f) else ApexTick)
         }
 
+/**
+ * Стекло «Спорт-премиум»: ровная тёмная заливка цветом панели темы (настоящего размытия карты Android
+ * под панелью не умеет, поэтому стекло плотнее, чем на макете), тонкая светлая рамка и мягкая тень.
+ */
+fun Modifier.premiumGlass(shape: Shape, elevation: Dp = 8.dp, alpha: Float = 1f): Modifier =
+    this.shadow((elevation * 0.5f).coerceAtMost(8.dp), shape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
+        .clip(shape)
+        .background(ShColors.T.panel.copy(alpha = (0.80f * alpha).coerceIn(0f, 1f)))
+        .border(1.dp, ShColors.GlassEdge, shape)
+
 /** Неоновая обводка, по которой бежит градиент из двух цветов темы. Снаружи — мягкое свечение. */
 fun Modifier.neonEdge(shape: Shape, width: Dp = 1.5.dp): Modifier = composed {
     val tr = rememberInfiniteTransition(label = "neon")
@@ -157,12 +170,13 @@ fun Modifier.neonEdge(shape: Shape, width: Dp = 1.5.dp): Modifier = composed {
  */
 fun Modifier.pressFx(): Modifier = composed {
     val flavor = ShColors.L.flavor
+    val motion = ShColors.M
     var pressed by remember { mutableStateOf(false) }
     var tiltX by remember { mutableStateOf(0f) }
     var tiltY by remember { mutableStateOf(0f) }
     val p by animateFloatAsState(
         if (pressed) 1f else 0f,
-        spring(dampingRatio = if (flavor == Flavor.TELEMETRY || flavor == Flavor.APEX) 0.8f else 0.42f, stiffness = if (pressed) 900f else 380f),
+        spring(dampingRatio = if (flavor == Flavor.TELEMETRY || flavor == Flavor.APEX || flavor == Flavor.PREMIUM) 0.85f else 0.42f, stiffness = if (pressed) 900f else 420f),
         label = "press"
     )
     val glitch = remember { Animatable(0f) }
@@ -197,6 +211,8 @@ fun Modifier.pressFx(): Modifier = composed {
                 }
                 Flavor.TELEMETRY -> { translationX = 4f * density * p; val s = 1f - 0.05f * p; scaleX = s; scaleY = s }
                 Flavor.DEPTH -> { rotationX = tiltX * p; rotationY = tiltY * p; val s = 1f - 0.05f * p; scaleX = s; scaleY = s; translationY = 2f * density * p }
+                // новое оформление: лёгкое ровное сжатие, без наклонов и мигания
+                Flavor.PREMIUM -> with(ru.shturman.ui.themes.Motions) { press(motion, p) }
                 Flavor.APEX -> {
                     // механический щелчок: короткое сжатие и мигание, как реле
                     val s = 1f - 0.035f * p; scaleX = s; scaleY = s

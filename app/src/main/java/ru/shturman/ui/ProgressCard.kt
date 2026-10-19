@@ -97,13 +97,18 @@ private fun ProgressBar(progress: Float, flavor: Flavor) {
     val pulse by tr.animateFloat(0.35f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "pulse")
     val a = ShColors.Accent
     val b = ShColors.Accent2
-    val h = when (flavor) { Flavor.TELEMETRY -> 10.dp; Flavor.DEPTH -> 12.dp; Flavor.NEON -> 6.dp; Flavor.GLASS -> 8.dp; Flavor.APEX -> 12.dp }
+    val h = when (flavor) { Flavor.TELEMETRY -> 10.dp; Flavor.DEPTH -> 12.dp; Flavor.NEON -> 6.dp; Flavor.GLASS -> 8.dp; Flavor.APEX -> 12.dp; Flavor.PREMIUM -> 2.dp }
     Canvas(Modifier.fillMaxWidth().height(h + 8.dp)) {
         val barH = h.toPx()
         val top = (size.height - barH) / 2
         val w = size.width
         val fw = w * p
         when (flavor) {
+            Flavor.PREMIUM -> {
+                // тонкая линия: серая дорожка и пройденное акцентом
+                drawRect(ShColors.Divider, Offset(0f, top), Size(w, barH))
+                if (fw > 0f) drawRect(a, Offset(0f, top), Size(fw, barH))
+            }
             Flavor.TELEMETRY -> {
                 val n = 12
                 val gap = 3.dp.toPx()

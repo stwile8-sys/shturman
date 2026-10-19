@@ -199,20 +199,51 @@ object Themes {
             enter = EnterKind.IGNITE, enterMs = 480, digit = DigitKind.SEGMENT, pressMs = 90, pressScale = 0.97f, transMs = 180,
             routeMs = 1100, routeJerky = false, vibrate = true,
             splashMs = 8000, splashPeakMs = 2600, splashRes = R.raw.welcome
+        ),
+        // 10. СПОРТ-ПРЕМИУМ — новое оформление по умолчанию: чёрный, графит и красный акцент.
+        // Заставка и звуки — как у «Классики» (самолёт и welcome.ogg).
+        ThemeSpec(
+            id = 9, name = "Спорт-премиум", vibe = "Чёрный, графит и красный акцент. Строго и спокойно",
+            bg = Color(0xFF0A0A0A), panel = Color(0xFF101012), accent = Color(0xFFE0313A), second = Color(0xFF8E8E93),
+            third = Color(0xFF6FCF97), danger = Color(0xFFE0313A), text = Color(0xFFF5F5F5), textSec = Color(0xFFBDBDBD),
+            divider = Color(0xFF2A2A2A), search = Color(0xFF141416), iconTint = Color(0xFFF5F5F5), flash = Color(0xFFE0313A),
+            signs = listOf(Color(0xFFE0313A), Color(0xFFF2C14E), Color(0xFFF5F5F5), Color(0xFFBDBDBD), Color(0xFF8E8E93)),
+            numFont = vf(R.font.montserrat, 300), textFont = vf(R.font.montserrat, 500), letterSp = 0f,
+            btn = BtnKind.SOFT, btnRadius = 10, btnW = 52, btnH = 52, panelRadius = 14, borderW = 1f, border = Color(0x14FFFFFF),
+            enter = EnterKind.RISE, enterMs = 260, digit = DigitKind.HAZE, pressMs = 120, pressScale = 0.96f, transMs = 220,
+            routeMs = 900, routeJerky = false, vibrate = false,
+            splashMs = 8700, splashPeakMs = 2900, splashRes = R.raw.welcome
         )
     )
 
     /** Номер темы APEX. */
     const val APEX = 8
 
-    /** Темы для выбора в настройках: APEX видна только после открытия «Штурман 2». */
-    fun visible(): List<ThemeSpec> = all.filter { it.id != APEX || Shturman2.unlocked }
+    /** Номер темы «Спорт-премиум» — новое оформление по умолчанию. */
+    const val PREMIUM = 9
 
-    /** Номер сохранённой темы. Старая настройка «режим принцессы» превращается в тему №2. */
+    /** Флаг: новое оформление уже включено (один раз у всех при обновлении). */
+    private const val DESIGN_V2 = "design_v2"
+
+    /** Темы для выбора в настройках: «Спорт-премиум» первой; APEX видна только после открытия «Штурман 2». */
+    fun visible(): List<ThemeSpec> =
+        listOf(all[PREMIUM]) + all.filter { it.id != PREMIUM && (it.id != APEX || Shturman2.unlocked) }
+
+    /** Какой набор звуков и заставку берёт тема: у «Спорт-премиум» — как у «Классики». */
+    fun soundSet(id: Int): Int = if (id == PREMIUM) 0 else id
+
+    /**
+     * Номер сохранённой темы. Старая настройка «режим принцессы» превращается в тему №2.
+     * При первом запуске нового оформления у всех один раз включается «Спорт-премиум»; потом — как выбрали.
+     */
     fun load(prefs: SharedPreferences): Int {
-        val id = if (prefs.contains(PREF)) prefs.getInt(PREF, 0).coerceIn(0, all.size - 1)
-            else if (prefs.getBoolean("princess", false)) 1 else 0
+        if (!prefs.getBoolean(DESIGN_V2, false)) {
+            prefs.edit().putInt(PREF, PREMIUM).putBoolean(DESIGN_V2, true).apply()
+            return PREMIUM
+        }
+        val id = if (prefs.contains(PREF)) prefs.getInt(PREF, PREMIUM).coerceIn(0, all.size - 1)
+            else if (prefs.getBoolean("princess", false)) 1 else PREMIUM
         // APEX без открытого «Штурман 2» не включается
-        return if (id == APEX && !prefs.getBoolean(Shturman2.PREF, false)) 0 else id
+        return if (id == APEX && !prefs.getBoolean(Shturman2.PREF, false)) PREMIUM else id
     }
 }

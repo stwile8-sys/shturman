@@ -73,7 +73,8 @@ private val HudWhite = Color(0xFFFFFFFF)
 private val HudDim = Color(0xFFB8C2CC)
 private val HudRed = Color(0xFFFF3B30)
 private val HudLimitRed = Color(0xFFFF2D2D)
-private val HudRouteColor = Color(0xFF3DDCFF)
+/** Линия маршрута и полоска до поворота — цветом темы (у «Спорт-премиум» — красным). */
+private val HudRouteColor: Color get() = ru.shturman.ui.theme.ShColors.Accent
 
 /** С этого расстояния до поворота полоска начинает укорачиваться, метры. */
 private const val BAR_FROM_M = 600.0
@@ -190,7 +191,8 @@ private fun HudPicture(s: NavState, modifier: Modifier) {
         // Внизу: время прибытия и сколько осталось, а без маршрута — просто часы
         val footer = route?.takeIf { navigating }?.let { r ->
             val left = (1.0 - traveled / total).coerceIn(0.0, 1.0)
-            "${formatClock(System.currentTimeMillis() + (r.timeSec * left * 1000).toLong())} · ${formatKm(total - traveled)} км"
+            "${formatClock(System.currentTimeMillis() + (r.timeSec * left * 1000).toLong())} · ${formatKm(total - traveled)} КМ · " +
+                formatDuration(r.timeSec * left).uppercase()
         } ?: formatClock(System.currentTimeMillis())
         if (landscape) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
@@ -209,7 +211,7 @@ private fun HudPicture(s: NavState, modifier: Modifier) {
                 ) {
                     SpeedBlock(s, u)
                     Spacer(Modifier.height(u * 0.05f))
-                    HudText(footer, u * 0.075f, HudDim)
+                    HudText(footer, u * 0.05f, HudDim, caps = true)
                 }
             }
         } else {
@@ -224,7 +226,8 @@ private fun HudPicture(s: NavState, modifier: Modifier) {
                     HudRoute(s, u, Modifier.weight(1f).fillMaxWidth())
                 }
                 SpeedBlock(s, u)
-                HudText(footer, u * 0.075f, HudDim)
+                Spacer(Modifier.height(u * 0.04f))
+                HudText(footer, u * 0.04f, HudDim, caps = true)
             }
         }
     }
@@ -311,17 +314,14 @@ private fun pointOnRoute(pts: List<LatLon>, cum: DoubleArray, d: Double, index: 
 @Composable
 private fun TurnBlock(s: NavState, u: Dp) {
     val turn = s.turn
-    val color = when {
-        turn == null -> HudWhite
-        turn.isRoundabout -> HudRouteColor
-        else -> signColor(turn.severity)
-    }
+    // знак белый, как на макете: цвет — только у линии маршрута и полоски
+    val color = HudWhite
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (turn != null && turn.isRoundabout) {
                 RoundaboutSign(turn.roundaboutExit, turn.exitAngle, u * 0.38f, color)
             } else {
-                RallyArrow(severity = turn?.severity, isLeft = turn?.isLeft ?: false, boxSize = u * 0.38f, color = color)
+                RallyArrow(severity = turn?.severity, isLeft = turn?.isLeft ?: false, boxSize = u * 0.38f, color = color, stroke = 0.08f)
             }
             Spacer(Modifier.width(u * 0.04f))
             Column {
@@ -335,7 +335,7 @@ private fun TurnBlock(s: NavState, u: Dp) {
                         HudText(unit, u * 0.09f, HudWhite, bold = true, modifier = Modifier.padding(bottom = u * 0.03f))
                     }
                     val sub = if (turn.isRoundabout) "${turn.roundaboutExit}-й съезд" else turn.street
-                    if (sub.isNotEmpty()) HudText(sub, u * 0.065f, HudDim, maxWidth = u * 0.6f)
+                    if (sub.isNotEmpty()) HudText(sub.uppercase(), u * 0.045f, HudDim, maxWidth = u * 0.6f, caps = true)
                 }
             }
         }
@@ -344,17 +344,15 @@ private fun TurnBlock(s: NavState, u: Dp) {
             val frac = (turn.distanceM / BAR_FROM_M).toFloat().coerceIn(0f, 1f)
             Box(
                 Modifier
-                    .width(u * 0.95f)
-                    .height(u * 0.035f)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.16f))
+                    .width(u * 0.8f)
+                    .height(u * 0.012f)
+                    .background(Color(0xFF262626))
             ) {
                 Box(
                     Modifier
                         .fillMaxHeight()
                         .fillMaxWidth(frac)
-                        .clip(RoundedCornerShape(50))
-                        .background(color)
+                        .background(HudRouteColor)
                 )
             }
         }
@@ -367,19 +365,17 @@ private fun SpeedBlock(s: NavState, u: Dp) {
     val limit = s.limitKmh
     val over = limit != null && s.speedKmh > limit + OVERSPEED_TOLERANCE_KMH
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            HudText(s.speedKmh.toString(), u * 0.48f, if (over) HudRed else HudWhite, bold = true, numbers = true)
-            HudText("км/ч", u * 0.07f, HudDim)
-        }
+        // кольцо скорости, как в поездке, только крупнее; знак ограничения — справа
+        SpeedRing(s.speedKmh, null, over, size = u * 0.56f)
         if (limit != null) {
-            Spacer(Modifier.width(u * 0.07f))
+            Spacer(Modifier.width(u * 0.05f))
             Box(
                 modifier = Modifier
-                    .size(u * 0.26f)
-                    .border(u * 0.03f, HudLimitRed, CircleShape),
+                    .size(u * 0.16f)
+                    .border(u * 0.009f, HudLimitRed, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                HudText(limit.toString(), if (limit >= 100) u * 0.085f else u * 0.105f, HudWhite, bold = true, numbers = true)
+                HudText(limit.toString(), if (limit >= 100) u * 0.045f else u * 0.055f, HudWhite, numbers = true)
             }
         }
     }
@@ -393,7 +389,8 @@ private fun HudText(
     modifier: Modifier = Modifier,
     bold: Boolean = false,
     numbers: Boolean = false,
-    maxWidth: Dp? = null
+    maxWidth: Dp? = null,
+    caps: Boolean = false
 ) {
     val fontSize: TextUnit = with(LocalDensity.current) { size.toSp() }
     Text(
@@ -401,8 +398,10 @@ private fun HudText(
         color = color,
         fontSize = fontSize,
         lineHeight = fontSize * 1.05f,
-        fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium,
-        fontFamily = if (numbers) NumberFont else null,
+        // крупные цифры тонкие, как на макете (300 — чтобы читались в отражении), подписи капсом — плотные
+        fontWeight = when { numbers -> FontWeight.Light; caps -> FontWeight.SemiBold; bold -> FontWeight.Medium; else -> FontWeight.Normal },
+        letterSpacing = if (caps) fontSize * 0.3f else androidx.compose.ui.unit.TextUnit.Unspecified,
+        fontFamily = NumberFont,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = if (maxWidth != null) modifier.then(Modifier.widthIn(max = maxWidth)) else modifier

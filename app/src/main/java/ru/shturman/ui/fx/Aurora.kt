@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,6 +28,11 @@ import kotlin.math.sin
  */
 @Composable
 fun AuroraBackground(modifier: Modifier = Modifier) {
+    // новое оформление: ровный тёмный фон без пятен и частиц
+    if (ShColors.premium) {
+        androidx.compose.foundation.layout.Box(modifier.fillMaxSize().background(ShColors.Background))
+        return
+    }
     val tr = rememberInfiniteTransition(label = "aurora")
     val t by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(16000, easing = LinearEasing)), label = "t")
     val bg = ShColors.Background

@@ -46,7 +46,33 @@ object MapStyle {
         val bg = th.bg
         val white = androidx.compose.ui.graphics.Color.White
         val halo = hex(bg)
-        val tints = listOf(
+        val look0 = ru.shturman.ui.themes.Looks.of(th.id)
+        // Новое оформление: спокойная нейтральная карта — серые дороги, чуть синеватая вода и зеленоватые парки,
+        // ярким остаётся только маршрут цветом темы
+        val premium = look0.flavor == ru.shturman.ui.themes.Flavor.PREMIUM
+        val waterC = androidx.compose.ui.graphics.Color(0xFF2A4A7A)
+        val parkC = androidx.compose.ui.graphics.Color(0xFF2A5A34)
+        val tints = if (premium) listOf(
+            arrayOf("bg", "bg", hex(bg)),
+            arrayOf("grass", "fill", mixHex(bg, parkC, 0.12f)),
+            arrayOf("wood", "fill", mixHex(bg, parkC, 0.16f)),
+            arrayOf("residential", "fill", mixHex(bg, white, 0.025f)),
+            arrayOf("park-flat", "fill", mixHex(bg, parkC, 0.18f)),
+            arrayOf("water", "fill", mixHex(bg, waterC, 0.24f)),
+            arrayOf("waterway", "line", mixHex(bg, waterC, 0.24f)),
+            arrayOf("road-minor", "line", mixHex(bg, white, 0.085f)),
+            arrayOf("road-mid", "line", mixHex(bg, white, 0.12f)),
+            arrayOf("road-major", "line", mixHex(bg, white, 0.16f)),
+            arrayOf("centerline", "line", mixHex(bg, white, 0.34f)),
+            arrayOf("centerline-minor", "line", mixHex(bg, white, 0.24f)),
+            arrayOf("route-casing", "line", hex(bg)),
+            arrayOf("road-names", "text", mixHex(bg, white, 0.44f)),
+            arrayOf("place-names", "text", mixHex(bg, white, 0.6f)),
+            arrayOf("landmark-names", "text", "#CFC4A6"),
+            arrayOf("church-names", "text", "#BDB5D6"),
+            arrayOf("landmark-dots", "dot", "#B8A06A"),
+            arrayOf("church-dots", "dot", "#9A90B8")
+        ) else listOf(
             arrayOf("bg", "bg", hex(bg)),
             arrayOf("grass", "fill", mixHex(bg, th.third, 0.05f)),
             arrayOf("wood", "fill", mixHex(bg, th.third, 0.07f)),
@@ -79,9 +105,11 @@ object MapStyle {
                 "dot" -> layer.setProperties(PropertyFactory.circleColor(c), PropertyFactory.circleStrokeColor(halo))
             }
         }
-        val look = ru.shturman.ui.themes.Looks.of(th.id)
+        val look = look0
         style.getLayer("route-line")?.setProperties(PropertyFactory.lineColor(hex(th.accent)))
         style.getLayer("route-glow")?.setProperties(PropertyFactory.lineColor(hex(look.glow)))
+        // в новом оформлении маршрут без свечения
+        style.getLayer("route-glow")?.setProperties(PropertyFactory.lineOpacity(if (premium) 0f else 0.42f))
         style.getLayer("comet-glow")?.setProperties(PropertyFactory.circleColor(hex(th.accent)))
         val dot = look.dot ?: th.accent
         style.getLayer("dest-pulse")?.setProperties(PropertyFactory.circleStrokeColor(hex(dot)))
@@ -94,18 +122,33 @@ object MapStyle {
                 org.maplibre.android.style.expressions.Expression.interpolate(
                     org.maplibre.android.style.expressions.Expression.linear(),
                     org.maplibre.android.style.expressions.Expression.coalesce(org.maplibre.android.style.expressions.Expression.get("render_height"), org.maplibre.android.style.expressions.Expression.literal(9)),
-                    org.maplibre.android.style.expressions.Expression.stop(0, org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.parseColor(mixHex(bg, white, 0.08f)))),
-                    org.maplibre.android.style.expressions.Expression.stop(30, org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.parseColor(mixHex(androidx.compose.ui.graphics.lerp(bg, white, 0.14f), th.accent, 0.10f)))),
-                    org.maplibre.android.style.expressions.Expression.stop(80, org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.parseColor(mixHex(androidx.compose.ui.graphics.lerp(bg, white, 0.22f), th.accent, 0.18f))))
+                    org.maplibre.android.style.expressions.Expression.stop(0, org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.parseColor(mixHex(bg, white, if (premium) 0.05f else 0.08f)))),
+                    org.maplibre.android.style.expressions.Expression.stop(30, org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.parseColor(mixHex(androidx.compose.ui.graphics.lerp(bg, white, if (premium) 0.085f else 0.14f), th.accent, if (premium) 0f else 0.10f)))),
+                    org.maplibre.android.style.expressions.Expression.stop(80, org.maplibre.android.style.expressions.Expression.color(android.graphics.Color.parseColor(mixHex(androidx.compose.ui.graphics.lerp(bg, white, if (premium) 0.12f else 0.22f), th.accent, if (premium) 0f else 0.18f))))
                 )
             )
         )
-        style.addImage(ONEWAY_IMAGE, onewayBitmap(hex(th.accent)))
+        // стрелки односторонних улиц: в новом оформлении серые, не цветом темы
+        style.addImage(ONEWAY_IMAGE, onewayBitmap(if (premium) mixHex(bg, white, 0.45f) else hex(th.accent)))
         val vis = org.maplibre.android.style.layers.Property.VISIBLE
         val none = org.maplibre.android.style.layers.Property.NONE
-        val hearts = th.id == 1
-        style.getLayer("trail-smoke")?.setProperties(PropertyFactory.visibility(if (hearts) none else vis))
+        val hearts = th.id == 1 && !premium
+        style.getLayer("trail-smoke")?.setProperties(PropertyFactory.visibility(if (hearts || premium) none else vis))
         style.getLayer("trail-hearts")?.setProperties(PropertyFactory.visibility(if (hearts) vis else none))
+        // точка назначения: акцентный круг с белой серединой; пульс и комета — только у прежних эффектов
+        style.getLayer("dest-pulse")?.setProperties(PropertyFactory.visibility(if (premium) none else vis))
+        style.getLayer("comet-glow")?.setProperties(PropertyFactory.visibility(if (premium) none else vis))
+        style.getLayer("comet-core")?.setProperties(PropertyFactory.visibility(if (premium) none else vis))
+        if (premium) {
+            style.getLayer("dest-pin")?.setProperties(
+                PropertyFactory.circleRadius(9f), PropertyFactory.circleColor("#FFFFFF"),
+                PropertyFactory.circleStrokeColor(hex(th.accent)), PropertyFactory.circleStrokeWidth(5f)
+            )
+        } else {
+            style.getLayer("dest-pin")?.setProperties(
+                PropertyFactory.circleRadius(8f), PropertyFactory.circleStrokeColor("#FFFFFF"), PropertyFactory.circleStrokeWidth(2f)
+            )
+        }
     }
 
     /** Стрелка-шеврон, смотрит вправо. Вдоль дороги Карта сама поворачивает её по направлению движения. */

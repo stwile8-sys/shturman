@@ -1,0 +1,67 @@
+name: Screenshots
+
+# Снимки экранов нового оформления на поддельной карте (Robolectric + Roborazzi).
+# Картинки и журнал кладутся в ветку shots. На обычную сборку и релизы не влияет.
+on:
+  push:
+    branches: [night]
+    paths: ['app/src/**', 'app/build.gradle.kts', '.github/workflows/shots.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: shots
+  cancel-in-progress: true
+
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.11.1
+
+      - name: Download Google Fonts (themes)
+        run: |
+          mkdir -p app/src/main/res/font
+          B=https://raw.githubusercontent.com/google/fonts/main/ofl
+          dl() { curl -fsSL --retry 5 --retry-delay 3 -o "app/src/main/res/font/$1" "$B/$2"; }
+          dl orbitron.ttf 'orbitron/Orbitron%5Bwght%5D.ttf'
+          dl inter.ttf 'inter/Inter%5Bopsz,wght%5D.ttf'
+          dl comfortaa.ttf 'comfortaa/Comfortaa%5Bwght%5D.ttf'
+          dl bebas_neue.ttf 'bebasneue/BebasNeue-Regular.ttf'
+          dl roboto_condensed.ttf 'robotocondensed/RobotoCondensed%5Bwght%5D.ttf'
+          dl racing_sans_one.ttf 'racingsansone/RacingSansOne-Regular.ttf'
+          dl oswald.ttf 'oswald/Oswald%5Bwght%5D.ttf'
+          dl montserrat.ttf 'montserrat/Montserrat%5Bwght%5D.ttf'
+
+      - name: Render screens
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          gradle :app:testDebugUnitTest -Pshots --tests 'ru.shturman.shots.*' --console=plain 2>&1 | tee "$RUNNER_TEMP/shots.log"
+
+      - name: Publish to branch shots
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          cp app/build/shots/*.png "$RUNNER_TEMP/out/" 2>/dev/null || true
+          { echo "commit ${GITHUB_SHA}"; grep -E "^e: |FAILED|Exception|Caused by|What went wrong" -A4 "$RUNNER_TEMP/shots.log" | head -150; echo "----- tail -----"; tail -60 "$RUNNER_TEMP/shots.log"; } > "$RUNNER_TEMP/out/log.txt" || true
+          for f in app/build/test-results/testDebugUnitTest/*.xml; do [ -f "$f" ] && grep -E "<failure" -A12 "$f" | head -60 >> "$RUNNER_TEMP/out/log.txt"; done || true
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout -q --orphan shots
+          git rm -rf -q .
+          cp "$RUNNER_TEMP"/out/* .
+          git add -- *.png log.txt
+          git commit -q -m "Screenshots for ${GITHUB_SHA}"
+          git push -f origin shots

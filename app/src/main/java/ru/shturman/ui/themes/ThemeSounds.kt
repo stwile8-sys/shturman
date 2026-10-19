@@ -35,7 +35,7 @@ object ThemeSounds {
             .build()
         val app = context.applicationContext
         for (s in ThemeSound.values()) {
-            val res = app.resources.getIdentifier("t${themeId + 1}_${s.key}", "raw", app.packageName)
+            val res = app.resources.getIdentifier("t${Themes.soundSet(themeId) + 1}_${s.key}", "raw", app.packageName)
             if (res != 0) runCatching { ids[s] = sp.load(app, res, 1) }
         }
         pool = sp

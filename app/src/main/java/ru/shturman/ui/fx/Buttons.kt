@@ -33,6 +33,7 @@ import ru.shturman.ui.themes.Flavor
 
 /** Отдельная кнопка на карте. */
 fun mapButtonShape(): Shape = when (ShColors.L.flavor) {
+    Flavor.PREMIUM -> RoundedCornerShape(10.dp)
     Flavor.TELEMETRY -> CutCornerShape(topEnd = 12.dp, bottomStart = 12.dp)
     Flavor.NEON -> RoundedCornerShape(17.dp)
     Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
@@ -41,6 +42,7 @@ fun mapButtonShape(): Shape = when (ShColors.L.flavor) {
 
 /** Вертикальная капсула с несколькими кнопками. */
 fun capsuleShape(): Shape = when (ShColors.L.flavor) {
+    Flavor.PREMIUM -> RoundedCornerShape(10.dp)
     Flavor.TELEMETRY -> CutCornerShape(topEnd = 14.dp, bottomStart = 14.dp)
     Flavor.NEON -> RoundedCornerShape(18.dp)
     Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
@@ -49,6 +51,7 @@ fun capsuleShape(): Shape = when (ShColors.L.flavor) {
 
 /** Строка поиска «Куда едем?». */
 fun pillShape(): Shape = when (ShColors.L.flavor) {
+    Flavor.PREMIUM -> RoundedCornerShape(14.dp)
     Flavor.TELEMETRY -> CutCornerShape(topEnd = 16.dp, bottomStart = 16.dp)
     Flavor.NEON -> RoundedCornerShape(17.dp)
     Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
@@ -57,6 +60,7 @@ fun pillShape(): Shape = when (ShColors.L.flavor) {
 
 /** Маленькая яркая кнопка внутри строки (например, «Где я»). */
 fun innerButtonShape(): Shape = when (ShColors.L.flavor) {
+    Flavor.PREMIUM -> RoundedCornerShape(10.dp)
     Flavor.TELEMETRY -> CutCornerShape(topEnd = 9.dp, bottomStart = 9.dp)
     Flavor.NEON -> RoundedCornerShape(13.dp)
     Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
@@ -65,6 +69,7 @@ fun innerButtonShape(): Shape = when (ShColors.L.flavor) {
 
 /** Плашки выбора (время выезда и т. п.). */
 fun choiceChipShape(): Shape = when (ShColors.L.flavor) {
+    Flavor.PREMIUM -> RoundedCornerShape(8.dp)
     Flavor.TELEMETRY -> RoundedCornerShape(2.dp)
     Flavor.NEON -> RoundedCornerShape(11.dp)
     Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
@@ -73,6 +78,7 @@ fun choiceChipShape(): Shape = when (ShColors.L.flavor) {
 
 /** Круглая кнопка-крестик в заголовках панелей. */
 fun closeButtonShape(): Shape = when (ShColors.L.flavor) {
+    Flavor.PREMIUM -> RoundedCornerShape(10.dp)
     Flavor.TELEMETRY -> RoundedCornerShape(2.dp)
     Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
     else -> CircleShape
@@ -86,6 +92,7 @@ val CapsuleDivider: Color get() =
     when (ShColors.L.flavor) {
         Flavor.NEON -> ShColors.Accent.copy(alpha = 0.30f)
         Flavor.APEX -> ApexChalk.copy(alpha = 0.08f)
+        Flavor.PREMIUM -> Color.White.copy(alpha = 0.08f)
         else -> Color.White.copy(alpha = 0.12f)
     }
 
@@ -98,6 +105,7 @@ fun Modifier.glassButton(shape: Shape, elevation: Dp = 10.dp): Modifier = compos
     val flavor = ShColors.L.flavor
     val panel = ShColors.Panel
     val acc = ShColors.Accent
+    if (flavor == Flavor.PREMIUM) return@composed this.premiumGlass(shape, elevation)
     if (flavor == Flavor.APEX) {
         // APEX: плоский асфальт, волосяная рамка и метки по углам
         return@composed this
@@ -130,6 +138,13 @@ fun Modifier.glassButton(shape: Shape, elevation: Dp = 10.dp): Modifier = compos
 fun Modifier.accentButton(shape: Shape, elevation: Dp = 10.dp, enabled: Boolean = true): Modifier = composed {
     val glow = ShColors.L.glow
     val flavor = ShColors.L.flavor
+    if (flavor == Flavor.PREMIUM) {
+        // новое оформление: ровная заливка акцентом, без градиента и цветного свечения
+        return@composed this
+            .shadow(if (enabled) (elevation * 0.4f) else 0.dp, shape, clip = false, ambientColor = Color.Black, spotColor = Color.Black)
+            .clip(shape)
+            .background(if (enabled) ShColors.Accent else ShColors.Divider)
+    }
     this
         .shadow(if (enabled) elevation else 0.dp, shape, clip = false, ambientColor = if (flavor == Flavor.TELEMETRY) Color.Black else glow, spotColor = if (flavor == Flavor.TELEMETRY) Color.Black else glow)
         .clip(shape)

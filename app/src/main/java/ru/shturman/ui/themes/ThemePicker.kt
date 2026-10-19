@@ -51,6 +51,7 @@ fun ThemePicker(selected: Int, onSelect: (Int) -> Unit) {
             val on = th.id == selected
             val lift by animateFloatAsState(if (on) 1f else 0f, spring(dampingRatio = 0.55f, stiffness = 300f), label = "lift")
             val shape = when (look.flavor) {
+                Flavor.PREMIUM -> RoundedCornerShape(12.dp)
                 Flavor.TELEMETRY -> CutCornerShape(topEnd = 16.dp, bottomStart = 16.dp)
                 Flavor.APEX -> androidx.compose.ui.graphics.RectangleShape
                 else -> RoundedCornerShape(18.dp)
@@ -72,9 +73,11 @@ fun ThemePicker(selected: Int, onSelect: (Int) -> Unit) {
                 Canvas(Modifier.size(width = 74.dp, height = 74.dp).clip(RoundedCornerShape(12.dp))) { miniScene(th, look) }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(text = th.name, color = th.text, fontFamily = th.numFont, fontSize = 17.sp)
+                    // в новом оформлении шрифт у всех один — Montserrat; у APEX — свой
+                    val apexLook = look.flavor == Flavor.APEX
+                    Text(text = th.name, color = th.text, fontFamily = if (apexLook) th.numFont else ru.shturman.ui.theme.Montserrat, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, fontSize = 17.sp)
                     Spacer(Modifier.height(2.dp))
-                    Text(text = th.vibe, color = th.textSec, fontFamily = th.textFont, fontSize = 12.sp, maxLines = 2)
+                    Text(text = th.vibe, color = th.textSec, fontFamily = if (apexLook) th.textFont else ru.shturman.ui.theme.Montserrat, fontSize = 12.sp, maxLines = 2)
                     Spacer(Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         for (c in listOf(th.accent, look.acc2, th.third)) {
@@ -118,6 +121,7 @@ private fun DrawScope.miniScene(th: ThemeSpec, look: ThemeLook) {
         Flavor.TELEMETRY -> drawRect(th.accent, tl, Size(5f, ph))
         Flavor.DEPTH -> drawRoundRect(Color.Black.copy(alpha = 0.35f), Offset(tl.x + 3f, tl.y + ph), Size(pw, 5f), CornerRadius(3f))
         Flavor.GLASS -> drawRoundRect(Color.White.copy(alpha = 0.35f), tl, Size(pw, ph), CornerRadius(10f), style = Stroke(1.2f))
+        Flavor.PREMIUM -> drawRoundRect(Color.White.copy(alpha = 0.18f), tl, Size(pw, ph), CornerRadius(8f), style = Stroke(1f))
         Flavor.APEX -> {
             // метки по углам плашки
             val k = ph * 0.35f

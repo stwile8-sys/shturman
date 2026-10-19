@@ -18,6 +18,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -33,6 +35,11 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.random.Random
 import kotlinx.coroutines.flow.first
+
+/** Для снимков экранов в тестах: всё появляется сразу, без анимации (в приложении всегда false). */
+object UiTest {
+    @Volatile var instant = false
+}
 
 /** Форма панелей выбранной темы (стекло, неон, телеметрия или глубина). */
 fun themePanelShape(): Shape = ru.shturman.ui.fx.panelShape()
@@ -54,7 +61,9 @@ private val BounceOut = Easing { x ->
  */
 @Composable
 fun Modifier.themedEnter(index: Int = 0): Modifier {
+    if (UiTest.instant) return this
     val flavor = ShColors.L.flavor
+    val motion = ShColors.M
     val p = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         // Под заставкой ждём, пока она начнёт уходить: тогда интерфейс въезжает каскадом в такт раскрытию.
@@ -70,6 +79,7 @@ fun Modifier.themedEnter(index: Int = 0): Modifier {
             Flavor.TELEMETRY -> p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.72f, stiffness = 520f))
             Flavor.DEPTH -> p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.58f, stiffness = 180f))
             Flavor.APEX -> p.animateTo(1f, tween(480, easing = LinearEasing))
+            Flavor.PREMIUM -> p.animateTo(1f, Motions.enterSpec(motion))
         }
     }
     val dust = ShColors.T.enter == EnterKind.SIDE_DUST
@@ -113,8 +123,16 @@ fun Modifier.themedEnter(index: Int = 0): Modifier {
             }
             // APEX: не выезжает, а загорается — три кадра мерцания, потом полный свет
             Flavor.APEX -> alpha = ru.shturman.ui.fx.apexIgnite(v)
+            // новое оформление: у каждой темы свой характер появления (ThemeMotion.kt)
+            Flavor.PREMIUM -> with(Motions) { enter(motion, v) }
         }
-    }
+    }.then(
+        if (flavor == Flavor.PREMIUM && motion == Motion.WIPE) Modifier.drawWithContent {
+            val v = p.value.coerceIn(0f, 1f)
+            if (v >= 1f) drawContent()
+            else clipRect(right = size.width * v) { this@drawWithContent.drawContent() }
+        } else Modifier
+    )
 }
 
 /** Появление целого экрана (поиск, вход): глубина и пружина по характеру темы. */
@@ -148,6 +166,11 @@ fun ThemedText(
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip
 ) {
+    if (ShColors.premium) {
+        // новое оформление: цифры меняются сразу, без эффектов — спокойно читается на ходу
+        Text(text = text, color = color, style = style, maxLines = maxLines, overflow = overflow, modifier = modifier)
+        return
+    }
     val kind = ShColors.T.digit
     val p = remember { Animatable(1f) }
     var first by remember { mutableStateOf(true) }
