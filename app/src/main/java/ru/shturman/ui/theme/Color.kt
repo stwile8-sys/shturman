@@ -24,6 +24,9 @@ object ShColors {
     /** Цвет текста на заливке акцентом: на светлом акценте — тёмный, на тёмном и красном — белый. */
     val OnAccent: Color get() = if (T.accent.luminance() > 0.3f) T.bg else Color.White
 
+    /** Характер движения темы в новом оформлении (ui/themes/ThemeMotion.kt). */
+    val M: ru.shturman.ui.themes.Motion get() = ru.shturman.ui.themes.Motions.of(themeId)
+
     /** Новое оформление (все темы, кроме APEX). */
     val premium: Boolean get() = L.flavor == ru.shturman.ui.themes.Flavor.PREMIUM
 

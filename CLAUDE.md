@@ -12,10 +12,16 @@ minSdk 26, targetSdk 34. Дорожные данные — Псковская о
 ## Где что
 - `NavViewModel.kt` — состояние экрана (`NavState`) и поездка: `onFix` → место на маршруте, подсказки голосом, ограничения, сигнал превышения, съезд с маршрута.
 - `routing/` — `Router` (запрос и разбор Valhalla: манёвры, кольца `roundabout_exit_count`, полосы `turn_lanes`), `RouteModel` (`nextTurn`), `PaceNotes` (дорожник, совет скорости), `Voice` + `VoiceClips` (голос — только готовые записи), `Deviation`, `Overspeed`, `Sun`, `GpsTracker`, `SpeedStore`/`SharedSync` (общая база).
-- `ui/` — `MainScreen` (раскладка: высоты блоков меряются, чтобы ничего не перекрывалось), `MapView` (камера, стрелка на высоте «Где я», масштаб от скорости), `TurnCard` (дорожник `PaceCard`), `RoadSigns`, `WindshieldHud` (проекция на лобовое), `MiniPlayer`, `SettingsSheet`, `themes/` (темы, заставки, звуки).
+- `ui/` — `MainScreen` (состояние, системные окна, шторки) и `MainLayout` (раскладка нового оформления «Спорт-премиум»: поездка, карта,
+  выбор маршрута, горизонтальный экран; высоты блоков меряются, чтобы ничего не перекрывалось), `Sport.kt` (панель манёвра, «ЗАТЕМ»,
+  кольцо скорости, стеклянные кнопки, карточки), `ApexIcons` (контурные значки), `MapView` (камера, стрелка, обзор маршрута, масштаб от скорости),
+  `RoutePanel`, `SearchScreen` (+ `Recents`), `RoadSigns`, `WindshieldHud` (проекция на лобовое), `MiniPlayer`, `SettingsSheet`,
+  `themes/` (темы, заставки, звуки; `ThemeMotion` — у каждой темы свой характер анимаций, кроме APEX).
 - `service/` — `NavService` (уведомление поездки), `DriveWatch` (фоновый сбор обезличенных данных о дорогах), `BootReceiver`.
 - `update/` — `Updater` (релизы `build-N` на GitHub), `AutoUpdate` (фоновое обновление).
-- `app/src/test` — юнит-тесты логики (JVM). `docs/voice` — как делать новые фразы тем же голосом. `docs/design` — макеты.
+- `app/src/test` — юнит-тесты логики (JVM). `docs/voice` — как делать новые фразы тем же голосом. `docs/design` — макеты и план
+  нового оформления (`redesign-plan.md`). `app/src/shots` + `.github/workflows/shots.yml` — снимки экранов на поддельной карте
+  (Robolectric + Roborazzi), картинки — в ветке `shots`: `git fetch -q origin '+refs/heads/shots:refs/remotes/origin/shots'`.
 
 ## Правила владельца (не нарушать)
 - Камеры скорости не рисовать на карте и не озвучивать — они только в варианте маршрута «Без камер».
@@ -42,7 +48,8 @@ minSdk 26, targetSdk 34. Дорожные данные — Псковская о
 
 ## Стиль кода
 - Комментарии и тексты интерфейса — по-русски, понятным языком. Сообщения коммитов — по-русски, что изменилось для водителя.
-- Цвета и шрифты — из темы (`ShColors`, `ShText`, `NumberFont`), панели — `Modifier.panel(...)`, кнопки на карте 56 dp.
+- Оформление «Спорт-премиум» у всех тем, кроме APEX: шрифт Montserrat (`ShText.Hero/Value/Caps/...`), цвета — из темы (`ShColors`),
+  стекло — `Modifier.panel(...)`, кнопки на карте — `GlassButton` 52 dp, значки — `ApexIcons`. Новые экраны — по макетам (холст «Спорт-премиум»).
 - В `DrawScope` внутри вложенных лямбд — `this@drawWithContent.drawContent()`.
 - Новые настройки — в SharedPreferences `settings`, в `NavState` и в `resetSettings()`.
 

@@ -58,6 +58,7 @@ private fun lin(t: Float, a: Float, b: Float) = ((t - a) / (b - a)).coerceIn(0f,
 @Composable
 fun StartOverlay(trigger: Int) {
     val flavor = ShColors.L.flavor
+    val motion = ShColors.M
     val dur = when (flavor) { Flavor.TELEMETRY -> 2300; Flavor.APEX -> 2100; Flavor.PREMIUM -> 1500; else -> 1900 }
     val progress = remember { Animatable(0f) }
     var visible by remember { mutableStateOf(false) }
@@ -106,7 +107,7 @@ fun StartOverlay(trigger: Int) {
                 Flavor.TELEMETRY -> drawLights(p, out, accent)
                 Flavor.DEPTH -> drawTunnel(p, out, accent, accent2)
                 Flavor.APEX -> drawApexGate(p, out, textAt)
-                Flavor.PREMIUM -> drawPremium(p, out, accent)
+                Flavor.PREMIUM -> drawPremium(p, out, accent, motion)
             }
             // вспышка в момент появления надписи (в новом оформлении без вспышки)
             val f = lin(p, textAt, textAt + 0.16f)
@@ -114,7 +115,7 @@ fun StartOverlay(trigger: Int) {
         }
         KineticTitle(
             text = when (flavor) { Flavor.GLASS -> "Поехали!"; Flavor.APEX, Flavor.PREMIUM -> "ПОЕХАЛИ"; else -> "ПОЕХАЛИ!" },
-            p = p, textAt = textAt, flavor = flavor, accent = accent, accent2 = accent2,
+            p = p, textAt = textAt, flavor = flavor, accent = accent, accent2 = accent2, motion = motion,
             modifier = Modifier.align(Alignment.Center)
         )
         if (flavor == Flavor.APEX) {
@@ -134,7 +135,7 @@ private fun backOut(x: Float): Float {
  * телеметрия — въезд справа с наклоном; глубина — из камеры на экран. Уход: буквы улетают по характеру темы.
  */
 @Composable
-private fun KineticTitle(text: String, p: Float, textAt: Float, flavor: Flavor, accent: Color, accent2: Color, modifier: Modifier) {
+private fun KineticTitle(text: String, p: Float, textAt: Float, flavor: Flavor, accent: Color, accent2: Color, modifier: Modifier, motion: ru.shturman.ui.themes.Motion = ru.shturman.ui.themes.Motion.PRECISE) {
     val italic = flavor != Flavor.GLASS && flavor != Flavor.APEX && flavor != Flavor.PREMIUM
     Row(modifier = modifier) {
         text.forEachIndexed { i, ch ->
@@ -191,8 +192,19 @@ private fun KineticTitle(text: String, p: Float, textAt: Float, flavor: Flavor, 
                                 rotationX = (1f - ease(g)) * 50f
                             }
                             Flavor.PREMIUM -> {
-                                // буквы проявляются по очереди с коротким подъёмом и так же спокойно уходят
-                                translationY = (1f - ease(g)) * 10f * density - ease(o) * 8f * density
+                                // буквы проявляются по очереди, у каждой темы — своим движением, и спокойно уходят
+                                val e = ease(g)
+                                when (motion) {
+                                    ru.shturman.ui.themes.Motion.PRECISE -> translationY = (1f - e) * 10f * density - ease(o) * 8f * density
+                                    ru.shturman.ui.themes.Motion.POWER_ON -> al = ru.shturman.ui.themes.Motions.flicker(g)
+                                    ru.shturman.ui.themes.Motion.FLOAT -> { translationY = (1f - e) * 24f * density - ease(o) * 16f * density; val sc = 0.9f + 0.1f * e; scaleX = sc; scaleY = sc }
+                                    ru.shturman.ui.themes.Motion.SIDE_DASH -> translationX = -(1f - e) * 60f * density + ease(o) * 90f * density
+                                    ru.shturman.ui.themes.Motion.WIPE -> translationX = (1f - e) * 30f * density - ease(o) * 30f * density
+                                    ru.shturman.ui.themes.Motion.EMERGE -> { val sc = 1.25f - 0.25f * e + 0.15f * ease(o); scaleX = sc; scaleY = sc }
+                                    ru.shturman.ui.themes.Motion.DROP -> translationY = -(1f - e) * 26f * density + ease(o) * 10f * density
+                                    ru.shturman.ui.themes.Motion.DUST -> { translationX = (1f - e) * 40f * density; rotationZ = (1f - e) * 6f }
+                                    ru.shturman.ui.themes.Motion.FOG -> { al = g * g; translationY = (1f - e) * 6f * density }
+                                }
                             }
                             Flavor.APEX -> {
                                 // буквы загораются, как лампы табло, каждая со своим сбоем; гаснут вразнобой
@@ -208,13 +220,81 @@ private fun KineticTitle(text: String, p: Float, textAt: Float, flavor: Flavor, 
     }
 }
 
-/** Новое оформление: лёгкое затемнение и тонкая линия акцентом, которая растягивается от центра под надписью. */
-private fun DrawScope.drawPremium(p: Float, out: Float, a: Color) {
+/**
+ * Новое оформление: лёгкое затемнение и под надписью — тонкий рисунок в характере темы:
+ * линия от центра, неоновая развёртка, мягкое свечение, полосы, шторка, след, луч фар, пыль или туман.
+ */
+private fun DrawScope.drawPremium(p: Float, out: Float, a: Color, m: ru.shturman.ui.themes.Motion) {
     drawRect(Color.Black.copy(alpha = 0.45f * lin(p, 0f, 0.12f) * out))
-    val k = ease(lin(p, 0.08f, 0.55f))
-    val half = size.width * 0.3f * k
-    val y = size.height / 2f + 34f * density
-    if (half > 0f) drawRect(a.copy(alpha = out), Offset(size.width / 2f - half, y), Size(half * 2f, 2f * density))
+    val w = size.width
+    val h = size.height
+    val cy = h / 2f
+    val y = cy + 34f * density
+    val line = 2f * density
+    when (m) {
+        ru.shturman.ui.themes.Motion.PRECISE -> {
+            val half = w * 0.3f * ease(lin(p, 0.08f, 0.55f))
+            if (half > 0f) drawRect(a.copy(alpha = out), Offset(w / 2f - half, y), Size(half * 2f, line))
+        }
+        ru.shturman.ui.themes.Motion.POWER_ON -> {
+            // развёртка сверху вниз и неоновая линия, которая «включается» с мерцанием
+            val sy = h * lin(p, 0.02f, 0.5f)
+            drawRect(Brush.verticalGradient(listOf(Color.Transparent, a.copy(alpha = 0.22f * out), Color.Transparent), sy - 60f * density, sy + 10f * density), Offset(0f, sy - 60f * density), Size(w, 70f * density))
+            val f = ru.shturman.ui.themes.Motions.flicker(lin(p, 0.1f, 0.5f))
+            drawRect(a.copy(alpha = out * f), Offset(w * 0.2f, y), Size(w * 0.6f, line))
+        }
+        ru.shturman.ui.themes.Motion.FLOAT -> {
+            val r = w * (0.25f + 0.45f * ease(lin(p, 0f, 0.6f)))
+            drawCircle(Brush.radialGradient(listOf(a.copy(alpha = 0.28f * out), Color.Transparent), Offset(w / 2f, cy), r), r, Offset(w / 2f, cy))
+        }
+        ru.shturman.ui.themes.Motion.SIDE_DASH -> {
+            // две белые полосы проносятся слева направо
+            for (i in 0..1) {
+                val k = lin(p, 0.05f + i * 0.08f, 0.45f + i * 0.08f)
+                val x = -w * 0.6f + k * w * 1.8f
+                drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.7f * out)), x, x + w * 0.5f), Offset(x, y + i * 8f * density), Size(w * 0.5f, line))
+            }
+        }
+        ru.shturman.ui.themes.Motion.WIPE -> {
+            // полоса цветом темы проходит слева направо, оставляя тонкую линию
+            val k = ease(lin(p, 0.04f, 0.5f))
+            drawRect(a.copy(alpha = 0.18f * out * (1f - k)), Offset(0f, cy - 40f * density), Size(w * k, 80f * density))
+            drawRect(a.copy(alpha = out), Offset(0f, y), Size(w * k, line))
+        }
+        ru.shturman.ui.themes.Motion.EMERGE -> {
+            // синий след: три линии расходятся от центра в стороны
+            val k = ease(lin(p, 0.05f, 0.6f))
+            for (i in -1..1) {
+                val yy = y + i * 10f * density
+                val half = w * (0.12f + 0.3f * k) * (1f - 0.25f * kotlin.math.abs(i))
+                drawRect(Brush.horizontalGradient(listOf(Color.Transparent, a.copy(alpha = 0.8f * out), Color.Transparent), w / 2f - half, w / 2f + half), Offset(w / 2f - half, yy), Size(half * 2f, line * 0.8f))
+            }
+        }
+        ru.shturman.ui.themes.Motion.DROP -> {
+            // луч фар по диагонали
+            val k = lin(p, 0.02f, 0.55f)
+            val x = -w * 0.5f + k * w * 2f
+            drawRect(Brush.linearGradient(listOf(Color.Transparent, a.copy(alpha = 0.3f * out), Color.Transparent), Offset(x - w * 0.25f, 0f), Offset(x + w * 0.25f, h)))
+        }
+        ru.shturman.ui.themes.Motion.DUST -> {
+            // мягкие клубы пыли снизу
+            for (i in 0 until 6) {
+                val k = lin(p, i * 0.04f, 0.7f + i * 0.04f)
+                if (k <= 0f || k >= 1f) continue
+                val c = Offset(w * (0.15f + i * 0.14f), h * (0.82f - 0.25f * k))
+                val r = (24f + 40f * k) * density
+                drawCircle(Brush.radialGradient(listOf(a.copy(alpha = 0.22f * (1f - k) * out), Color.Transparent), c, r), r, c)
+            }
+        }
+        ru.shturman.ui.themes.Motion.FOG -> {
+            // две полосы тумана медленно плывут навстречу
+            for (i in 0..1) {
+                val k = lin(p, 0f, 1f)
+                val x = if (i == 0) -w * 0.4f + k * w * 0.5f else w * 0.4f - k * w * 0.5f
+                drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.10f * out), Color.Transparent), x, x + w), Offset(x, cy - (40f - i * 70f) * density), Size(w, 60f * density))
+            }
+        }
+    }
 }
 
 private fun DrawScope.drawGlass(p: Float, out: Float, a: Color, b: Color) {

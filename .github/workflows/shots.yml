@@ -62,6 +62,6 @@ jobs:
           git checkout -q --orphan shots
           git rm -rf -q .
           cp "$RUNNER_TEMP"/out/* .
-          git add -A
+          git add -- *.png log.txt
           git commit -q -m "Screenshots for ${GITHUB_SHA}"
           git push -f origin shots

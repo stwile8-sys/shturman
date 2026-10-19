@@ -65,8 +65,9 @@ class Shots {
         speedKmh = 72, limitKmh = 60, destination = Place("ул. Гоголя, 12", "Псков", route.points.last())
     )
 
-    private fun shot(name: String, content: @Composable () -> Unit) {
-        ShColors.themeId = Themes.PREMIUM
+    private fun shot(name: String, theme: Int = Themes.PREMIUM, content: @Composable () -> Unit) {
+        ru.shturman.ui.themes.UiTest.instant = true
+        ShColors.themeId = theme
         captureRoboImage("build/shots/$name.png") { ShturmanTheme { content() } }
     }
 
@@ -136,6 +137,16 @@ class Shots {
             searching = false, error = null, onQuery = {}, onPick = {}, onClose = {},
             initialQuery = "Гоголя", here = route.points.first()
         )
+    }
+
+    @Test
+    fun tripClassic() = shot("10_trip_classic", theme = 0) {
+        MainLayout(trip.copy(curveAdviceKmh = 40), listOf(Pill("Возможен гололёд", warn = true)), true, actions) { FakeMap(route = true) }
+    }
+
+    @Test
+    fun mapNightRider() = shot("11_map_nightrider", theme = 4) {
+        MainLayout(NavState(dataReady = true, hud = Hud(weather = Weather("Снег", -5, 0.8))), emptyList(), true, actions) { FakeMap(route = false) }
     }
 
     @Test

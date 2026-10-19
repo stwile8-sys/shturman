@@ -170,6 +170,7 @@ fun Modifier.neonEdge(shape: Shape, width: Dp = 1.5.dp): Modifier = composed {
  */
 fun Modifier.pressFx(): Modifier = composed {
     val flavor = ShColors.L.flavor
+    val motion = ShColors.M
     var pressed by remember { mutableStateOf(false) }
     var tiltX by remember { mutableStateOf(0f) }
     var tiltY by remember { mutableStateOf(0f) }
@@ -211,7 +212,7 @@ fun Modifier.pressFx(): Modifier = composed {
                 Flavor.TELEMETRY -> { translationX = 4f * density * p; val s = 1f - 0.05f * p; scaleX = s; scaleY = s }
                 Flavor.DEPTH -> { rotationX = tiltX * p; rotationY = tiltY * p; val s = 1f - 0.05f * p; scaleX = s; scaleY = s; translationY = 2f * density * p }
                 // новое оформление: лёгкое ровное сжатие, без наклонов и мигания
-                Flavor.PREMIUM -> { val s = 1f - 0.04f * p; scaleX = s; scaleY = s }
+                Flavor.PREMIUM -> with(ru.shturman.ui.themes.Motions) { press(motion, p) }
                 Flavor.APEX -> {
                     // механический щелчок: короткое сжатие и мигание, как реле
                     val s = 1f - 0.035f * p; scaleX = s; scaleY = s
