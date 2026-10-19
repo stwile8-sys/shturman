@@ -87,6 +87,8 @@ data class Hud(
 
 data class NavState(
     val dataReady: Boolean = false,
+    /** Приехали на заказ из приложения «Заказы», и у него есть следующий: показать кнопку «Следующий заказ». */
+    val nextOrderId: Long? = null,
     val dataProgress: Float = 0f,
     val dataError: String? = null,
 
@@ -349,8 +351,24 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun chooseDestination(place: Place) {
+        ru.shturman.api.ExternalTrip.active = null
+        autoStart = false
         _state.update { it.copy(destination = place, results = emptyList(), searchError = null) }
         buildRoute()
+    }
+
+    /** Запрос «Поехать» из «Заказов»: строим маршрут и сами запускаем ведение, как кнопкой «Поехали». */
+    private var autoStart = false
+
+    fun startExternalTrip(r: ru.shturman.api.ExternalTrip.Request) {
+        chooseDestination(Place(r.name, "", LatLon(r.lat, r.lon)))
+        ru.shturman.api.ExternalTrip.active = r
+        autoStart = _state.value.routeError == null
+        _state.update { it.copy(nextOrderId = null) }
+    }
+
+    fun dismissNextOrder() {
+        _state.update { it.copy(nextOrderId = null) }
     }
 
     fun setDeparture(offsetMin: Int) {
@@ -426,7 +444,12 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                         seasonNote = note
                     )
                 }
+                if (autoStart) {
+                    autoStart = false
+                    if (_state.value.route != null) startNavigation()
+                }
             } catch (e: Exception) {
+                autoStart = false
                 ru.shturman.Errors.log("route", e)
                 ThemeSounds.play(ThemeSound.ERROR)
                 _state.update {
@@ -1327,7 +1350,9 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     /** Приехали: говорим об этом и убираем маршрут. */
     fun arrived() {
         if (_state.value.voiceOn) voice.say("Вы приехали")
+        val ext = ru.shturman.api.ExternalTrip.active
         clearRoute()
+        if (ext != null && ext.hasNext) _state.update { it.copy(nextOrderId = ext.orderId) }
     }
 
 
@@ -1348,6 +1373,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearRoute() {
+        ru.shturman.api.ExternalTrip.active = null
+        autoStart = false
         finishTrip()
         stopNavService()
         _state.update {

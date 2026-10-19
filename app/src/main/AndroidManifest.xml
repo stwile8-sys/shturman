@@ -18,7 +18,13 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!-- Только приложения, подписанные тем же ключом («Заказы»), могут просить маршруты -->
+    <permission
+        android:name="ru.apex.permission.ROUTE_API"
+        android:protectionLevel="signature" />
+
     <queries>
+        <package android:name="ru.zakazy" />
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
@@ -43,12 +49,35 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.Shturman">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- «Поехать» из приложения «Заказы»: маршрут строится и ведение запускается само -->
+        <activity-alias
+            android:name=".api.NavigateAlias"
+            android:exported="true"
+            android:permission="ru.apex.permission.ROUTE_API"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="ru.apex.action.NAVIGATE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Невидимый движок маршрутов для «Заказов» -->
+        <service
+            android:name=".api.RouteApiService"
+            android:exported="true"
+            android:permission="ru.apex.permission.ROUTE_API">
+            <intent-filter>
+                <action android:name="ru.apex.action.ROUTE_API" />
+            </intent-filter>
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

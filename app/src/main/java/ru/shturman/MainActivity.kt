@@ -52,8 +52,16 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        ru.shturman.api.ExternalTrip.parse(intent)?.let { ru.shturman.api.ExternalTrip.pending.value = it }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // «Поехать» из приложения «Заказы»: точка подождёт входа и дорожных данных
+        if (savedInstanceState == null) ru.shturman.api.ExternalTrip.parse(intent)?.let { ru.shturman.api.ExternalTrip.pending.value = it }
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // навигатор: экран не гаснет
         ru.shturman.ui.themes.Shturman2.load(getSharedPreferences("settings", MODE_PRIVATE))
         ru.shturman.ui.theme.ShColors.themeId = ru.shturman.ui.themes.Themes.load(getSharedPreferences("settings", MODE_PRIVATE))
