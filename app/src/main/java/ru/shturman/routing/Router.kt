@@ -88,6 +88,8 @@ class Router(private val roadData: RoadData) {
                     "directions_options",
                     JSONObject().put("language", "ru-RU").put("units", "kilometers")
                 )
+                // Полосы перед манёврами (если они размечены в данных)
+                json.put("turn_lanes", true)
                 if (withTime) {
                     json.put("date_time", JSONObject().put("type", 1).put("value", departure))
                 }
@@ -161,12 +163,21 @@ class Router(private val roadData: RoadData) {
             for (i in 0 until ms.length()) {
                 val m = ms.getJSONObject(i)
                 val names = m.optJSONArray("street_names")
+                val lanes = ArrayList<Lane>()
+                m.optJSONArray("lanes")?.let { arr ->
+                    for (j in 0 until arr.length()) {
+                        val l = arr.optJSONObject(j) ?: continue
+                        lanes += Lane(l.optInt("directions"), l.optInt("active"), l.optInt("valid"))
+                    }
+                }
                 maneuvers.add(
                     Maneuver(
                         type = m.optInt("type"),
                         instruction = m.optString("instruction"),
                         street = if (names != null && names.length() > 0) names.getString(0) else "",
-                        startIndex = m.optInt("begin_shape_index")
+                        startIndex = m.optInt("begin_shape_index"),
+                        roundaboutExits = m.optInt("roundabout_exit_count"),
+                        lanes = lanes
                     )
                 )
             }

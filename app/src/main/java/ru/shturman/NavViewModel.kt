@@ -109,6 +109,12 @@ data class NavState(
 
     /** Ограничение скорости на участке, где мы сейчас едем, км/ч (если оно известно). */
     val limitKmh: Int? = null,
+    /** Впереди крутой изгиб, а едем быстро: до скольких км/ч советуем сбавить. */
+    val curveAdviceKmh: Int? = null,
+    /** Сейчас темно (после заката) и включён ночной экран: карта темнее. */
+    val night: Boolean = false,
+    /** Настройка «Ночной экран». */
+    val nightScreen: Boolean = true,
 
     val weather: Weather? = null,
 
@@ -209,6 +215,10 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private var tripStartMs = 0L
     private var tripMaxKmh = 0
     private var spokenLevel = -1
+    private var lastTurnKey = -1
+    /** Где на маршруте (метры от начала) уже советовали сбавить скорость перед изгибом. */
+    private val spokenCurves = ArrayList<Double>()
+    private var iceWarned = false
     private var lastTurnDistance = Double.MAX_VALUE
     private var rerouting = false
     private var lastRerouteAt = 0L
@@ -223,6 +233,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         map3d = settings.getBoolean("map3d", true),
         overspeedSound = settings.getBoolean("overspeed", true),
         hudMirror = settings.getBoolean("hud_mirror", true),
+        nightScreen = settings.getBoolean("night_screen", true),
         nightVoice = settings.getBoolean("night_voice", true),
         radarOn = settings.getBoolean("radar", true),
         cardPercent = settings.getBoolean("card_percent", true),
@@ -475,7 +486,10 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         deviation.reset()
         lastTurnDistOnRoute = Double.MAX_VALUE
         spokenLevel = -1
+        lastTurnKey = -1
         lastTurnDistance = Double.MAX_VALUE
+        spokenCurves.clear()
+        iceWarned = false
         stopRecorder.reset()
         overspeed.reset()
         loadLimits(route)
@@ -562,16 +576,28 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             locateOnRoute(route, here, fromIndex)
         }
-        announceTurn(nextTurn(route, position))
-        vibrateForTurn(nextTurn(route, position)?.distanceM)
+        val turn = nextTurn(route, position)
+        announceTurn(turn, speedMps)
+        vibrateForTurn(turn?.distanceM)
         val limit = limits.firstOrNull { position.traveledM >= it.startM && position.traveledM < it.endM }?.kmh
         // Один сигнал на одно превышение больше чем на 15 км/ч (routing/Overspeed.kt)
         if (overspeed.update(kmh, limit) && s.overspeedSound && limit != null) ThemeSounds.speeding(kmh - limit)
         val hazards = checkHazards(position.traveledM, s)
+        val notes = runCatching { ru.shturman.routing.paceNotes(route, position.traveledM) }.getOrDefault(emptyList())
+        // Крутой изгиб дороги впереди, а едем быстро: «Сбавьте до N» на дорожнике и голосом один раз
+        val advice = ru.shturman.routing.curveAdvice(notes, turn?.distanceM, kmh)
+        if (advice != null && s.voiceOn) {
+            val at = position.traveledM + advice.second.distanceM
+            if (spokenCurves.none { kotlin.math.abs(it - at) < 80.0 }) {
+                spokenCurves += at
+                voice.say(ru.shturman.routing.curvePhrase(advice.first), flush = false)
+            }
+        }
+        warnIce(s)
         _state.update {
             it.copy(
-                position = position, turn = nextTurn(route, position), limitKmh = limit,
-                notes = runCatching { ru.shturman.routing.paceNotes(route, position.traveledM) }.getOrDefault(emptyList()),
+                position = position, turn = turn, limitKmh = limit,
+                notes = notes, curveAdviceKmh = advice?.first,
                 hazard = hazards.first, cameraAhead = hazards.second
             )
         }
@@ -797,6 +823,11 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                         )
                     }
                     deviation.reset()
+                    // новый маршрут — подсказки о поворотах и изгибах заново
+                    spokenLevel = -1
+                    lastTurnKey = -1
+                    lastTurnDistance = Double.MAX_VALUE
+                    spokenCurves.clear()
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -819,20 +850,35 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Голосовая подсказка о ближайшем повороте: заранее, близко и в момент поворота, по одному разу. */
-    private fun announceTurn(turn: NextTurn?) {
+    /**
+     * Голосовая подсказка о ближайшем повороте: заранее, близко и в момент поворота, по одному разу.
+     * На скорости подсказки раньше: «сейчас» — за 4 секунды пути (не ближе 60 м), «близко» — за 12 секунд
+     * (не ближе 250 м), а от 70 км/ч ещё и «через километр». По кольцу до своего съезда едем молча.
+     */
+    private fun announceTurn(turn: NextTurn?, speedMps: Float) {
         if (turn == null || !_state.value.voiceOn) return
         val d = turn.distanceM
-        if (d > lastTurnDistance + 150.0) spokenLevel = -1 // начался новый поворот
+        // начался следующий поворот (или маршрут перестроен и расстояние выросло)
+        if (turn.key != lastTurnKey || d > lastTurnDistance + 150.0) spokenLevel = -1
+        lastTurnKey = turn.key
         lastTurnDistance = d
+        if (turn.onRoundabout) {
+            spokenLevel = 9
+            return
+        }
+        val v = speedMps.toDouble().coerceAtLeast(0.0)
+        val nowM = maxOf(60.0, v * 4.0)
+        val nearM = maxOf(250.0, v * 12.0).coerceAtMost(550.0)
         val level = when {
-            d <= 60.0 -> 2
-            d <= 250.0 -> 1
-            d <= 600.0 -> 0
+            d <= nowM -> 3
+            d <= nearM -> 2
+            d <= 600.0 -> 1
+            d in 700.0..1100.0 && v >= 19.0 -> 0
             else -> -1
         }
         if (level > spokenLevel) {
             spokenLevel = level
-            voice.say(turnPhrase(level, d, turn.isLeft, turn.severity, turn.street, voice.isNight()))
+            voice.say(turnPhrase(level, d, turn.isLeft, turn.severity, turn.roundaboutExit))
         }
     }
 
@@ -884,6 +930,31 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     fun setHudMirror(on: Boolean) {
         putBool("hud_mirror", on)
         _state.update { it.copy(hudMirror = on) }
+    }
+
+    fun setNightScreen(on: Boolean) {
+        putBool("night_screen", on)
+        _state.update { it.copy(nightScreen = on, night = on && darkNow()) }
+    }
+
+    /** Темно ли сейчас там, где мы (по солнцу); без положения — по часам: с 20 до 6. */
+    private fun darkNow(): Boolean {
+        val now = System.currentTimeMillis()
+        val here = lastFix ?: lastKnownPosition(getApplication())
+        if (here != null) return ru.shturman.routing.isDark(here, now)
+        val h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return h >= 20 || h < 6
+    }
+
+    /** Холодно (до +3°): возможен гололёд — один раз за поездку голосом и коротким сообщением. */
+    private fun warnIce(s: NavState) {
+        if (iceWarned || !s.navigating) return
+        if (System.currentTimeMillis() - tripStartMs < 8_000L) return // сначала звук старта и первая подсказка
+        val t = (s.hud.weather ?: s.weather)?.tempC ?: return
+        if (t > 3) return
+        iceWarned = true
+        showNotice("Возможен гололёд: ${if (t > 0) "+$t" else "$t"}°")
+        if (s.voiceOn) voice.say("Осторожно, возможен гололёд", flush = false)
     }
 
     fun setOverspeedSound(on: Boolean) {
@@ -1030,6 +1101,9 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                         ))
                     }
                 }
+                // Ночной экран: после заката карта темнее (проверка по солнцу там, где мы)
+                val dark = _state.value.nightScreen && darkNow()
+                if (dark != _state.value.night) _state.update { it.copy(night = dark) }
                 val here = lastFix
                 val now = System.currentTimeMillis()
                 if (here != null && now - lastWeatherAt > 30 * 60_000L) {
@@ -1135,7 +1209,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             .remove("radar").remove("card_percent").remove("card_distance").remove("card_eta")
             .remove("card_remaining").remove("card_fuel").remove("consumption").remove("fuel_price")
             .remove("dev_level").remove("theme_sounds").remove("turn_vibro").remove("map3d")
-            .remove("hud_mirror")
+            .remove("hud_mirror").remove("night_screen")
             .apply()
         ThemeSounds.enabled = true
         deviation.level = DeviationLevel.MEDIUM
@@ -1145,7 +1219,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 voiceOn = true, fullscreen = false, satellite = false, overspeedSound = true, nightVoice = true,
                 radarOn = true, cardPercent = true, cardDistance = true, cardEta = true, cardRemaining = false,
                 cardFuel = false, consumption = 8.0f, fuelPrice = 60.0f, devLevel = 1, turnVibro = true, map3d = true,
-                hudMirror = true
+                hudMirror = true, nightScreen = true
             )
         }
     }

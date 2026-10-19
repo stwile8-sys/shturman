@@ -311,10 +311,18 @@ private fun pointOnRoute(pts: List<LatLon>, cum: DoubleArray, d: Double, index: 
 @Composable
 private fun TurnBlock(s: NavState, u: Dp) {
     val turn = s.turn
-    val color = if (turn == null) HudWhite else signColor(turn.severity)
+    val color = when {
+        turn == null -> HudWhite
+        turn.isRoundabout -> HudRouteColor
+        else -> signColor(turn.severity)
+    }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            RallyArrow(severity = turn?.severity, isLeft = turn?.isLeft ?: false, boxSize = u * 0.38f, color = color)
+            if (turn != null && turn.isRoundabout) {
+                RoundaboutSign(turn.roundaboutExit, turn.exitAngle, u * 0.38f, color)
+            } else {
+                RallyArrow(severity = turn?.severity, isLeft = turn?.isLeft ?: false, boxSize = u * 0.38f, color = color)
+            }
             Spacer(Modifier.width(u * 0.04f))
             Column {
                 if (turn == null) {
@@ -326,7 +334,8 @@ private fun TurnBlock(s: NavState, u: Dp) {
                         Spacer(Modifier.width(u * 0.015f))
                         HudText(unit, u * 0.09f, HudWhite, bold = true, modifier = Modifier.padding(bottom = u * 0.03f))
                     }
-                    if (turn.street.isNotEmpty()) HudText(turn.street, u * 0.065f, HudDim, maxWidth = u * 0.6f)
+                    val sub = if (turn.isRoundabout) "${turn.roundaboutExit}-й съезд" else turn.street
+                    if (sub.isNotEmpty()) HudText(sub, u * 0.065f, HudDim, maxWidth = u * 0.6f)
                 }
             }
         }
