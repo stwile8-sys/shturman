@@ -23,6 +23,11 @@ fun formatDuration(seconds: Double): String {
     return if (minutes < 60) "$minutes мин" else "${minutes / 60} ч ${String.format(Locale.US, "%02d", minutes % 60)} мин"
 }
 
+// Один формат времени на поток: не создаём новый на каждый кадр (SimpleDateFormat не потокобезопасен)
+private val clockFormat = object : ThreadLocal<SimpleDateFormat>() {
+    override fun initialValue() = SimpleDateFormat("HH:mm", Locale.US)
+}
+
 /** Время суток «18:42» по часам телефона. */
 fun formatClock(millis: Long): String =
-    SimpleDateFormat("HH:mm", Locale.US).format(Date(millis))
+    clockFormat.get()!!.format(Date(millis))

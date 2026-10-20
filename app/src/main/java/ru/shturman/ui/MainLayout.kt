@@ -33,6 +33,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -136,7 +137,9 @@ fun MainLayout(
             val total = route.totalM.coerceAtLeast(1.0)
             val traveled = (s.position?.traveledM ?: 0.0).coerceIn(0.0, total)
             val remainingSec = route.timeSec * (1.0 - traveled / total)
-            val eta = formatClock(System.currentTimeMillis() + (remainingSec * 1000).toLong())
+            // время прибытия пересчитывается в текст только когда меняется минута
+            val etaMinute = (System.currentTimeMillis() + (remainingSec * 1000).toLong()) / 60_000L
+            val eta = remember(etaMinute) { formatClock(etaMinute * 60_000L) }
             val kmLeft = formatKm(total - traveled)
             val minLeft = formatDuration(remainingSec).uppercase()
             val over = s.limitKmh != null && s.speedKmh > s.limitKmh + ru.shturman.routing.OVERSPEED_TOLERANCE_KMH
@@ -181,8 +184,11 @@ fun MainLayout(
                         val fit = ((avail + 8.dp) / (SportButtonSize + 8.dp)).toInt().coerceIn(1, buttons.size)
                         val keep = buttons.sortedBy { it.priority }.take(fit).toSet()
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            buttons.filter { it in keep }.forEachIndexed { i, b ->
-                                GlassButton(b.icon, b.description, b.onClick, tint = if (b.accent) ShColors.Accent else ShColors.TextPrimary, index = i)
+                            // key — место кнопки в общем списке: если одна спряталась, остальные не появляются заново
+                            buttons.withIndex().filter { it.value in keep }.forEachIndexed { i, (slot, b) ->
+                                key(slot) {
+                                    GlassButton(b.icon, b.description, b.onClick, tint = if (b.accent) ShColors.Accent else ShColors.TextPrimary, index = i)
+                                }
                             }
                         }
                     }

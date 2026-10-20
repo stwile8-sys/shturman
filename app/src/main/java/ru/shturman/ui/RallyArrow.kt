@@ -1,8 +1,8 @@
 package ru.shturman.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -51,7 +52,8 @@ fun RallyArrow(
     /** Толщина линии в долях размера: 0,13 — прежние знаки, 0,09 — тонкие знаки нового оформления. */
     stroke: Float = 0.13f
 ) {
-    Canvas(modifier = modifier.size(boxSize)) {
+    // Путь стрелки строится один раз на размер и резкость (drawWithCache), а не на каждый кадр
+    Spacer(modifier = modifier.size(boxSize).drawWithCache {
         val total = if (severity == null) 0f else Math.toRadians(bendDegrees(severity)).toFloat()
         val dir = if (isLeft) -1f else 1f
         val stem = if (severity == null) 2.2f else 1.1f
@@ -104,14 +106,10 @@ fun RallyArrow(
             val p = map(pts[i])
             line.lineTo(p.x, p.y)
         }
-        drawPath(
-            path = line,
-            color = color,
-            style = Stroke(
-                width = this.size.minDimension * stroke,
-                cap = StrokeCap.Round,
-                join = StrokeJoin.Round
-            )
+        val lineStyle = Stroke(
+            width = this.size.minDimension * stroke,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round
         )
 
         val head = Path()
@@ -122,8 +120,11 @@ fun RallyArrow(
         head.lineTo(l.x, l.y)
         head.lineTo(r.x, r.y)
         head.close()
-        drawPath(path = head, color = color)
-    }
+        onDrawBehind {
+            drawPath(path = line, color = color, style = lineStyle)
+            drawPath(path = head, color = color)
+        }
+    })
 }
 
 /** Стрелка поворота с маленьким кружком-цифрой резкости (1–6) в углу. */

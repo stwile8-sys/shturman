@@ -1,16 +1,16 @@
 package ru.shturman.ui.fx
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
@@ -156,11 +156,18 @@ fun Modifier.accentButton(shape: Shape, elevation: Dp = 10.dp, enabled: Boolean 
  * APEX: по главной кнопке раз в 4 секунды проходит полоса света — как фары встречной машины по стене гаража.
  */
 private fun Modifier.headlights(): Modifier = composed {
-    val tr = rememberInfiniteTransition(label = "lights")
-    val t by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(4000, easing = LinearEasing)), label = "t")
+    // Полоса бежит 1,2 с, потом 2,8 с покоя: в покое кнопка не перерисовывается
+    val k0 = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            k0.snapTo(0f)
+            k0.animateTo(1f, tween(1200, easing = LinearEasing))
+            delay(2800L)
+        }
+    }
     this.drawWithContent {
         drawContent()
-        val k = (t / 0.3f).coerceIn(0f, 1f)
+        val k = k0.value
         if (k <= 0f || k >= 1f) return@drawWithContent
         val w = size.width
         val x = -w * 0.4f + k * w * 1.8f

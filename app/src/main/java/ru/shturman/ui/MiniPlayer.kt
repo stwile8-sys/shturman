@@ -36,7 +36,9 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import ru.shturman.R
 import ru.shturman.media.Music
 import ru.shturman.media.MusicState
@@ -46,7 +48,8 @@ import ru.shturman.ui.theme.ShColors
 
 /**
  * Мини-плеер в поездке: что играет и три кнопки — назад, пауза, вперёд. Появляется сам, когда играет музыка
- * (Яндекс Музыка или другой плеер) и выдан «Доступ к уведомлениям». Опрос раз в 2 секунды, батарею не тратит.
+ * (Яндекс Музыка или другой плеер) и выдан «Доступ к уведомлениям». Опрос раз в 2 секунды в фоновом потоке;
+ * экран обновляется, только когда сменилась песня, исполнитель, пауза или плеер.
  */
 @Composable
 fun MiniPlayer(modifier: Modifier = Modifier, onOpen: () -> Unit) {
@@ -54,7 +57,10 @@ fun MiniPlayer(modifier: Modifier = Modifier, onOpen: () -> Unit) {
     var music by remember { mutableStateOf<MusicState?>(null) }
     LaunchedEffect(Unit) {
         while (true) {
-            music = if (Music.hasAccess(context)) runCatching { Music.read(context) }.getOrNull() else null
+            val next = withContext(Dispatchers.IO) {
+                if (Music.hasAccess(context)) runCatching { Music.read(context) }.getOrNull() else null
+            }
+            if (!sameTrack(music, next)) music = next
             delay(2000L)
         }
     }
@@ -70,10 +76,11 @@ fun MiniPlayer(modifier: Modifier = Modifier, onOpen: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         val shape = RoundedCornerShape(8.dp)
-        val art = m.art
+        // обложка переводится в картинку для экрана один раз на песню
+        val art = remember(m.title, m.art) { m.art?.asImageBitmap() }
         if (art != null) {
             Image(
-                bitmap = art.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop,
+                bitmap = art, contentDescription = null, contentScale = ContentScale.Crop,
                 modifier = Modifier.size(36.dp).clip(shape)
             )
         } else {
@@ -83,9 +90,8 @@ fun MiniPlayer(modifier: Modifier = Modifier, onOpen: () -> Unit) {
         }
         Column(Modifier.weight(1f)) {
             Text(m.title, color = ShColors.TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (m.artist.isNotBlank()) {
-                Text(m.artist, color = ShColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+            // строка исполнителя есть всегда (пустая, если его нет): высота плеера не меняется от песни к песне
+            Text(m.artist.ifBlank { " " }, color = ShColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         PlayerKey({ Music.previous(context) }) { c -> skip(c, next = false) }
         PlayerKey({ Music.toggle(context); music = MusicState(m.title, m.artist, m.art, !m.playing, m.posMs, m.durMs, m.pkg) }) { c ->
@@ -113,6 +119,13 @@ private fun PlayerKey(onClick: () -> Unit, draw: androidx.compose.ui.graphics.dr
         val c = ShColors.TextPrimary
         Canvas(Modifier.size(18.dp)) { draw(c) }
     }
+}
+
+/** Для экрана ничего не изменилось: та же песня, исполнитель, пауза, плеер и есть ли обложка. */
+private fun sameTrack(a: MusicState?, b: MusicState?): Boolean {
+    if (a == null || b == null) return a == null && b == null
+    return a.title == b.title && a.artist == b.artist && a.playing == b.playing && a.pkg == b.pkg &&
+        (a.art == null) == (b.art == null)
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.skip(c: Color, next: Boolean) {

@@ -161,16 +161,15 @@ fun ManeuverPanel(turn: NextTurn?, notes: List<PaceNote>, modifier: Modifier = M
                 LaneStrip(lanes, Modifier.align(Alignment.Bottom).padding(start = 8.dp, bottom = 2.dp), laneWidth = 18.dp, laneHeight = 26.dp)
             }
         }
-        if (street.isNotEmpty()) {
-            Text(
-                street.uppercase(),
-                color = ShColors.TextSecondary,
-                style = ShText.Caps.copy(fontSize = 12.sp, letterSpacing = 3.sp),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
+        // строка улицы есть всегда (пустая, если улицы нет): высота панели не прыгает и кнопки справа не пропадают
+        Text(
+            street.uppercase().ifEmpty { " " },
+            color = ShColors.TextSecondary,
+            style = ShText.Caps.copy(fontSize = 12.sp, letterSpacing = 3.sp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 8.dp)
+        )
         val frac = if (mainDist == null) 0f else (mainDist / 600.0).toFloat().coerceIn(0f, 1f)
         Box(Modifier.padding(top = 12.dp).fillMaxWidth().height(2.dp).background(ShColors.Divider)) {
             Box(Modifier.fillMaxWidth(frac).fillMaxHeight().background(ShColors.Accent))
