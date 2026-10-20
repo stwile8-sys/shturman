@@ -98,6 +98,7 @@ private enum class Page(val title: String) {
     CAR("Бензин и машина"),
     TRIPS("Поездки и статистика"),
     CARAVAN("Караван"),
+    CLAN("Клан"),
     NOTIF("Уведомления и автозапуск"),
     DATA("Данные и резервная копия"),
     PRIVACY("Приватность и синхронизация"),
@@ -189,6 +190,7 @@ fun SettingsSheet(
                         Page.CAR -> CarPage(s, vm)
                         Page.TRIPS -> TripsPage(vm)
                         Page.CARAVAN -> CaravanPage(s, vm)
+                        Page.CLAN -> ClanPage(s, vm)
                         Page.NOTIF -> NotifPage()
                         Page.DATA -> DataPage(vm)
                         Page.PRIVACY -> PrivacyPage(user, s, vm)
@@ -268,6 +270,8 @@ private fun Home(user: UserInfo, s: NavState, vm: NavViewModel, isAdmin: Boolean
             if (trips == 0) "Поездок пока нет" else "$trips ${plural(trips, "поездка", "поездки", "поездок")} за 3 месяца") { open(Page.TRIPS) }
         CategoryRow(ApexIcons.Caravan, Page.CARAVAN.title, Page.CARAVAN.ordinal,
             s.caravanCode?.let { "Код $it · на карте ${s.members.size}" } ?: "Вы не в караване") { open(Page.CARAVAN) }
+        CategoryRow(ApexIcons.Caravan, Page.CLAN.title, Page.CLAN.ordinal,
+            s.clan?.let { "«${it.name}» · ${s.clanMembers.size} ${plural(s.clanMembers.size, "участник", "участника", "участников")}" } ?: "Вы не в клане") { open(Page.CLAN) }
     }
 
     Group("Система") { if (secret.tap('B')) onUnlock() }
@@ -551,6 +555,115 @@ private fun CaravanPage(s: NavState, vm: NavViewModel) {
         )
     }
     s.caravanMessage?.let { Hint(it, Modifier.padding(top = 6.dp)) }
+}
+
+/** Поле ввода текста в настройках (название клана, пароль). */
+@Composable
+private fun SheetTextField(label: String, value: String, password: Boolean = false, onChange: (String) -> Unit) {
+    TextField(
+        value = value,
+        onValueChange = { onChange(it.take(32)) },
+        label = { Text(label, fontSize = 12.sp) },
+        singleLine = true,
+        visualTransformation = if (password) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else KeyboardType.Text),
+        shape = RoundedCornerShape(14.dp),
+        colors = sheetFieldColors(),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    )
+}
+
+/**
+ * Клан: друзья видят друг друга на карте — где каждый, с какой скоростью и по какому маршруту едет.
+ * Вступить — по названию и паролю. Глава (создатель) может передать главенство, исключить участника,
+ * сменить пароль или распустить клан.
+ */
+@Composable
+private fun ClanPage(s: NavState, vm: NavViewModel) {
+    val c = s.clan
+    if (c == null) {
+        InfoCard("Клан — это ваша компания на дорогах. Участники видят на карте, кто где, с какой скоростью едет и по какому маршруту.")
+        var jName by remember { mutableStateOf("") }
+        var jPass by remember { mutableStateOf("") }
+        Section("Вступить в клан")
+        SheetTextField("Название клана", jName) { jName = it }
+        SheetTextField("Пароль", jPass, password = true) { jPass = it }
+        Spacer(Modifier.height(8.dp))
+        ru.shturman.ui.fx.GlowButton(
+            text = "Вступить",
+            onClick = { vm.joinClan(jName, jPass) },
+            enabled = jName.isNotBlank() && jPass.isNotEmpty(),
+            burst = 0f, height = 52.dp, modifier = Modifier.fillMaxWidth()
+        )
+        var cName by remember { mutableStateOf("") }
+        var cPass by remember { mutableStateOf("") }
+        Section("Создать свой клан")
+        Hint("Вы станете главой. Название и пароль скажите друзьям.")
+        SheetTextField("Название", cName) { cName = it }
+        SheetTextField("Пароль (от 4 знаков)", cPass, password = true) { cPass = it }
+        WideButton("Создать клан") { if (cName.isNotBlank() && cPass.length >= 4) vm.createClan(cName, cPass) }
+        s.clanMessage?.let { Hint(it, Modifier.padding(top = 8.dp)) }
+        return
+    }
+
+    val me = s.myUid
+    val iAmOwner = me != null && c.ownerUid == me
+    InfoCard("Клан «${c.name}»\nГлава: ${c.ownerName}" + if (iAmOwner) " (это вы)" else "")
+    SwitchRow("Показывать меня клану", "Где я, скорость и маршрут видят только участники клана", s.clanShare) { vm.setClanShare(it) }
+
+    Section("Участники · ${s.clanMembers.size}")
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(30_000L); now = System.currentTimeMillis() } }
+    var armed by remember { mutableStateOf<String?>(null) }
+    s.clanMembers.forEach { m ->
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+            Box(
+                Modifier.size(12.dp).clip(CircleShape)
+                    .background(Color(android.graphics.Color.parseColor(m.color)))
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    m.name + (if (m.uid == me) " (вы)" else "") + (if (m.uid == c.ownerUid) " · глава" else ""),
+                    color = ShColors.TextPrimary, style = ShText.Small
+                )
+                Text(ru.shturman.routing.clanStatus(m, now), color = ShColors.TextSecondary, fontSize = 13.sp)
+            }
+        }
+        if (iAmOwner && m.uid != me) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(start = 24.dp, bottom = 4.dp)) {
+                val ownerKey = "owner:" + m.uid
+                val kickKey = "kick:" + m.uid
+                TextButton(onClick = { if (armed == ownerKey) { armed = null; vm.makeClanOwner(m) } else armed = ownerKey }) {
+                    Text(if (armed == ownerKey) "Точно сделать главой?" else "Сделать главой", color = ShColors.Accent, style = ShText.Small)
+                }
+                TextButton(onClick = { if (armed == kickKey) { armed = null; vm.kickClanMember(m) } else armed = kickKey }) {
+                    Text(if (armed == kickKey) "Точно исключить?" else "Исключить", color = ShColors.Danger, style = ShText.Small)
+                }
+            }
+        }
+    }
+
+    if (iAmOwner) {
+        Section("Пароль клана")
+        var newPass by remember { mutableStateOf("") }
+        SheetTextField("Новый пароль", newPass, password = true) { newPass = it }
+        WideButton("Сменить пароль") { if (newPass.length >= 4) { vm.changeClanPassword(newPass); newPass = "" } }
+    }
+
+    Spacer(Modifier.height(12.dp))
+    val others = s.clanMembers.count { it.uid != me }
+    if (iAmOwner && others > 0) {
+        Hint("Чтобы выйти, сначала сделайте главой другого участника.")
+        TextButton(onClick = { if (armed == "disband") { armed = null; vm.disbandClan() } else armed = "disband" }, modifier = Modifier.height(48.dp)) {
+            Text(if (armed == "disband") "Нажмите ещё раз: распустить клан" else "Распустить клан", color = ShColors.Danger, style = ShText.Small)
+        }
+    } else {
+        TextButton(onClick = { if (armed == "leave") { armed = null; vm.leaveClan() } else armed = "leave" }, modifier = Modifier.height(48.dp)) {
+            Text(if (armed == "leave") "Нажмите ещё раз: выйти" else "Выйти из клана", color = ShColors.Danger, style = ShText.Small)
+        }
+    }
+    s.clanMessage?.let { Hint(it, Modifier.padding(top = 6.dp)) }
 }
 
 @Composable

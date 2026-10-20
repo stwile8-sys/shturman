@@ -182,6 +182,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                     works = s.works,
                     danger = s.danger,
                     members = s.members,
+                    clan = remember(s.clanMembers, s.myUid) { s.clanMembers.filter { it.uid != s.myUid } },
                     satellite = s.satellite,
                     themeId = s.theme,
                     map3d = s.map3d,

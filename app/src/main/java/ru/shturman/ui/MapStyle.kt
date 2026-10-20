@@ -191,6 +191,8 @@ object MapStyle {
     "works": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "danger": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "caravan": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
+    "clan": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
+    "clan-routes": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "trail": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "bloom": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
     "comet": { "type": "geojson", "data": { "type": "FeatureCollection", "features": [] } },
@@ -252,6 +254,12 @@ object MapStyle {
                  "line-width": ["interpolate", ["linear"], ["zoom"], 16, 0.4, 19, 1.2] } },
 
     { "id": "sat-layer", "type": "raster", "source": "sat", "layout": { "visibility": "none" } },
+
+    { "id": "clan-route-lines", "type": "line", "source": "clan-routes",
+      "layout": { "line-cap": "round", "line-join": "round" },
+      "paint": { "line-color": ["get", "color"], "line-opacity": 0.75,
+                 "line-dasharray": [2, 1.5],
+                 "line-width": ["interpolate", ["linear"], ["zoom"], 8, 2, 14, 4, 18, 6] } },
 
     { "id": "route-glow", "type": "line", "source": "route",
       "layout": { "line-cap": "round", "line-join": "round" },
@@ -352,6 +360,17 @@ object MapStyle {
       "layout": { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 12,
                   "text-offset": [0, 1.4], "text-allow-overlap": true },
       "paint": { "text-color": "#FFFFFF", "text-halo-color": "#0A0C10", "text-halo-width": 1.5 } },
+
+    { "id": "clan-dots", "type": "circle", "source": "clan",
+      "paint": { "circle-radius": 9, "circle-color": ["get", "color"],
+                 "circle-opacity": ["case", ["==", ["get", "fresh"], true], 1, 0.45],
+                 "circle-stroke-color": "#0A0C10", "circle-stroke-width": 2.5 } },
+
+    { "id": "clan-names", "type": "symbol", "source": "clan",
+      "layout": { "text-field": ["get", "label"], "text-font": ["Noto Sans Regular"], "text-size": 12,
+                  "text-offset": [0, 1.5], "text-anchor": "top", "text-allow-overlap": true },
+      "paint": { "text-color": "#FFFFFF", "text-halo-color": "#0A0C10", "text-halo-width": 1.6,
+                 "text-opacity": ["case", ["==", ["get", "fresh"], true], 1, 0.6] } },
 
     { "id": "comet-glow", "type": "circle", "source": "comet",
       "paint": { "circle-radius": 16, "circle-color": "#3DDCFF", "circle-blur": 1, "circle-opacity": 0.75 } },

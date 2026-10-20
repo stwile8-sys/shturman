@@ -95,6 +95,8 @@ fun DarkMap(
     works: List<LatLon> = emptyList(),
     danger: List<LatLon> = emptyList(),
     members: List<CaravanMember> = emptyList(),
+    /** Участники клана (без меня): точка, имя со скоростью и их маршрут. */
+    clan: List<ru.shturman.routing.ClanMember> = emptyList(),
     satellite: Boolean = false,
     themeId: Int = 0,
     map3d: Boolean = true,
@@ -477,6 +479,35 @@ fun DarkMap(
             )
         }
         style?.getSourceAs<GeoJsonSource>("caravan")?.setGeoJson("{\"type\":\"FeatureCollection\",\"features\":[$features]}")
+    }
+    // Клан: точки участников с именем и скоростью и их маршруты пунктиром своего цвета.
+    // Раз в 30 с подписи пересчитываются, чтобы «был N мин назад» не застывало.
+    LaunchedEffect(style, clan) {
+        val st = style ?: return@LaunchedEffect
+        while (true) {
+            val now = System.currentTimeMillis()
+            val shown = clan.filter { it.sharing && it.position != null && now - it.updated < ru.shturman.routing.CLAN_SHOW_MS }
+            val points = shown.joinToString(",") { m ->
+                val p = m.position!!
+                val fresh = now - m.updated <= ru.shturman.routing.CLAN_FRESH_MS
+                val name = m.name.filter { it.isLetterOrDigit() || it == ' ' || it == '-' }
+                val label = if (fresh) (if (m.speedKmh >= 5) "$name\\n${m.speedKmh} км/ч" else "$name\\nстоит")
+                    else "$name\\n${ru.shturman.routing.clanStatus(m, now)}"
+                String.format(
+                    java.util.Locale.US,
+                    "{\"type\":\"Feature\",\"properties\":{\"label\":\"%s\",\"color\":\"%s\",\"fresh\":%b},\"geometry\":{\"type\":\"Point\",\"coordinates\":[%.6f,%.6f]}}",
+                    label, m.color, fresh, p.lon, p.lat
+                )
+            }
+            st.getSourceAs<GeoJsonSource>("clan")?.setGeoJson("{\"type\":\"FeatureCollection\",\"features\":[$points]}")
+            val lines = shown.filter { it.route != null && now - it.updated <= 10 * 60_000L }.joinToString(",") { m ->
+                val coords = m.route!!.joinToString(",") { String.format(java.util.Locale.US, "[%.5f,%.5f]", it.lon, it.lat) }
+                "{\"type\":\"Feature\",\"properties\":{\"color\":\"${m.color}\"},\"geometry\":{\"type\":\"LineString\",\"coordinates\":[$coords]}}"
+            }
+            st.getSourceAs<GeoJsonSource>("clan-routes")?.setGeoJson("{\"type\":\"FeatureCollection\",\"features\":[$lines]}")
+            if (shown.isEmpty()) break
+            kotlinx.coroutines.delay(30_000L)
+        }
     }
     // Спутник: показываем снимки поверх карты и прячем 3D-дома
     LaunchedEffect(style, satellite) {
