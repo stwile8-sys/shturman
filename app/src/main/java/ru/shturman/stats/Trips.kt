@@ -82,18 +82,22 @@ object TripMath {
 class TripLog(private val prefs: SharedPreferences) {
     fun trips(): List<Trip> = ru.shturman.Crypto.decrypt(prefs.getString("trips", "") ?: "").lines().mapNotNull { TripMath.decode(it) }
 
+    /** Запись идёт в фоне (не в главном потоке), поэтому изменения журнала — по одному. */
+    @Synchronized
     fun add(t: Trip, nowMs: Long = System.currentTimeMillis()) {
         val all = TripMath.trim(trips() + t, nowMs)
         prefs.edit().putString("trips", ru.shturman.Crypto.encrypt(all.joinToString("\n") { TripMath.encode(it) }))
             .putFloat("odometer", (prefs.getFloat("odometer", 0f) + t.km).toFloat()).apply()
     }
 
+    @Synchronized
     fun clearTrips() { prefs.edit().remove("trips").apply() }
 
     val odometerKm: Double get() = prefs.getFloat("odometer", 0f).toDouble()
 
     fun refuels(): List<Refuel> = ru.shturman.Crypto.decrypt(prefs.getString("refuels", "") ?: "").lines().mapNotNull { TripMath.decodeRefuel(it) }
 
+    @Synchronized
     fun addRefuel(r: Refuel) {
         val all = (refuels() + r).takeLast(200)
         prefs.edit().putString("refuels", ru.shturman.Crypto.encrypt(all.joinToString("\n") { TripMath.encode(it) })).apply()

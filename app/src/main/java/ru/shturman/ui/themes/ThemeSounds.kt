@@ -44,18 +44,24 @@ object ThemeSounds {
 
     fun play(sound: ThemeSound, volume: Float = 1f) {
         if (!enabled) return
+        playAlways(sound, volume)
+    }
+
+    /** Без оглядки на «Звуки темы»: для сигналов со своим выключателем. */
+    private fun playAlways(sound: ThemeSound, volume: Float) {
         val id = ids[sound] ?: return
         runCatching { pool?.play(id, volume, volume, 1, 0, 1f) }
     }
 
     /**
      * Один сигнал о превышении (когда звучать, решает routing/Overspeed.kt). Громче при большем превышении.
-     * Защита от двойного сигнала: не чаще раза в 2 секунды.
+     * Защита от двойного сигнала: не чаще раза в 2 секунды. У сигнала своя настройка («Сигнал превышения»),
+     * поэтому он звучит и при выключенных звуках темы.
      */
     fun speeding(excessKmh: Int) {
         val now = System.currentTimeMillis()
         if (now - lastSpeedAt < 2000L) return
         lastSpeedAt = now
-        play(ThemeSound.SPEED, (0.6f + (excessKmh - 15).coerceIn(0, 30) / 30f * 0.4f))
+        playAlways(ThemeSound.SPEED, (0.6f + (excessKmh - 15).coerceIn(0, 30) / 30f * 0.4f))
     }
 }

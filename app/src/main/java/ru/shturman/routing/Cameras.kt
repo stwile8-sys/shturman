@@ -115,17 +115,52 @@ class OsmPoints(context: Context, name: String, private val query: String) {
     }
 }
 
+private const val M_PER_DEG = 111_320.0
+
+/**
+ * Для каждой точки из items — номер ближайшей вершины линии не дальше maxM (или -1).
+ * Быстро: сначала отбрасываем всё, что дальше прямоугольника вокруг линии (+50 м), а расстояние
+ * внутри считаем «на плоскости» (на таких расстояниях это то же самое, что точная формула).
+ */
+private fun nearestVertex(points: List<LatLon>, items: List<LatLon>, maxM: Double): IntArray {
+    val out = IntArray(items.size) { -1 }
+    if (points.isEmpty() || items.isEmpty()) return out
+    var minLat = Double.MAX_VALUE; var maxLat = -Double.MAX_VALUE
+    var minLon = Double.MAX_VALUE; var maxLon = -Double.MAX_VALUE
+    for (p in points) {
+        if (p.lat < minLat) minLat = p.lat
+        if (p.lat > maxLat) maxLat = p.lat
+        if (p.lon < minLon) minLon = p.lon
+        if (p.lon > maxLon) maxLon = p.lon
+    }
+    val k = Math.cos(Math.toRadians((minLat + maxLat) / 2)).coerceAtLeast(0.1)
+    val padLat = maxOf(maxM, 50.0) / M_PER_DEG
+    val padLon = padLat / k
+    val max2 = maxM * maxM
+    for ((idx, c) in items.withIndex()) {
+        if (c.lat < minLat - padLat || c.lat > maxLat + padLat || c.lon < minLon - padLon || c.lon > maxLon + padLon) continue
+        var best = -1
+        var bestD = max2
+        for (i in points.indices) {
+            val p = points[i]
+            val dy = (p.lat - c.lat) * M_PER_DEG
+            if (dy * dy >= bestD) continue
+            val dx = (p.lon - c.lon) * M_PER_DEG * k
+            val d = dx * dx + dy * dy
+            if (d < bestD) { bestD = d; best = i }
+        }
+        out[idx] = best
+    }
+    return out
+}
+
 /** Объекты, стоящие не дальше maxM от линии, в порядке появления вдоль неё: расстояние от начала линии и индекс объекта. */
 fun alongRoute(route: RouteOption, items: List<LatLon>, maxM: Double): List<Pair<Double, Int>> {
     if (route.points.isEmpty()) return emptyList()
+    val near = nearestVertex(route.points, items, maxM)
     val found = ArrayList<Pair<Double, Int>>()
-    for ((idx, c) in items.withIndex()) {
-        var best = -1
-        var bestD = maxM
-        for (i in route.points.indices) {
-            val d = distanceM(route.points[i], c)
-            if (d < bestD) { bestD = d; best = i }
-        }
+    for (idx in items.indices) {
+        val best = near[idx]
         if (best >= 0) found += route.cumM[best] to idx
     }
     return found.sortedBy { it.first }
@@ -134,15 +169,10 @@ fun alongRoute(route: RouteOption, items: List<LatLon>, maxM: Double): List<Pair
 /** Камеры, стоящие не дальше 35 м от линии, в порядке их появления вдоль неё (для объезда). */
 fun camerasNear(points: List<LatLon>, cameras: List<LatLon>): List<LatLon> {
     if (points.isEmpty()) return emptyList()
+    val near = nearestVertex(points, cameras, 35.0)
     val found = ArrayList<Pair<Int, LatLon>>()
-    for (c in cameras) {
-        var best = -1
-        var bestD = 35.0
-        for (i in points.indices) {
-            val d = distanceM(points[i], c)
-            if (d < bestD) { bestD = d; best = i }
-        }
-        if (best >= 0) found += best to c
+    for ((idx, c) in cameras.withIndex()) {
+        if (near[idx] >= 0) found += near[idx] to c
     }
     return found.sortedBy { it.first }.map { it.second }
 }

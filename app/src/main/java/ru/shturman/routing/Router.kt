@@ -97,15 +97,18 @@ class Router(private val roadData: RoadData) {
             }
 
             var timeAware = true
-            fun call(costing: JSONObject?, exclude: List<LatLon>): String =
-                if (timeAware) {
-                    try {
-                        valhalla.routeRaw(request(true, costing, exclude))
-                    } catch (e: Exception) {
-                        timeAware = false
-                        valhalla.routeRaw(request(false, costing, exclude))
-                    }
-                } else valhalla.routeRaw(request(false, costing, exclude))
+            fun call(costing: JSONObject?, exclude: List<LatLon>): String {
+                if (!timeAware) return valhalla.routeRaw(request(false, costing, exclude))
+                return try {
+                    valhalla.routeRaw(request(true, costing, exclude))
+                } catch (e: Exception) {
+                    // Без времени тоже не вышло — ошибка не во времени, признак не трогаем (исключение уйдёт дальше)
+                    val plain = valhalla.routeRaw(request(false, costing, exclude))
+                    // С временем движок не смог, а без него смог: дальше считаем без учёта времени выезда
+                    timeAware = false
+                    plain
+                }
+            }
 
             // Самый быстрый: обязательный, без него маршрута нет
             val fastest = parse(call(null, emptyList()), "Самый быстрый").first()

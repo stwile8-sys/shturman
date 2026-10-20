@@ -36,6 +36,12 @@ class Voice(context: Context) {
         return nightMode && (h >= 22 || h < 6)
     }
 
+    /** Ответы синтезатора приходят в его потоке: всё, что трогает очередь и аудиофокус, делаем в главном. */
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    /** Фразы синтезатора, которые ещё звучат или ждут очереди. */
+    private val ttsPending = HashSet<String>()
+    private var ttsSeq = 0
+
     init {
         tts = TextToSpeech(app) { status ->
             val engine = tts
@@ -46,25 +52,43 @@ class Voice(context: Context) {
                 pickFemaleVoice(engine)
                 engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {}
-                    override fun onDone(utteranceId: String?) { releaseFocus() }
+                    override fun onDone(utteranceId: String?) { main.post { ttsFinished(utteranceId) } }
+                    override fun onStop(utteranceId: String?, interrupted: Boolean) { main.post { ttsFinished(utteranceId) } }
                     @Deprecated("Нужен для старых версий Android")
-                    override fun onError(utteranceId: String?) { releaseFocus() }
+                    override fun onError(utteranceId: String?) { main.post { ttsFinished(utteranceId) } }
                     override fun onError(utteranceId: String?, errorCode: Int) {
-                        releaseFocus()
-                        // Выбранный голос не сработал (например, ему нужен интернет): берём голос по умолчанию и повторяем
-                        val text = lastText
-                        if (!retried && text != null) {
-                            retried = true
-                            runCatching { engine.voice = engine.defaultVoice }
-                            onStatus?.invoke("Голос не сработал (код $errorCode), пробую другой")
-                            engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "shturman-retry")
-                        } else {
-                            onStatus?.invoke("Ошибка синтезатора речи (код $errorCode)")
+                        main.post {
+                            ttsFinished(utteranceId)
+                            // Выбранный голос не сработал (например, ему нужен интернет): берём голос по умолчанию и повторяем
+                            val text = lastText
+                            if (!retried && text != null) {
+                                retried = true
+                                runCatching { engine.voice = engine.defaultVoice }
+                                onStatus?.invoke("Голос не сработал (код $errorCode), пробую другой")
+                                if (requestFocus()) {
+                                    val id = "shturman-retry-${++ttsSeq}"
+                                    ttsPending.clear()
+                                    ttsPending.add(id)
+                                    engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, id)
+                                }
+                            } else {
+                                onStatus?.invoke("Ошибка синтезатора речи (код $errorCode)")
+                            }
                         }
                     }
                 })
             }
         }
+    }
+
+    private fun ttsFinished(id: String?) {
+        if (id != null) ttsPending.remove(id)
+        releaseIfIdle()
+    }
+
+    /** Аудиофокус отдаём, только когда больше нечего говорить: ни записей, ни фраз синтезатора. */
+    private fun releaseIfIdle() {
+        if (player == null && queue.isEmpty() && ttsPending.isEmpty()) releaseFocus()
     }
 
     private fun attrs() = AudioAttributes.Builder()
@@ -99,6 +123,8 @@ class Voice(context: Context) {
             onStatus?.invoke("Для этой фразы нет записи и нет голоса в телефоне")
             return
         }
+        // Идёт телефонный разговор или звук не отдают: молчим, чтобы не говорить поверх собеседника
+        if (!requestFocus()) return
         lastText = text
         retried = false
         engine.setPitch(if (princess) 1.3f else 1.12f)
@@ -106,18 +132,39 @@ class Voice(context: Context) {
         val params = Bundle().apply {
             putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, if (isNight()) 0.45f else 1.0f)
         }
-        requestFocus()
-        engine.speak(text, if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD, params, "shturman")
+        val id = "shturman-${++ttsSeq}"
+        if (flush) ttsPending.clear()
+        ttsPending.add(id)
+        engine.speak(text, if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD, params, id)
     }
 
     private val queue = ArrayDeque<Int>()
     private var player: android.media.MediaPlayer? = null
+    /** Какая запись звучит сейчас. */
+    private var playingId = 0
+
+    /** Предупреждения о безопасности (изгиб, лежачий, ремонт, гололёд): их не обрываем подсказкой о повороте. */
+    private val safetyClips: Set<Int> = VoiceClips.map
+        .filterKeys { it.startsWith("Впереди") || it.startsWith("Осторожно") }
+        .values.toSet()
 
     private fun playClip(resId: Int, flush: Boolean) {
         if (flush) {
+            // Ждущие подсказки устарели, а предупреждения остаются в очереди
+            val keep = queue.filter { it in safetyClips }
             queue.clear()
+            if (player != null && playingId in safetyClips) {
+                // Предупреждение договариваем, новая подсказка — сразу за ним
+                queue.addLast(resId)
+                queue.addAll(keep)
+                return
+            }
             runCatching { player?.release() }
             player = null
+            queue.addLast(resId)
+            queue.addAll(keep)
+            playNext()
+            return
         }
         queue.addLast(resId)
         if (player == null) playNext()
@@ -126,10 +173,18 @@ class Voice(context: Context) {
     private fun playNext() {
         val id = queue.removeFirstOrNull()
         if (id == null) {
-            releaseFocus()
+            player = null
+            releaseIfIdle()
             return
         }
-        requestFocus()
+        // Телефонный разговор или фокус не дали: очередь сбрасываем, старые подсказки потом уже не к месту
+        if (!requestFocus()) {
+            queue.clear()
+            player = null
+            releaseIfIdle()
+            return
+        }
+        playingId = id
         val mp = runCatching { android.media.MediaPlayer.create(app, id, attrs(), audio.generateAudioSessionId()) }.getOrNull()
         if (mp == null) {
             onStatus?.invoke("Не удалось проиграть запись голоса")
@@ -154,14 +209,20 @@ class Voice(context: Context) {
         mp.start()
     }
 
-    private fun requestFocus() {
-        if (focus != null) return
+    /** Просит звук на время фразы. false — идёт звонок или система звук не дала: тогда не говорим. */
+    private fun requestFocus(): Boolean {
+        val mode = runCatching { audio.mode }.getOrDefault(AudioManager.MODE_NORMAL)
+        if (mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_IN_COMMUNICATION) return false
+        if (focus != null) return true
         val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
             .setAudioAttributes(attrs())
             .setWillPauseWhenDucked(false)
             .setOnAudioFocusChangeListener { }
             .build()
-        if (audio.requestAudioFocus(req) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) focus = req
+        val granted = runCatching { audio.requestAudioFocus(req) }.getOrDefault(AudioManager.AUDIOFOCUS_REQUEST_FAILED) ==
+            AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        if (granted) focus = req
+        return granted
     }
 
     private fun releaseFocus() {
@@ -170,8 +231,10 @@ class Voice(context: Context) {
     }
 
     fun shutdown() {
+        main.removeCallbacksAndMessages(null)
         releaseFocus()
         queue.clear()
+        ttsPending.clear()
         runCatching { player?.release() }
         runCatching { tts?.stop(); tts?.shutdown() }
     }
@@ -182,12 +245,16 @@ class Voice(context: Context) {
  * 2 — близко, 3 — прямо сейчас. roundaboutExit > 0 — кольцо с номером съезда.
  * Текст точно совпадает с готовыми записями (VoiceClips): названия улиц в записи не входят.
  */
-fun turnPhrase(level: Int, distanceM: Double, isLeft: Boolean, severity: Int, roundaboutExit: Int = 0): String {
+fun turnPhrase(
+    level: Int, distanceM: Double, isLeft: Boolean, severity: Int, roundaboutExit: Int = 0,
+    /** Кольцо, даже если номер съезда неизвестен: тогда «круговое движение» без номера. */
+    roundabout: Boolean = roundaboutExit > 0
+): String {
     val near = when (level) {
         2 -> "Через ${roundMeters(distanceM, 50).coerceIn(50, 600)} метров"
         else -> "Через ${roundMeters(distanceM, 100).coerceIn(50, 600)} метров"
     }
-    if (roundaboutExit > 0) {
+    if (roundabout) {
         val exit = EXIT_WORDS.getOrNull(roundaboutExit - 1)?.let { "$it съезд" }
         return when (level) {
             3 -> if (exit != null) "На кольце $exit" else "Круговое движение"

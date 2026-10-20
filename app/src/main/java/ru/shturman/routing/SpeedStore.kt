@@ -34,9 +34,19 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
         db.execSQL(OBS_TABLE)
         db.execSQL(DANGER_TABLE)
         db.execSQL("CREATE INDEX IF NOT EXISTS obs_k ON stop_obs (k)")
+        // Поиск свежих строк для обмена и остановок в прямоугольнике маршрута — без перебора всей таблицы
+        db.execSQL("CREATE INDEX IF NOT EXISTS cells_updated ON cells (updated)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS stops_updated ON stops (updated)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS stops_ll ON stops (lat, lon)")
     }
 
     init {
+        // Старые записи чистим в фоне: открытие базы и удаление не должны тормозить запуск экрана
+        dbWriter.execute { cleanup() }
+    }
+
+    @Synchronized
+    private fun cleanup() {
         runCatching {
             val old = arrayOf((System.currentTimeMillis() - EXPIRE_MS).toString())
             writableDatabase.delete("cells", "updated < ?", old)
@@ -151,9 +161,19 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
                 compareBy<List<Pair<Double, Long>>> { it.size }.thenBy { list -> list.maxOf { it.second } }
             ) ?: continue
             val mode = best.map { it.first }.average()
+            val own = minOf(obs.size, 20)
+            // В строке могут быть и данные из общей базы (n больше своих проездов): их не затираем,
+            // а смешиваем со своим значением по числу наблюдений; n не уменьшаем
+            var oldWait = mode
+            var oldN = 0
+            db.rawQuery("SELECT wait, n FROM stops WHERE k = ?", arrayOf(key)).use { c ->
+                if (c.moveToFirst()) { oldWait = c.getDouble(0); oldN = c.getInt(1) }
+            }
+            val shared = (oldN - own).coerceAtLeast(0)
+            val wait = if (shared > 0) (mode * own + oldWait * shared) / (own + shared) else mode
             val values = ContentValues().apply {
-                put("wait", mode)
-                put("n", minOf(obs.size, 20))
+                put("wait", wait)
+                put("n", maxOf(own, oldN).coerceAtMost(20))
                 put("updated", nowMs)
             }
             if (db.update("stops", values, "k = ?", arrayOf(key)) > 0) changed++
@@ -226,12 +246,15 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
     }.getOrDefault(0)
 
     // ---------- обмен с общей базой ----------
+    // Время в общей базе округлено до часа, а свои записи — с точностью до миллисекунды. Поэтому строка,
+    // у которой время ровно на границе часа, — это копия из общей базы: обратно её не отправляем,
+    // иначе число проездов на сервере удваивалось бы при каждом обмене.
 
     @Synchronized
     fun dirtyStops(since: Long, limit: Int): List<SharedRow> = runCatching {
         val out = ArrayList<SharedRow>()
         readableDatabase.rawQuery(
-            "SELECT k, lat, lon, wait, n, updated FROM stops WHERE updated > ? ORDER BY updated LIMIT ?",
+            "SELECT k, lat, lon, wait, n, updated FROM stops WHERE updated > ? AND updated % $HOUR_MS != 0 ORDER BY updated LIMIT ?",
             arrayOf(since.toString(), limit.toString())
         ).use { c ->
             while (c.moveToNext()) out += SharedRow(c.getString(0), c.getDouble(1), c.getDouble(2), c.getDouble(3), c.getInt(4), c.getLong(5))
@@ -243,7 +266,7 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
     fun dirtyCells(since: Long, limit: Int): List<SharedRow> = runCatching {
         val out = ArrayList<SharedRow>()
         readableDatabase.rawQuery(
-            "SELECT k, speed, n, updated FROM cells WHERE updated > ? ORDER BY updated LIMIT ?",
+            "SELECT k, speed, n, updated FROM cells WHERE updated > ? AND updated % $HOUR_MS != 0 ORDER BY updated LIMIT ?",
             arrayOf(since.toString(), limit.toString())
         ).use { c ->
             while (c.moveToNext()) out += SharedRow(c.getString(0), 0.0, 0.0, c.getDouble(1), c.getInt(2), c.getLong(3))
@@ -262,7 +285,6 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
             }
             // ту же строку из общей базы второй раз не вливаем — иначе число проездов удвоится
             if (mine?.updated == r.updated) return@runCatching
-            if (mine?.updated == r.updated) return@runCatching
             val m = mine?.let { combineRows(it, r) } ?: r
             val v = ContentValues().apply {
                 put("k", m.key); put("lat", m.lat); put("lon", m.lon); put("wait", m.value); put("n", m.n); put("updated", m.updated)
@@ -280,9 +302,25 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
             db.rawQuery("SELECT speed, n, updated FROM cells WHERE k = ?", arrayOf(r.key)).use { c ->
                 if (c.moveToFirst()) mine = SharedRow(r.key, 0.0, 0.0, c.getDouble(0), c.getInt(1), c.getLong(2))
             }
+            // ту же строку из общей базы второй раз не вливаем — иначе число проездов удвоится
+            if (mine?.updated == r.updated) return@runCatching
             val m = mine?.let { combineRows(it, r) } ?: r
             val v = ContentValues().apply { put("k", m.key); put("speed", m.value); put("n", m.n); put("updated", m.updated) }
             db.insertWithOnConflict("cells", null, v, SQLiteDatabase.CONFLICT_REPLACE)
+        }
+    }
+
+    /** Вливает страницу строк из общей базы одной транзакцией (быстрее и без полузаписанных страниц). */
+    @Synchronized
+    fun mergeAll(rows: List<SharedRow>, stops: Boolean) {
+        if (rows.isEmpty()) return
+        val db = runCatching { writableDatabase }.getOrNull() ?: return
+        db.beginTransaction()
+        try {
+            for (r in rows) if (stops) mergeStop(r) else mergeCell(r)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
     }
 
@@ -303,6 +341,7 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
 
         private const val REPLACE_MS = 14L * 24 * 3600 * 1000
         private const val EXPIRE_MS = 28L * 24 * 3600 * 1000
+        private const val HOUR_MS = 3600_000L
 
         private const val DANGER_TABLE =
             "CREATE TABLE IF NOT EXISTS danger (k TEXT PRIMARY KEY, lat REAL NOT NULL, lon REAL NOT NULL, n INTEGER NOT NULL, updated INTEGER NOT NULL)"
@@ -324,9 +363,10 @@ class SpeedStore(context: Context) : SQLiteOpenHelper(context, "speeds.db", null
             "${floor(lat / 0.0003).toLong()}:${floor(lon / 0.0005).toLong()}:${bucketOf(atMs)}"
 
         /** Ключ квадрата и часа недели. */
-        fun key(lat: Double, lon: Double, atMs: Long): String {
-            val cal = Calendar.getInstance().apply { timeInMillis = atMs }
-            val bucket = (cal.get(Calendar.DAY_OF_WEEK) - 1) * 24 + cal.get(Calendar.HOUR_OF_DAY)
+        fun key(lat: Double, lon: Double, atMs: Long): String = cellKey(lat, lon, bucketOf(atMs))
+
+        /** Ключ квадрата для уже известного часа недели (без лишнего календаря на каждую точку). */
+        fun cellKey(lat: Double, lon: Double, bucket: Int): String {
             val a = floor(lat / 0.0012).toLong()
             val b = floor(lon / 0.0022).toLong()
             return "$a:$b:$bucket"
@@ -429,48 +469,75 @@ class SpeedRecorder(private val store: SpeedStore) {
     }
 }
 
+/**
+ * Общая память для нескольких подсчётов времени (варианты маршрута, разное время выезда):
+ * скорости квадратов и остановки вдоль маршрута читаются из базы один раз.
+ * Не для одновременного использования из разных потоков.
+ */
+class ForecastCache {
+    internal val cells = HashMap<String, Double?>()
+    internal var stopsRoute: RouteOption? = null
+    internal var stops: List<StopSpot> = emptyList()
+    /** Для каждой остановки — ближайшая точка маршрута (не дальше 25 м) или -1. */
+    internal var stopPoint: IntArray = IntArray(0)
+    internal val cal: Calendar = Calendar.getInstance()
+}
+
 /** Пересчитывает время маршрута по запомненным скоростям; где данных нет, берёт среднюю скорость движка. */
-fun forecastTimeSec(route: RouteOption, store: SpeedStore, departMs: Long): Double {
+fun forecastTimeSec(route: RouteOption, store: SpeedStore, departMs: Long, cache: ForecastCache = ForecastCache()): Double {
     if (route.points.size < 2 || route.timeSec <= 0) return route.timeSec
     val baseline = (route.lengthM / route.timeSec).coerceAtLeast(2.0)
     var t = 0.0
-    val cache = HashMap<String, Double?>()
+    val cells = cache.cells
+    val cal = cache.cal
     val arrival = DoubleArray(route.points.size)
+    // час недели меняется редко: считаем его календарём только при переходе через границу часа
+    var hourFrom = Long.MAX_VALUE
+    var hourTo = Long.MIN_VALUE
+    var bucket = 0
     for (i in 1 until route.points.size) {
         val a = route.points[i - 1]
         val b = route.points[i]
-        val len = distanceM(a, b)
+        val len = route.cumM[i] - route.cumM[i - 1]
         val at = departMs + (t * 1000).toLong()
-        val key = SpeedStore.key((a.lat + b.lat) / 2, (a.lon + b.lon) / 2, at)
-        val v = if (cache.containsKey(key)) cache[key] else store.expected(key, at).also { cache[key] = it }
+        if (at < hourFrom || at >= hourTo) {
+            cal.timeInMillis = at
+            bucket = (cal.get(Calendar.DAY_OF_WEEK) - 1) * 24 + cal.get(Calendar.HOUR_OF_DAY)
+            cal.set(Calendar.MINUTE, 0); cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+            hourFrom = cal.timeInMillis
+            hourTo = hourFrom + 3600_000L
+        }
+        val key = SpeedStore.cellKey((a.lat + b.lat) / 2, (a.lon + b.lon) / 2, bucket)
+        val v = if (cells.containsKey(key)) cells[key] else store.expected(key, at).also { cells[key] = it }
         t += len / (v ?: baseline).coerceIn(1.5, 40.0)
         arrival[i] = t
     }
-    return t + stopDelaySec(route, store, departMs, arrival)
+    return t + stopDelaySec(route, store, departMs, arrival, cache)
 }
 
 /** Сколько времени в сумме обычно уходит на стоянки (светофоры, заторы) на этом маршруте в это время. */
-private fun stopDelaySec(route: RouteOption, store: SpeedStore, departMs: Long, arrival: DoubleArray): Double {
+private fun stopDelaySec(route: RouteOption, store: SpeedStore, departMs: Long, arrival: DoubleArray, cache: ForecastCache): Double {
     val pts = route.points
-    var minLat = Double.MAX_VALUE; var maxLat = -Double.MAX_VALUE
-    var minLon = Double.MAX_VALUE; var maxLon = -Double.MAX_VALUE
-    for (p in pts) {
-        if (p.lat < minLat) minLat = p.lat
-        if (p.lat > maxLat) maxLat = p.lat
-        if (p.lon < minLon) minLon = p.lon
-        if (p.lon > maxLon) maxLon = p.lon
-    }
-    val spots = store.stopsIn(minLat - 0.001, maxLat + 0.001, minLon - 0.002, maxLon + 0.002, departMs)
-    if (spots.isEmpty()) return 0.0
-    // Для каждой остановки ищем ближайшую точку маршрута (не дальше 25 м) и смотрим, совпадает ли час недели
-    val waitAt = HashMap<Int, Double>()
-    for (spot in spots) {
-        var best = -1
-        var bestD = 25.0
-        for (i in pts.indices) {
-            val d = distanceM(pts[i], spot.position)
-            if (d < bestD) { bestD = d; best = i }
+    if (cache.stopsRoute !== route) {
+        cache.stopsRoute = route
+        var minLat = Double.MAX_VALUE; var maxLat = -Double.MAX_VALUE
+        var minLon = Double.MAX_VALUE; var maxLon = -Double.MAX_VALUE
+        for (p in pts) {
+            if (p.lat < minLat) minLat = p.lat
+            if (p.lat > maxLat) maxLat = p.lat
+            if (p.lon < minLon) minLon = p.lon
+            if (p.lon > maxLon) maxLon = p.lon
         }
+        val spots = store.stopsIn(minLat - 0.001, maxLat + 0.001, minLon - 0.002, maxLon + 0.002, departMs)
+        cache.stops = spots
+        cache.stopPoint = nearestRoutePoints(pts, spots, 25.0)
+    }
+    val spots = cache.stops
+    if (spots.isEmpty()) return 0.0
+    // Для каждой остановки — ближайшая точка маршрута (не дальше 25 м); смотрим, совпадает ли час недели
+    val waitAt = HashMap<Int, Double>()
+    for ((s, spot) in spots.withIndex()) {
+        val best = cache.stopPoint[s]
         if (best < 0) continue
         val at = departMs + (arrival[best] * 1000).toLong()
         if (SpeedStore.bucketOf(at) != spot.bucket) continue
@@ -491,4 +558,43 @@ private fun stopDelaySec(route: RouteOption, store: SpeedStore, departMs: Long, 
         lastCum = route.cumM[idx]
     }
     return total
+}
+
+/**
+ * Для каждой остановки — ближайшая точка маршрута не дальше maxM (или -1). Точки маршрута раскладываются
+ * по клеткам сетки размером maxM, и для остановки проверяются только соседние клетки.
+ */
+private fun nearestRoutePoints(pts: List<LatLon>, spots: List<StopSpot>, maxM: Double): IntArray {
+    val out = IntArray(spots.size) { -1 }
+    if (pts.isEmpty() || spots.isEmpty()) return out
+    val mPerDeg = 111_320.0
+    // клетка по долготе берётся с запасом (по самой северной точке), чтобы соседних клеток всегда хватало
+    val k = Math.cos(Math.toRadians(maxOf(pts.maxOf { kotlin.math.abs(it.lat) }, spots.maxOf { kotlin.math.abs(it.position.lat) })))
+        .coerceAtLeast(0.1)
+    val cellLat = maxM / mPerDeg
+    val cellLon = cellLat / k
+    fun cell(a: Long, b: Long): Long = (a shl 32) xor (b and 0xffffffffL)
+    val grid = HashMap<Long, MutableList<Int>>()
+    for (i in pts.indices) {
+        val a = floor(pts[i].lat / cellLat).toLong()
+        val b = floor(pts[i].lon / cellLon).toLong()
+        grid.getOrPut(cell(a, b)) { ArrayList(2) }.add(i)
+    }
+    for ((s, spot) in spots.withIndex()) {
+        val p = spot.position
+        val a = floor(p.lat / cellLat).toLong()
+        val b = floor(p.lon / cellLon).toLong()
+        var best = -1
+        var bestD = maxM
+        for (da in -1L..1L) for (db in -1L..1L) {
+            val list = grid[cell(a + da, b + db)] ?: continue
+            for (i in list) {
+                val d = distanceM(pts[i], p)
+                // при равном расстоянии — более ранняя точка, как при обычном переборе
+                if (d < bestD || (d == bestD && best >= 0 && i < best)) { bestD = d; best = i }
+            }
+        }
+        out[s] = best
+    }
+    return out
 }

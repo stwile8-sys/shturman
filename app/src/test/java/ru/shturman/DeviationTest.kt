@@ -73,7 +73,28 @@ class DeviationTest {
         val d = DeviationDetector()
         val r = run(d, 10, 3.0, course = 180f, bearing = 0.0)
         assertEquals(DeviationEvent.REVERSE, r!!.first)
-        assertEquals(null, run(d, 20, 3.0, course = 180f, bearing = 0.0, startS = r.second + 1))
+        // повторного «в обратную сторону» сразу нет
+        assertEquals(null, run(d, 5, 3.0, course = 180f, bearing = 0.0, startS = r.second + 1))
+    }
+
+    @Test fun longReverseIsUTurn() {
+        // едем против маршрута 10 секунд подряд — это разворот, маршрут перестраивается
+        val d = DeviationDetector()
+        var event: Pair<DeviationEvent, Int>? = null
+        for (s in 0 until 30) {
+            val e = d.update(s * 1000L, 3.0, 5f, 10f, 180f, 0.0, INF)
+            if (e == DeviationEvent.U_TURN) { event = e to s; break }
+        }
+        assertEquals(DeviationEvent.U_TURN, event!!.first)
+        assertEquals(10, event.second)
+    }
+
+    @Test fun shortReverseNoUTurn() {
+        val d = DeviationDetector()
+        for (s in 0 until 8) assertTrue(d.update(s * 1000L, 3.0, 5f, 10f, 180f, 0.0, INF) != DeviationEvent.U_TURN)
+        // снова едем по маршруту — отсчёт заново
+        d.update(8_000L, 3.0, 5f, 10f, 0f, 0.0, INF)
+        for (s in 9 until 18) assertTrue(d.update(s * 1000L, 3.0, 5f, 10f, 180f, 0.0, INF) != DeviationEvent.U_TURN)
     }
 
     @Test fun stoppedOffRouteOnce() {

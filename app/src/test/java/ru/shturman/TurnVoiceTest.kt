@@ -44,6 +44,11 @@ class TurnPhraseTest {
             val p = turnPhrase(level, d.toDouble(), left, sev, exit)
             if (!VoiceClips.map.containsKey(p)) missing += p
         }
+        // кольцо без номера съезда в данных
+        for (level in 0..3) for (d in 40..650 step 5) {
+            val p = turnPhrase(level, d.toDouble(), true, 3, 0, roundabout = true)
+            if (!VoiceClips.map.containsKey(p)) missing += p
+        }
         for (v in 20..70 step 10) {
             val p = curvePhrase(v)
             if (!VoiceClips.map.containsKey(p)) missing += p
