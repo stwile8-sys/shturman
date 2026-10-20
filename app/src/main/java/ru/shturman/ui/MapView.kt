@@ -100,10 +100,10 @@ fun DarkMap(
     map3d: Boolean = true,
     /** Где держать стрелку в поездке: расстояние от низа экрана до её центра (0 — по центру, как обычно). */
     markerFromBottom: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(0f),
-    /** Скорость, км/ч: в поездке от неё зависит масштаб (быстрее — видно дальше). */
-    speedKmh: Int = 0,
+    /** Скорость, км/ч: в поездке от неё зависит масштаб (быстрее — видно дальше). Читается по запросу, чтобы карта не перерисовывалась на каждое положение. */
+    speedKmh: () -> Int = { 0 },
     /** До ближайшего поворота, м: перед поворотом камера чуть ближе. */
-    turnAheadM: Double = Double.MAX_VALUE,
+    turnAheadM: () -> Double = { Double.MAX_VALUE },
     /** Отступ стрелки слева (горизонтальный экран: стрелка по центру свободной части справа от колонки). */
     markerFromLeft: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(0f),
     /** Поля при показе маршрута целиком: сверху кнопки, снизу шторка вариантов, слева колонка (горизонтально). */
@@ -131,6 +131,18 @@ fun DarkMap(
     val currentRoute by rememberUpdatedState(route)
     val currentSpeed by rememberUpdatedState(speedKmh)
     val currentTurnAhead by rememberUpdatedState(turnAheadM)
+    val currentMarkerBottom by rememberUpdatedState(markerFromBottom)
+    val currentMarkerLeft by rememberUpdatedState(markerFromLeft)
+    val currentPreviewTop by rememberUpdatedState(previewTop)
+    val currentPreviewBottom by rememberUpdatedState(previewBottom)
+    val currentPreviewLeft by rememberUpdatedState(previewLeft)
+    val currentMap3d by rememberUpdatedState(map3d)
+    // Когда маршрут последний раз вписывался в экран целиком (чтобы понять, двигали ли карту после этого)
+    val previewFitAt = remember { longArrayOf(0L) }
+    // С какими полями (сверху, снизу, слева, dp) маршрут вписывался последний раз
+    val previewFitInsets = remember { floatArrayOf(0f, 0f, 0f) }
+    // Что сейчас нарисовано линией маршрута (чтобы не пересылать карте одно и то же)
+    val routeLine = remember { RouteLineCache() }
     // Когда пользователь последний раз сам двигал или масштабировал карту пальцами
     val lastGestureAt = remember { longArrayOf(0L) }
     // Где стрелка на линии маршрута (номер точки): обзор показывает путь отсюда до конца
@@ -222,20 +234,109 @@ fun DarkMap(
         }
     }
 
-    // Лёгкий дымный след за стрелкой: бледные расплывчатые пятна, которые растут и гаснут за долю секунды
-    val trail = remember { SmokeTrail() }
-    LaunchedEffect(style) {
-        val src = style?.getSourceAs<GeoJsonSource>("trail") ?: return@LaunchedEffect
-        while (true) {
-            kotlinx.coroutines.delay(90)
-            // в новом оформлении следа за стрелкой нет
-            if (!ru.shturman.ui.theme.ShColors.premium) src.setGeoJson(trail.tick())
+    /**
+     * Поля камеры в поездке, чтобы стрелка стояла на высоте кнопки «Где я» (markerFromBottom — от низа экрана):
+     * центр кадра = (высота + отступ сверху) / 2. Слева — колонка горизонтального экрана. Без поездки — без полей.
+     */
+    fun markerPadding(): DoubleArray {
+        val h = mapView.height.toFloat()
+        val w = mapView.width.toFloat()
+        if (!currentNavigating || h <= 0f) return doubleArrayOf(0.0, 0.0, 0.0, 0.0)
+        val fromBottom = with(densityNow) { currentMarkerBottom.toPx() }
+        val fromLeft = with(densityNow) { currentMarkerLeft.toPx() }
+        val top = if (fromBottom > 0f) {
+            val y = (h - fromBottom).coerceAtLeast(h * 0.5f)
+            (2f * y - h).coerceIn(0f, h * 0.7f)
+        } else 0f
+        val left = if (fromLeft > 0f) fromLeft.coerceIn(0f, w * 0.6f) else 0f
+        return doubleArrayOf(left.toDouble(), top.toDouble(), 0.0, 0.0)
+    }
+
+    /** Масштаб, с которым камера возвращается к стрелке: в поездке — от скорости и поворота, иначе обычный. */
+    fun followZoom(): Double = if (currentNavigating) autoZoom(currentSpeed(), currentTurnAhead()) else FOLLOW_ZOOM
+
+    /**
+     * Камера возвращается к стрелке и едет за ней. Сдвиг стрелки (поля) ставится в том же движении:
+     * раньше камера сначала подлетала, а потом второй раз съезжала вниз.
+     */
+    fun follow(m: MapLibreMap, durationMs: Long, zoom: Double, tilt: Double) {
+        val lc = m.locationComponent
+        if (!lc.isLocationComponentActivated) return
+        val pad = markerPadding()
+        val loc = lc.lastKnownLocation
+        if (lc.cameraMode != CameraMode.NONE) {
+            // камера уже следит: подлёта нет, только плавно ставим поля
+            lc.setCameraMode(CameraMode.TRACKING_GPS, durationMs, zoom, null, tilt, null)
+            runCatching { lc.paddingWhileTracking(pad, 400L) }
+            return
         }
+        if (loc == null || !loc.latitude.isFinite() || !loc.longitude.isFinite()) {
+            // стрелки ещё нет: поля ставим сразу, подлёт — как раньше
+            runCatching { m.moveCamera(CameraUpdateFactory.paddingTo(pad[0], pad[1], pad[2], pad[3])) }
+            lc.setCameraMode(CameraMode.TRACKING_GPS, durationMs, zoom, null, tilt, null)
+            return
+        }
+        val target = CameraPosition.Builder()
+            .target(LatLng(loc.latitude, loc.longitude))
+            .zoom(zoom)
+            .tilt(tilt)
+            .bearing(loc.bearing.toDouble())
+            .padding(pad)
+            .build()
+        // кнопки сразу как при слежении («Весь маршрут», а не «Где я»)
+        currentOnFollow(true)
+        runCatching {
+            m.animateCamera(CameraUpdateFactory.newCameraPosition(target), durationMs.toInt().coerceAtLeast(1), object : MapLibreMap.CancelableCallback {
+                override fun onCancel() {
+                    if (lc.isLocationComponentActivated && lc.cameraMode == CameraMode.NONE) currentOnFollow(false)
+                    // подлёт прервали пальцем в поездке — как и при слежении, через 8 секунд камера вернётся сама
+                    if (currentNavigating && System.currentTimeMillis() - lastGestureAt[0] < 1500L) {
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            if (currentNavigating && lc.isLocationComponentActivated && lc.cameraMode == CameraMode.NONE &&
+                                System.currentTimeMillis() - lastGestureAt[0] >= 7500L
+                            ) follow(m, 600L, followZoom(), MapCam.follow)
+                        }, 8000L)
+                    }
+                }
+                override fun onFinish() {
+                    // уже на месте: дальше камера просто едет за стрелкой (короткий доезд, если стрелка сдвинулась)
+                    if (lc.isLocationComponentActivated && lc.cameraMode == CameraMode.NONE) {
+                        lc.setCameraMode(CameraMode.TRACKING_GPS, 300L, zoom, null, tilt, null)
+                    }
+                }
+            })
+        }.onFailure { lc.setCameraMode(CameraMode.TRACKING_GPS, durationMs, zoom, null, tilt, null) }
     }
 
     // Свёрнутое приложение без поездки GPS не держит (батарея); в поездке приём идёт и в свёрнутом виде
-    val lifeState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifeState by lifecycleOwner.lifecycle.currentStateAsState()
     val trackGps = navigating || lifeState.isAtLeast(Lifecycle.State.STARTED)
+    // Экран виден: анимации на карте нужны только тогда
+    val visibleNow = lifeState.isAtLeast(Lifecycle.State.STARTED)
+
+    // Лёгкий дымный след за стрелкой: бледные расплывчатые пятна, которые растут и гаснут за долю секунды.
+    // В новом оформлении следа нет; в свёрнутом приложении след не считается.
+    val trail = remember { SmokeTrail() }
+    LaunchedEffect(style, themeId, visibleNow) {
+        val src = style?.getSourceAs<GeoJsonSource>("trail") ?: return@LaunchedEffect
+        if (ru.shturman.ui.theme.ShColors.premium || !visibleNow) {
+            src.setGeoJson(EMPTY_FEATURES)
+            return@LaunchedEffect
+        }
+        var sentEmpty = false
+        while (true) {
+            kotlinx.coroutines.delay(90)
+            val json = trail.tick()
+            // пустой след отправляем один раз, а не каждые 90 мс
+            if (trail.isEmpty) {
+                if (!sentEmpty) { src.setGeoJson(json); sentEmpty = true }
+            } else {
+                src.setGeoJson(json)
+                sentEmpty = false
+            }
+        }
+    }
 
     // Включаем стрелку и свой приём GPS, когда есть и стиль, и разрешение
     DisposableEffect(map, style, hasPermission, trackGps) {
@@ -244,7 +345,8 @@ fun DarkMap(
         if (m == null || st == null || !hasPermission || !trackGps) {
             return@DisposableEffect onDispose { }
         }
-        enableLocation(context, m, st)
+        // если маршрут уже показан целиком (и поездки нет), камеру к стрелке не уводим
+        enableLocation(context, m, st, track = currentNavigating || (currentRoute?.size ?: 0) < 2)
 
         val bearing = BearingFilter()
         var lastTrimAt = 0L
@@ -254,16 +356,18 @@ fun DarkMap(
             ru.shturman.routing.Diag.lastPos = here
             val snap = currentOnFix(here, raw.speed, if (raw.hasAccuracy()) raw.accuracy else 0f, if (raw.hasBearing()) raw.bearing else -1f, if (raw.hasAltitude()) raw.altitude.toFloat() else Float.NaN)
 
-            // Пройденная часть маршрута исчезает за стрелкой: линия рисуется только от стрелки вперёд
+            // Пройденная часть маршрута исчезает за стрелкой: линия рисуется только от стрелки вперёд.
+            // Линия пересылается карте не чаще раза в 1,5 с и только когда стрелка заметно продвинулась;
+            // в свёрнутом приложении не пересылается вовсе (как вернёмся — обрежется сразу).
             val nowMs = System.currentTimeMillis()
             val r = currentRoute
             if (snap != null) lastSnapIndex[0] = snap.index
-            if (snap != null && currentNavigating && r != null && nowMs - lastTrimAt > 400L) {
+            if (snap != null && currentNavigating && r != null && r.size >= 2 &&
+                lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) &&
+                nowMs - lastTrimAt >= 1500L && routeLine.needsTrim(r, snap.index, snap.point)
+            ) {
                 lastTrimAt = nowMs
-                val rest = ArrayList<LatLon>(maxOf(r.size - snap.index, 1))
-                rest.add(snap.point)
-                for (j in snap.index + 1 until r.size) rest.add(r[j])
-                st.getSourceAs<GeoJsonSource>("route")?.setGeoJson(lineGeoJson(rest))
+                st.getSourceAs<GeoJsonSource>("route")?.setGeoJson(routeLine.trimmed(r, snap.index, snap.point))
             }
 
             val shown = Location(raw)
@@ -295,7 +399,7 @@ fun DarkMap(
         val back = Runnable {
             val lc = m.locationComponent
             if (currentNavigating && lc.isLocationComponentActivated && lc.cameraMode == CameraMode.NONE) {
-                lc.setCameraMode(CameraMode.TRACKING_GPS, 600L, FOLLOW_ZOOM, null, MapCam.follow, null)
+                follow(m, 600L, followZoom(), MapCam.follow)
             }
         }
         val trackListener = object : org.maplibre.android.location.OnCameraTrackingChangedListener {
@@ -334,6 +438,8 @@ fun DarkMap(
             val steps = (th.routeMs / 40).coerceIn(8, 30)
             val frames = if (th.routeJerky) 8 else steps
             for (k in 1 until frames) {
+                // нажали «Поехали» или маршрут перестроился — прорисовку не продолжаем
+                if (currentNavigating) break
                 val upto = (route.size * k / frames).coerceAtLeast(2)
                 src.setGeoJson(lineGeoJson(route.subList(0, upto)))
                 // Принцесса: по пути расцветают цветочки
@@ -345,6 +451,8 @@ fun DarkMap(
             }
         }
         src?.setGeoJson(lineGeoJson(route))
+        // линия снова целая: в поездке её надо обрезать заново
+        routeLine.reset()
         if (th.id == 1 && bloom != null && route != null) {
             kotlinx.coroutines.delay(2500)
             bloom.setGeoJson(pointsGeoJson(emptyList()))
@@ -401,7 +509,7 @@ fun DarkMap(
     }
 
     // Просмотр маршрута: по линии бежит светящаяся точка; точка назначения пульсирует кольцом
-    LaunchedEffect(style, route, navigating, destination, themeId) {
+    LaunchedEffect(style, route, navigating, destination, themeId, visibleNow) {
         val st = style ?: return@LaunchedEffect
         val comet = st.getSourceAs<GeoJsonSource>("comet")
         val pulse = st.getLayer("dest-pulse")
@@ -409,6 +517,14 @@ fun DarkMap(
         if (destination == null) return@LaunchedEffect
         // новое оформление: без бегущей точки и пульса, точка назначения спокойная
         if (ru.shturman.ui.theme.ShColors.premium) return@LaunchedEffect
+        // в поездке кольцо у точки назначения стоит спокойно, а в свёрнутом приложении ничего не анимируем
+        if (navigating || !visibleNow) {
+            pulse?.setProperties(
+                org.maplibre.android.style.layers.PropertyFactory.circleRadius(16f),
+                org.maplibre.android.style.layers.PropertyFactory.circleStrokeOpacity(0.7f)
+            )
+            return@LaunchedEffect
+        }
         val pts = route
         val cum = if (pts != null && pts.size >= 2) DoubleArray(pts.size).also { c ->
             for (i in 1 until pts.size) c[i] = c[i - 1] + ru.shturman.routing.distanceM(pts[i - 1], pts[i])
@@ -439,6 +555,26 @@ fun DarkMap(
         }
     }
 
+    /** Весь маршрут на экране с полями (поля берутся последние измеренные). */
+    fun fitPreview(m: MapLibreMap, r: List<LatLon>, durationMs: Int) {
+        val bounds = LatLngBounds.Builder()
+            .includes(r.map { LatLng(it.lat, it.lon) })
+            .build()
+        val d = context.resources.displayMetrics.density
+        runCatching { m.moveCamera(CameraUpdateFactory.paddingTo(0.0, 0.0, 0.0, 0.0)) }
+        m.animateCamera(
+            CameraUpdateFactory.newLatLngBounds(
+                bounds, 0.0, if (currentMap3d) 32.0 else 0.0,
+                (currentPreviewLeft.value * d).toInt(), (currentPreviewTop.value * d).toInt(), (32 * d).toInt(), (currentPreviewBottom.value * d).toInt()
+            ),
+            durationMs
+        )
+        previewFitAt[0] = System.currentTimeMillis()
+        previewFitInsets[0] = currentPreviewTop.value
+        previewFitInsets[1] = currentPreviewBottom.value
+        previewFitInsets[2] = currentPreviewLeft.value
+    }
+
     // Когда маршрут построен, показываем его целиком; когда отменён или закончился, возвращаемся к себе
     LaunchedEffect(map, route, navigating) {
         val m = map ?: return@LaunchedEffect
@@ -447,26 +583,31 @@ fun DarkMap(
         if (route != null && route.size >= 2) {
             routeShown = true
             if (active) m.locationComponent.cameraMode = CameraMode.NONE
-            val bounds = LatLngBounds.Builder()
-                .includes(route.map { LatLng(it.lat, it.lon) })
-                .build()
-            val d = context.resources.displayMetrics.density
-            runCatching { m.moveCamera(CameraUpdateFactory.paddingTo(0.0, 0.0, 0.0, 0.0)) }
-            m.animateCamera(
-                CameraUpdateFactory.newLatLngBounds(
-                    bounds, 0.0, if (map3d) 32.0 else 0.0,
-                    (previewLeft.value * d).toInt(), (previewTop.value * d).toInt(), (32 * d).toInt(), (previewBottom.value * d).toInt()
-                ),
-                900
-            )
+            fitPreview(m, route, 900)
         } else if (routeShown) {
             routeShown = false
             if (active) {
-                m.locationComponent.setCameraMode(
-                    CameraMode.TRACKING_GPS, 800L, FOLLOW_ZOOM, null, MapCam.follow, null
-                )
+                // поля от показа маршрута (снизу — под шторку) снимаем в том же движении, что и возврат к стрелке
+                m.locationComponent.cameraMode = CameraMode.NONE
+                follow(m, 800L, FOLLOW_ZOOM, MapCam.follow)
+            } else {
+                runCatching { m.moveCamera(CameraUpdateFactory.paddingTo(0.0, 0.0, 0.0, 0.0)) }
             }
         }
+    }
+
+    // Шторка вариантов померилась уже после показа маршрута — вписываем его ещё раз, если карту не трогали пальцами
+    LaunchedEffect(previewTop, previewBottom, previewLeft) {
+        val m = map ?: return@LaunchedEffect
+        val r = currentRoute
+        if (currentNavigating || !routeShown || r == null || r.size < 2) return@LaunchedEffect
+        if (previewFitAt[0] == 0L || lastGestureAt[0] > previewFitAt[0]) return@LaunchedEffect
+        delay(150) // высота шторки меняется в несколько шагов — ждём, пока успокоится
+        if (currentNavigating || currentRoute !== r || lastGestureAt[0] > previewFitAt[0]) return@LaunchedEffect
+        // поля те же, с которыми уже вписали, — ничего не делаем
+        if (previewFitInsets[0] == currentPreviewTop.value && previewFitInsets[1] == currentPreviewBottom.value &&
+            previewFitInsets[2] == currentPreviewLeft.value) return@LaunchedEffect
+        runCatching { fitPreview(m, r, 500) }
     }
 
     // В поездке стрелка стоит в нижней части экрана — на высоте кнопки «Где я» (markerFromBottom — расстояние
@@ -478,29 +619,25 @@ fun DarkMap(
         var tries = 0
         while (!m.locationComponent.isLocationComponentActivated && tries < 40) { delay(250); tries++ }
         if (!m.locationComponent.isLocationComponentActivated) return@LaunchedEffect
-        val fromBottom = with(densityNow) { markerFromBottom.toPx() }
-        val fromLeft = with(densityNow) { markerFromLeft.toPx() }
         while (true) {
-            val h = mapView.height.toFloat()
-            val w = mapView.width.toFloat()
-            if (h > 0f && m.locationComponent.cameraMode != CameraMode.NONE) {
-                val top = if (navigating && fromBottom > 0f) {
-                    val y = (h - fromBottom).coerceAtLeast(h * 0.5f)
-                    (2f * y - h).coerceIn(0f, h * 0.7f)
-                } else 0f
-                // слева: центр свободной части справа от колонки (горизонтальный экран)
-                val left = if (navigating && fromLeft > 0f) fromLeft.coerceIn(0f, w * 0.6f) else 0f
+            if (mapView.height > 0 && m.locationComponent.cameraMode != CameraMode.NONE) {
+                val want = if (navigating) markerPadding() else doubleArrayOf(0.0, 0.0, 0.0, 0.0)
                 val pad = runCatching { m.cameraPosition.padding }.getOrNull()
                 val curTop = pad?.getOrNull(1) ?: 0.0
                 val curLeft = pad?.getOrNull(0) ?: 0.0
-                if (kotlin.math.abs(curTop - top) > 2.0 || kotlin.math.abs(curLeft - left) > 2.0) {
-                    runCatching { m.locationComponent.paddingWhileTracking(doubleArrayOf(left.toDouble(), top.toDouble(), 0.0, 0.0), 400L, null) }
+                val curRight = pad?.getOrNull(2) ?: 0.0
+                val curBottom = pad?.getOrNull(3) ?: 0.0
+                if (kotlin.math.abs(curTop - want[1]) > 2.0 || kotlin.math.abs(curLeft - want[0]) > 2.0 ||
+                    kotlin.math.abs(curRight) > 2.0 || kotlin.math.abs(curBottom) > 2.0
+                ) {
+                    runCatching { m.locationComponent.paddingWhileTracking(want, 400L, null) }
                 }
             }
             if (!navigating) {
                 // поездка закончилась: снимаем сдвиг стрелки, даже если камера сейчас не следит
+                // (но не трогаем показ маршрута целиком — там свои поля под шторку)
                 val pad = runCatching { m.cameraPosition.padding }.getOrNull()
-                if (pad != null && (kotlin.math.abs(pad.getOrNull(1) ?: 0.0) > 2.0 || kotlin.math.abs(pad.getOrNull(0) ?: 0.0) > 2.0)) {
+                if (!routeShown && pad != null && (kotlin.math.abs(pad.getOrNull(1) ?: 0.0) > 2.0 || kotlin.math.abs(pad.getOrNull(0) ?: 0.0) > 2.0)) {
                     runCatching { m.moveCamera(CameraUpdateFactory.paddingTo(0.0, 0.0, 0.0, 0.0)) }
                 }
                 break
@@ -515,14 +652,25 @@ fun DarkMap(
         val m = map ?: return@LaunchedEffect
         if (!navigating) return@LaunchedEffect
         delay(3000) // сначала подлёт камеры после «Поехали»
+        // Последний заданный масштаб: плавное приближение (1,5 с) не перезапускается каждую секунду,
+        // пока цель та же. Если масштаб сбили (пальцами, обзором) — поправляем не чаще раза в 3 секунды.
+        var lastTarget = Double.NaN
+        var lastIssuedAt = 0L
         while (true) {
             delay(1000)
             val lc = m.locationComponent
             if (!lc.isLocationComponentActivated || lc.cameraMode != CameraMode.TRACKING_GPS) continue
-            if (System.currentTimeMillis() - lastGestureAt[0] < 10_000L) continue
-            val target = autoZoom(currentSpeed, currentTurnAhead)
+            val nowMs = System.currentTimeMillis()
+            if (nowMs - lastGestureAt[0] < 10_000L) continue
+            val target = autoZoom(currentSpeed(), currentTurnAhead())
             val now = m.cameraPosition.zoom
-            if (kotlin.math.abs(now - target) > 0.12) runCatching { lc.zoomWhileTracking(target, 1500L) }
+            val targetChanged = lastTarget.isNaN() || kotlin.math.abs(target - lastTarget) > 0.12
+            val drifted = kotlin.math.abs(now - target) > 0.12 && nowMs - lastIssuedAt > 3000L
+            if (kotlin.math.abs(now - target) > 0.12 && (targetChanged || drifted)) {
+                lastTarget = target
+                lastIssuedAt = nowMs
+                runCatching { lc.zoomWhileTracking(target, 1500L) }
+            }
         }
     }
 
@@ -544,9 +692,7 @@ fun DarkMap(
                 }
             }
             delay(250)
-            m.locationComponent.setCameraMode(
-                CameraMode.TRACKING_GPS, 2100L, START_ZOOM, null, MapCam.start, null
-            )
+            follow(m, 2100L, START_ZOOM, MapCam.start)
         }
     }
 
@@ -572,7 +718,7 @@ fun DarkMap(
         }
         delay(12_000)
         if (currentNavigating && lc.isLocationComponentActivated && lc.cameraMode == CameraMode.NONE) {
-            lc.setCameraMode(CameraMode.TRACKING_GPS, 800L, FOLLOW_ZOOM, null, MapCam.follow, null)
+            follow(m, 800L, followZoom(), MapCam.follow)
         }
     }
 
@@ -580,9 +726,7 @@ fun DarkMap(
     LaunchedEffect(recenterKey) {
         val m = map ?: return@LaunchedEffect
         if (recenterKey > 0 && m.locationComponent.isLocationComponentActivated) {
-            m.locationComponent.setCameraMode(
-                CameraMode.TRACKING_GPS, 600L, FOLLOW_ZOOM, null, MapCam.follow, null
-            )
+            follow(m, 600L, followZoom(), MapCam.follow)
         }
     }
 
@@ -687,7 +831,7 @@ private fun puckOptions(context: Context): LocationComponentOptions {
 }
 
 @SuppressLint("MissingPermission")
-private fun enableLocation(context: Context, map: MapLibreMap, style: Style) {
+private fun enableLocation(context: Context, map: MapLibreMap, style: Style, track: Boolean) {
     val component = map.locationComponent
     if (component.isLocationComponentActivated) return
 
@@ -701,9 +845,12 @@ private fun enableLocation(context: Context, map: MapLibreMap, style: Style) {
     )
     component.isLocationComponentEnabled = true
     component.renderMode = RenderMode.GPS          // стрелка повёрнута по курсу
-    component.cameraMode = CameraMode.TRACKING_GPS // камера едет за стрелкой и поворачивается по курсу
-    component.zoomWhileTracking(FOLLOW_ZOOM)
-    component.tiltWhileTracking(MapCam.follow)
+    // камера едет за стрелкой и поворачивается по курсу; если на экране показан маршрут целиком — не уводим её
+    if (track) {
+        component.cameraMode = CameraMode.TRACKING_GPS
+        component.zoomWhileTracking(FOLLOW_ZOOM)
+        component.tiltWhileTracking(MapCam.follow)
+    }
 }
 
 
@@ -735,6 +882,9 @@ private class SmokeTrail {
         return LatLon(a.lat + (b.lat - a.lat) * f, a.lon + (b.lon - a.lon) * f)
     }
 
+    /** Пятен нет — след пустой. */
+    val isEmpty: Boolean get() = puffs.isEmpty()
+
     fun tick(): String {
         val now = System.currentTimeMillis()
         val pos = currentPos()
@@ -751,4 +901,50 @@ private class SmokeTrail {
     }
 
     private companion object { const val LIFE_MS = 700L }
+}
+
+private const val EMPTY_FEATURES = """{"type":"FeatureCollection","features":[]}"""
+
+/**
+ * Линия маршрута в поездке: координаты точек переводятся в текст один раз на маршрут,
+ * а обрезанная линия (от стрелки до конца) собирается из готовых кусков.
+ */
+private class RouteLineCache {
+    private var coordsFor: List<LatLon>? = null
+    private var coords: Array<String> = emptyArray()
+    private var trimmedFor: List<LatLon>? = null
+    private var trimmedIndex = -1
+    private var trimmedHead: LatLon? = null
+
+    /** Линию нарисовали целиком заново — следующую обрезку надо сделать обязательно. */
+    fun reset() {
+        trimmedFor = null
+        trimmedIndex = -1
+        trimmedHead = null
+    }
+
+    /** Нужно ли обрезать заново: стрелка перешла на другой отрезок или ушла вперёд больше чем на 15 м. */
+    fun needsTrim(r: List<LatLon>, index: Int, head: LatLon): Boolean {
+        if (trimmedFor !== r || index != trimmedIndex) return true
+        val prev = trimmedHead ?: return true
+        return ru.shturman.routing.distanceM(prev, head) > 15.0
+    }
+
+    fun trimmed(r: List<LatLon>, index: Int, head: LatLon): String {
+        if (coordsFor !== r) {
+            coords = Array(r.size) { String.format(java.util.Locale.US, "[%.6f,%.6f]", r[it].lon, r[it].lat) }
+            coordsFor = r
+        }
+        trimmedFor = r
+        trimmedIndex = index
+        trimmedHead = head
+        val from = (index + 1).coerceAtLeast(0)
+        if (from >= r.size) return EMPTY_FEATURES
+        val sb = StringBuilder(64 + (r.size - from + 1) * 24)
+        sb.append("""{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[""")
+        sb.append(String.format(java.util.Locale.US, "[%.6f,%.6f]", head.lon, head.lat))
+        for (j in from until r.size) sb.append(',').append(coords[j])
+        sb.append("]}}")
+        return sb.toString()
+    }
 }

@@ -27,12 +27,14 @@ class DeviationDetector(var level: DeviationLevel = DeviationLevel.MEDIUM) {
     private var stillSince = -1L
     private var reverseSince = -1L
     private var lastReverseAt = Long.MIN_VALUE / 2
+    /** Начало непрерывного движения против маршрута: долго (10 с) — значит, развернулись, строим новый путь. */
+    private var reverseStart = -1L
     private var uturnFired = false
     private var stoppedFired = false
 
     fun reset() {
         offSince = -1L; courseAtOff = -1f; uturnSince = -1L; stillSince = -1L
-        reverseSince = -1L; uturnFired = false; stoppedFired = false
+        reverseSince = -1L; reverseStart = -1L; uturnFired = false; stoppedFired = false
     }
 
     /**
@@ -60,16 +62,23 @@ class DeviationDetector(var level: DeviationLevel = DeviationLevel.MEDIUM) {
             if (hasCourse && routeBearing >= 0 && speedMps > 3f &&
                 abs(turnAngle(routeBearing, courseDeg.toDouble())) > 140.0
             ) {
+                if (reverseStart < 0) reverseStart = nowMs
+                if (nowMs - reverseStart >= REVERSE_UTURN_MS) {
+                    // следующий раз — не раньше чем через столько же, если новый путь так и не построился
+                    reverseStart = nowMs
+                    return DeviationEvent.U_TURN
+                }
                 if (reverseSince < 0) reverseSince = nowMs
                 if (nowMs - reverseSince >= REVERSE_HOLD_MS && nowMs - lastReverseAt >= REVERSE_PAUSE_MS) {
                     lastReverseAt = nowMs
                     reverseSince = -1L
                     return DeviationEvent.REVERSE
                 }
-            } else reverseSince = -1L
+            } else { reverseSince = -1L; reverseStart = -1L }
             return DeviationEvent.NONE
         }
         reverseSince = -1L
+        reverseStart = -1L
 
         // Вне маршрута
         if (offSince < 0) {
@@ -118,6 +127,8 @@ class DeviationDetector(var level: DeviationLevel = DeviationLevel.MEDIUM) {
         const val PARALLEL_MAX_M = 120.0
         const val REVERSE_HOLD_MS = 4_000L
         const val REVERSE_PAUSE_MS = 30_000L
+        /** Едем против маршрута дольше этого — считаем разворотом и перестраиваем путь. */
+        const val REVERSE_UTURN_MS = 10_000L
         /** Пропущенный поворот: ушли от маршрута на 60+ м, а поворот был прямо перед этим (не дальше 80 м). */
         const val MISSED_FAR_M = 60.0
         const val MISSED_TURN_NEAR_M = 80.0

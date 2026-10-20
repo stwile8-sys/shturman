@@ -70,7 +70,13 @@ class NavService : Service() {
             }
         }
 
+        /** Канал уже проверен в этом запуске приложения: не спрашиваем систему при каждом обновлении. */
+        @Volatile private var channelReady = false
+        private var openIntent: PendingIntent? = null
+        private var cancelIntent: PendingIntent? = null
+
         private fun ensureChannel(ctx: Context) {
+            if (channelReady) return
             if (Build.VERSION.SDK_INT >= 26) {
                 val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 if (nm.getNotificationChannel(CHANNEL) == null) {
@@ -82,17 +88,28 @@ class NavService : Service() {
                     )
                 }
             }
+            channelReady = true
+        }
+
+        /** Нажатия по уведомлению (открыть приложение, отменить маршрут) создаются один раз. */
+        @Synchronized
+        private fun intents(ctx: Context): Pair<PendingIntent?, PendingIntent> {
+            val app = ctx.applicationContext
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            if (openIntent == null) {
+                openIntent = app.packageManager.getLaunchIntentForPackage(app.packageName)?.let {
+                    PendingIntent.getActivity(app, 0, it, flags)
+                }
+            }
+            val cancel = cancelIntent ?: PendingIntent.getBroadcast(
+                app, 1, Intent(ACTION_CANCEL).setPackage(app.packageName), flags
+            ).also { cancelIntent = it }
+            return openIntent to cancel
         }
 
         private fun build(ctx: Context, title: String, text: String): Notification {
             ensureChannel(ctx)
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            val open = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.let {
-                PendingIntent.getActivity(ctx, 0, it, flags)
-            }
-            val cancel = PendingIntent.getBroadcast(
-                ctx, 1, Intent(ACTION_CANCEL).setPackage(ctx.packageName), flags
-            )
+            val (open, cancel) = intents(ctx)
             val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, CHANNEL) else Notification.Builder(ctx)
             return b.setSmallIcon(ru.shturman.R.drawable.ic_stat_apex)
                 .setContentTitle(title)

@@ -21,7 +21,11 @@ private const val STEP_M = 10.0
  * Читает форму дороги впереди (а не только повороты на перекрёстках) и выдаёт дорожник: ближайшие
  * изгибы с направлением и резкостью. Резкость считается по радиусу: чем меньше радиус, тем меньше цифра.
  */
-fun paceNotes(route: RouteOption, traveledM: Double, aheadM: Double = 900.0, maxNotes: Int = 3): List<PaceNote> {
+fun paceNotes(
+    route: RouteOption, traveledM: Double, aheadM: Double = 900.0, maxNotes: Int = 3,
+    /** Номер точки маршрута, где мы сейчас: поиск начинается отсюда, а не с начала маршрута. */
+    fromIndex: Int = 0
+): List<PaceNote> {
     val pts = route.points
     val cum = route.cumM
     if (pts.size < 2 || cum.size != pts.size) return emptyList()
@@ -30,8 +34,10 @@ fun paceNotes(route: RouteOption, traveledM: Double, aheadM: Double = 900.0, max
 
     // Точки линии через каждые 10 метров
     val samples = ArrayList<LatLon>()
-    var i = 0
     var d = traveledM.coerceAtLeast(0.0)
+    var i = fromIndex.coerceIn(0, pts.size - 2)
+    // на случай, если номер чуть впереди пройденного: отступаем до нужного отрезка
+    while (i > 0 && cum[i] > d) i--
     while (d <= endM) {
         while (i < pts.size - 2 && cum[i + 1] < d) i++
         val seg = cum[i + 1] - cum[i]

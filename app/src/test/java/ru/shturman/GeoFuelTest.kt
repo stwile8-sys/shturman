@@ -6,6 +6,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.shturman.routing.LatLon
+import ru.shturman.routing.Maneuver
+import ru.shturman.routing.RoutePosition
+import ru.shturman.routing.nextTurn
 import ru.shturman.routing.RouteOption
 import ru.shturman.routing.bearingDeg
 import ru.shturman.routing.distanceM
@@ -57,6 +60,29 @@ class GeoFuelTest {
         assertNotNull(s)
         assertEquals(5, s!!.index)
         assertTrue(s.offsetM < 10.0)
+    }
+
+    @Test fun snapPrefersOwnDirection() {
+        // дорога «туда-обратно»: туда на север, обратно на юг почти по той же линии
+        val pts = List(6) { LatLon(57.0 + it * 0.0009, 28.0) } + List(5) { LatLon(57.0 + (4 - it) * 0.0009, 28.00002) }
+        val r = route(pts)
+        val here = LatLon(57.0 + 2.5 * 0.0009, 28.00001)
+        assertEquals(2, snapToRoute(r, here, 0)!!.index)
+        assertEquals(2, snapToRoute(r, here, 0, speedMps = 10f, courseDeg = 0f)!!.index)
+        assertEquals(7, snapToRoute(r, here, 0, speedMps = 10f, courseDeg = 180f)!!.index)
+    }
+
+    @Test fun turnSideFromManeuverType() {
+        val pts = line(12)
+        fun turnOf(type: Int) = nextTurn(RouteOption(100.0, 1000.0, pts, listOf(Maneuver(type, "", "", 5))), RoutePosition(0, 0.0))
+        // выезд направо почти без угла — всё равно подсказка, «плавно направо»
+        val exit = turnOf(20)!!
+        assertEquals(6, exit.severity); assertEquals(false, exit.isLeft)
+        // разворот налево: сторона из типа, резкость — «резко»
+        val u = turnOf(13)!!
+        assertEquals(1, u.severity); assertEquals(true, u.isLeft)
+        // обычный поворот на прямой дороге — не поворот
+        assertNull(turnOf(15))
     }
 
     @Test fun fuelBasics() {

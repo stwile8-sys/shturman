@@ -17,6 +17,21 @@ class SharedSync(context: Context, private val store: SpeedStore) {
         /** Две синхронизации сразу (автоматическая, фоновая и по кнопке) не запускаются: вторая ждёт первую. */
         private val lock = kotlinx.coroutines.sync.Mutex()
         private const val HOUR = 3600_000L
+        /** Глубже этого в общую базу не заглядываем: старше 28 дней данные всё равно забываются. */
+        private const val PULL_MAX_AGE_MS = 28L * 24 * HOUR
+
+        /**
+         * Остановка для общей базы: только если проездов не меньше двух (по одному можно угадать чужую поездку),
+         * а место — центр квадрата ключа (около 33 × 28 м), без точных координат проезда.
+         */
+        internal fun shareableStop(r: SharedRow): SharedRow? {
+            if (r.n < 2) return null
+            val p = r.key.removePrefix("s").split(':')
+            if (p.size != 3) return null
+            val a = p[0].toLongOrNull() ?: return null
+            val b = p[1].toLongOrNull() ?: return null
+            return SharedRow(r.key, (a + 0.5) * 0.0003, (b + 0.5) * 0.0005, r.value, r.n, r.updated)
+        }
     }
 
     /** Обезличенные данные о дорогах отправляют все пользователи (выключателя нет). */
@@ -25,15 +40,19 @@ class SharedSync(context: Context, private val store: SpeedStore) {
     val lastSyncAt: Long get() = prefs.getLong("last_sync", 0L)
 
     /** Отправляет свои новые данные (если разрешено) и забирает чужие. Возвращает короткий итог. */
-    suspend fun sync(): String = lock.withLock { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { syncLocked() } }
+    suspend fun sync(): String {
+        // Без входа в аккаунт общая база не пускает: не тратим время и сеть
+        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) return "Не вышло: нужен вход в аккаунт"
+        return lock.withLock { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { syncLocked() } }
+    }
 
     private suspend fun syncLocked(): String {
         val started = System.currentTimeMillis()
         var pushed = 0
         if (share) {
-            pushed += push("stops", { store.dirtyStops(prefs.getLong("push_stops", 0L), 300) }, "push_stops")
+            pushed += push("stops", { store.dirtyStops(prefs.getLong("push_stops", 0L), 300) }, "push_stops") { shareableStop(it) }
             // ячейку с одним проездом не отправляем: по ней можно угадать чужую поездку; уйдёт, когда проедут ещё раз
-            pushed += push("cells", { store.dirtyCells(prefs.getLong("push_cells", 0L), 300) }, "push_cells") { it.n >= 2 }
+            pushed += push("cells", { store.dirtyCells(prefs.getLong("push_cells", 0L), 300) }, "push_cells") { it.takeIf { r -> r.n >= 2 } }
         }
         val pulled = pull("stops", "pull_stops") + pull("cells", "pull_cells")
         val result = "Отправлено $pushed, получено $pulled"
@@ -44,12 +63,14 @@ class SharedSync(context: Context, private val store: SpeedStore) {
     /** Итог последней синхронизации («Отправлено 12, получено 340») или null, если её ещё не было. */
     val lastResult: String? get() = prefs.getString("last_result", null)
 
-    private suspend fun push(collection: String, rows: () -> List<SharedRow>, mark: String, keep: (SharedRow) -> Boolean = { true }): Int {
+    /** prepare: что отправить вместо строки (null — не отправлять). */
+    private suspend fun push(collection: String, rows: () -> List<SharedRow>, mark: String, prepare: (SharedRow) -> SharedRow?): Int {
         val list = rows()
+        var sent = 0
         for (r0 in list) {
-            if (!keep(r0)) continue
+            val r1 = prepare(r0) ?: continue
             // время в общей базе — с точностью до часа, без минут и секунд проезда
-            val r = SharedRow(r0.key, r0.lat, r0.lon, r0.value, r0.n, r0.updated / HOUR * HOUR)
+            val r = SharedRow(r1.key, r1.lat, r1.lon, r1.value, r1.n, r1.updated / HOUR * HOUR)
             val ref = db.collection(collection).document(r.key)
             db.runTransaction { tx ->
                 val snap = tx.get(ref)
@@ -72,15 +93,17 @@ class SharedSync(context: Context, private val store: SpeedStore) {
                 )
                 null
             }.await()
+            sent++
         }
         if (list.isNotEmpty()) prefs.edit().putLong(mark, list.maxOf { it.updated }).apply()
-        return list.count(keep)
+        return sent
     }
 
     private suspend fun pull(collection: String, mark: String): Int {
         var count = 0
         // время в общей базе округлено до часа: берём с запасом в час, повторы при вливании отсекаются
         var since = (prefs.getLong(mark, 0L) - HOUR).coerceAtLeast(0L)
+        since = maxOf(since, System.currentTimeMillis() - PULL_MAX_AGE_MS)
         while (true) {
             val snap = db.collection(collection)
                 .whereGreaterThan("updated", since)
@@ -88,6 +111,7 @@ class SharedSync(context: Context, private val store: SpeedStore) {
                 .limit(500)
                 .get().await()
             if (snap.isEmpty) break
+            val page = ArrayList<SharedRow>(snap.size())
             for (d in snap.documents) {
                 val row = SharedRow(
                     d.id,
@@ -95,10 +119,14 @@ class SharedSync(context: Context, private val store: SpeedStore) {
                     d.getDouble("value") ?: continue, (d.getLong("n") ?: 1L).toInt(),
                     d.getLong("updated") ?: continue
                 )
-                if (collection == "stops") store.mergeStop(row) else store.mergeCell(row)
+                page += row
                 since = maxOf(since, row.updated)
-                count++
             }
+            // даже если строки страницы оказались неполными, идём дальше, а не по кругу
+            snap.documents.lastOrNull()?.getLong("updated")?.let { since = maxOf(since, it) }
+            // вся страница — одной записью в базу
+            store.mergeAll(page, stops = collection == "stops")
+            count += page.size
             prefs.edit().putLong(mark, since).apply()
             if (snap.size() < 500) break
         }

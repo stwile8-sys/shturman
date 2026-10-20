@@ -4,6 +4,18 @@ package ru.shturman.routing
 const val MANEUVER_ROUNDABOUT_ENTER = 26
 const val MANEUVER_ROUNDABOUT_EXIT = 27
 
+/*
+ * Типы манёвров Valhalla (DirectionsLeg.Maneuver.Type): 9 плавно направо, 10 направо, 11 резко направо,
+ * 12 разворот направо, 13 разворот налево, 14 резко налево, 15 налево, 16 плавно налево, 17 съезд прямо,
+ * 18 съезд направо, 19 съезд налево, 20 выезд направо, 21 выезд налево, 22 держаться прямо,
+ * 23 держаться правее, 24 держаться левее, 25 слияние, 37 слияние справа, 38 слияние слева.
+ */
+private val RIGHT_TYPES = setOf(9, 10, 11, 12, 18, 20, 23, 37)
+private val LEFT_TYPES = setOf(13, 14, 15, 16, 19, 21, 24, 38)
+private val UTURN_TYPES = setOf(12, 13)
+/** Съезды, выезды, развилки и слияния с известной стороной: о них говорим, даже если дорога почти прямая. */
+private val SLIGHT_TYPES = setOf(18, 19, 20, 21, 23, 24, 37, 38)
+
 /**
  * Полоса перед манёвром. directions — какие стрелки нарисованы на полосе (биты, как в Valhalla):
  * 1 нет стрелки, 2 прямо, 4 резко налево, 8 налево, 16 плавно налево, 32 плавно направо, 64 направо,
@@ -58,7 +70,9 @@ class NextTurn(
     /** Полосы перед манёвром, слева направо (пусто — нет данных). */
     val lanes: List<Lane> = emptyList(),
     /** Номер манёвра в маршруте: по нему видно, что начался следующий поворот. */
-    val key: Int = -1
+    val key: Int = -1,
+    /** Это кольцо, даже если номер съезда в данных не указан (тогда roundaboutExit = 0). */
+    val roundabout: Boolean = roundaboutExit > 0
 ) {
     val isRoundabout: Boolean get() = roundaboutExit > 0
 }
@@ -104,12 +118,12 @@ fun nextTurn(route: RouteOption, position: RoutePosition): NextTurn? {
         if (m.startIndex <= position.index) continue
         val pts = route.points
         if (m.type == MANEUVER_ROUNDABOUT_EXIT) {
-            // Уже едем по кольцу: до съезда показываем кольцо с тем же номером
-            val enter = list.getOrNull(k - 1)?.takeIf { it.type == MANEUVER_ROUNDABOUT_ENTER && it.roundaboutExits > 0 }
+            // Уже едем по кольцу: до съезда показываем кольцо с тем же номером (или без номера, если его нет в данных)
+            val enter = list.getOrNull(k - 1)?.takeIf { it.type == MANEUVER_ROUNDABOUT_ENTER }
                 ?: continue
             return roundaboutTurn(route, enter, m, position, onRing = true, key = k)
         }
-        if (m.type == MANEUVER_ROUNDABOUT_ENTER && m.roundaboutExits > 0) {
+        if (m.type == MANEUVER_ROUNDABOUT_ENTER) {
             val exit = list.getOrNull(k + 1)?.takeIf { it.type == MANEUVER_ROUNDABOUT_EXIT }
             return roundaboutTurn(route, m, exit, position, onRing = false, key = k)
         }
@@ -119,10 +133,22 @@ fun nextTurn(route: RouteOption, position: RoutePosition): NextTurn? {
         val before = bearingDeg(pointBack(pts, idx, 15.0), pts[idx])
         val after = bearingDeg(pts[idx], pointAhead(pts, idx, 15.0))
         val angle = turnAngle(before, after)
-        val severity = turnSeverity(angle) ?: continue
+        // Сторона — из типа манёвра Valhalla (форма дороги у развязок обманчива), иначе по форме дороги
+        val left = when (m.type) {
+            in LEFT_TYPES -> true
+            in RIGHT_TYPES -> false
+            else -> angle < 0
+        }
+        val severity = when {
+            // разворот: всегда «резко», сторона — из типа, а не случайная по форме дороги
+            m.type in UTURN_TYPES -> 1
+            // съезд, развилка или слияние почти без угла — всё равно подсказываем, «плавно»
+            m.type in SLIGHT_TYPES -> turnSeverity(angle) ?: 6
+            else -> turnSeverity(angle) ?: continue
+        }
         return NextTurn(
             severity = severity,
-            isLeft = angle < 0,
+            isLeft = left,
             distanceM = (route.cumM[idx] - position.traveledM).coerceAtLeast(0.0),
             street = m.street,
             lanes = m.lanes,
@@ -140,17 +166,20 @@ private fun roundaboutTurn(route: RouteOption, enter: Maneuver, exit: Maneuver?,
     val outIdx = (exit?.startIndex ?: inIdx).coerceIn(0, last)
     val before = bearingDeg(pointBack(pts, inIdx, 20.0), pts[inIdx])
     val after = bearingDeg(pts[outIdx], pointAhead(pts, outIdx, 20.0))
-    val angle = if (exit != null) turnAngle(before, after) else 0.0
+    val raw = if (exit != null) turnAngle(before, after) else 0.0
+    // Почти разворот по кольцу (больше 160°): при правостороннем движении это всегда «налево»
+    val angle = if (kotlin.math.abs(raw) > 160.0) -kotlin.math.abs(raw) else raw
     val target = if (onRing) outIdx else inIdx
     return NextTurn(
         severity = 3,
         isLeft = angle < 0,
         distanceM = (route.cumM[target] - position.traveledM).coerceAtLeast(0.0),
         street = (exit?.street ?: "").ifEmpty { enter.street },
-        roundaboutExit = enter.roundaboutExits,
+        roundaboutExit = enter.roundaboutExits.coerceAtLeast(0),
         onRoundabout = onRing,
         exitAngle = angle,
         lanes = if (onRing) emptyList() else enter.lanes,
-        key = key
+        key = key,
+        roundabout = true
     )
 }

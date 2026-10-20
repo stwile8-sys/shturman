@@ -149,13 +149,14 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
 
     val pills = buildPills(s, gpsWait, context, vm)
 
-    val actions = MainActions(
+    // Кнопки не пересоздаются на каждое новое положение GPS (иначе перерисовывается весь экран)
+    val actions = remember(vm, context) { MainActions(
         openSettings = { showSettings = true },
         openSearch = { saving -> searchSaving = saving; searchText = ""; showSearch = true },
-        voiceSearch = onVoiceSearch,
+        voiceSearch = { onVoiceSearch() },
         pickPlace = { place -> Recents.add(context, place); vm.chooseDestination(place) },
         clearRoute = { vm.clearRoute() },
-        toggleVoice = { vm.setVoiceOn(!s.voiceOn) },
+        toggleVoice = { vm.setVoiceOn(!vm.state.value.voiceOn) },
         overview = { overviewKey++ },
         recenter = { recenterKey++ },
         setSatellite = vm::setSatellite,
@@ -164,7 +165,7 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
         selectOption = vm::selectOption,
         setDeparture = vm::setDeparture,
         start = { vm.startNavigation() }
-    )
+    ) }
 
     val fx = remember { ru.shturman.ui.fx.FxController() }
     androidx.compose.runtime.CompositionLocalProvider(ru.shturman.ui.fx.LocalFx provides fx) {
@@ -191,8 +192,9 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                     previewLeft = insets.previewLeft,
                     overviewKey = overviewKey,
                     onFollowChanged = { following = it },
-                    speedKmh = s.speedKmh,
-                    turnAheadM = s.turn?.distanceM ?: Double.MAX_VALUE,
+                    // скорость и поворот карта читает сама, когда нужно: так она не перестраивается на каждое положение
+                    speedKmh = { vm.state.value.speedKmh },
+                    turnAheadM = { vm.state.value.turn?.distanceM ?: Double.MAX_VALUE },
                     onFix = { here, speed, accuracy, course, altitude -> vm.onFix(here, speed, accuracy, course, altitude) }
                 )
             }

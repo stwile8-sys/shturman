@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -49,8 +51,8 @@ import ru.shturman.routing.SpeedRecorder
 import ru.shturman.routing.StopRecorder
 import ru.shturman.routing.SpeedStore
 import ru.shturman.routing.forecastTimeSec
+import ru.shturman.routing.ForecastCache
 import ru.shturman.routing.lastKnownPosition
-import ru.shturman.routing.locateOnRoute
 import ru.shturman.routing.nextTurn
 import ru.shturman.routing.snapToRoute
 import java.util.Date
@@ -189,10 +191,15 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private var cameraList: List<Camera> = emptyList()
     private val bumpRepo = OsmPoints.bumps(app)
     private val worksRepo = OsmPoints.roadworks(app)
-    private var routeBumps: List<Pair<Double, Int>> = emptyList()
-    private var routeWorks: List<Pair<Double, Int>> = emptyList()
+    /** Лежачие полицейские и ремонт на маршруте: где (метры от начала маршрута) и сама точка. */
+    private var routeBumps: List<Pair<Double, LatLon>> = emptyList()
+    private var routeWorks: List<Pair<Double, LatLon>> = emptyList()
     private var routeCams: List<Pair<Double, Int>> = emptyList()
+    private var hazardsJob: kotlinx.coroutines.Job? = null
+    /** О каких точках уже сказали в этой поездке (по координатам: после перестроения не повторяем). */
     private val spoken = HashSet<String>()
+    /** Какие фразы о перестроении уже сказаны, пока мы вне маршрута (сбрасывается, когда снова на маршруте). */
+    private val rerouteSaid = HashSet<String>()
     private var prevSpeed = 0f
     private var prevSpeedAt = 0L
     private val caravan = Caravan(
@@ -408,22 +415,26 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             _state.update { it.copy(routeError = gpsProblemText()) }
             return
         }
-        _state.update { it.copy(routeLoading = true, routeError = null) }
+        _state.update { it.copy(routeLoading = true, routeError = null, departAdvice = null) }
         val gen = ++routeGen
         viewModelScope.launch {
             try {
                 val departAt = Date(System.currentTimeMillis() + s.departOffsetMin * 60_000L)
+                // Погоду спрашиваем сразу, пока строится маршрут; ждём её не дольше 2,5 секунды после маршрута
+                val weatherAsk = viewModelScope.async(Dispatchers.IO) { fetchWeather(from, departAt.time) }
                 val result = router.route(from, destination.position, departAt, cameraList.map { it.position })
+                // Скорости из базы читаются один раз на все варианты и на подбор времени выезда
+                val cache = ForecastCache()
                 // Тяжёлый подсчёт идёт не в главном потоке; при любой ошибке остаётся время движка
                 val forecast = withContext(Dispatchers.Default) {
                     runCatching {
                         result.options.map { o ->
-                            RouteOption(forecastTimeSec(o, speedStore, departAt.time), o.lengthM, o.points, o.maneuvers, o.label)
+                            RouteOption(forecastTimeSec(o, speedStore, departAt.time, cache), o.lengthM, o.points, o.maneuvers, o.label)
                         }
                     }.getOrDefault(result.options)
                 }
-                // Погода на час выезда: дождь, снег и гололёд замедляют прогноз
-                val weather = fetchWeather(from, departAt.time)
+                // Погода на час выезда: дождь, снег и гололёд замедляют прогноз (не успела — считаем без неё)
+                val weather = withTimeoutOrNull(2_500L) { weatherAsk.await() }
                 val weatherFactor = weatherSlowdown(weather, departAt.time)
                 // Сезонность (зима, дачный поток, час пик, каникулы) считается по каждому варианту
                 val adjusted = forecast.map { o ->
@@ -442,12 +453,9 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                     } else o
                 }.sortedBy { it.timeSec }
 
-                // Лучшее время выезда: смотрим на ближайшие 3 часа с шагом 15 минут
-                val advice = fastest?.let { f ->
-                    withContext(Dispatchers.Default) { runCatching { departureAdvice(f, departAt.time, weather) }.getOrNull() }
-                }
                 // пока считали, цель сменили или маршрут отменили — этот ответ уже не нужен
                 if (gen != routeGen || _state.value.destination != destination) return@launch
+                // Варианты показываем сразу, совет о времени выезда досчитывается следом
                 _state.update {
                     it.copy(
                         weather = weather,
@@ -455,13 +463,21 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                         options = labeled,
                         selected = 0,
                         timeAware = result.timeAware,
-                        departAdvice = advice,
+                        departAdvice = null,
                         seasonNote = note
                     )
                 }
                 if (autoStart) {
                     autoStart = false
                     if (_state.value.route != null) startNavigation()
+                }
+
+                // Лучшее время выезда: смотрим на ближайшие 3 часа с шагом 15 минут
+                val advice = fastest?.let { f ->
+                    withContext(Dispatchers.Default) { runCatching { departureAdvice(f, departAt.time, weather, cache) }.getOrNull() }
+                }
+                if (advice != null && gen == routeGen && _state.value.destination == destination) {
+                    _state.update { it.copy(departAdvice = advice) }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -503,10 +519,10 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Ищет, когда выехать выгоднее всего. Возвращает фразу, если выигрыш не меньше 5 минут. */
-    private fun departureAdvice(route: RouteOption, baseMs: Long, weather: Weather?): String? {
+    private fun departureAdvice(route: RouteOption, baseMs: Long, weather: Weather?, cache: ForecastCache): String? {
         fun total(offsetMin: Int): Double {
             val at = baseMs + offsetMin * 60_000L
-            val t = forecastTimeSec(route, speedStore, at) * weatherSlowdown(weather, at) * seasonEffect(at, route.lengthM).slowdown
+            val t = forecastTimeSec(route, speedStore, at, cache) * weatherSlowdown(weather, at) * seasonEffect(at, route.lengthM).slowdown
             return offsetMin * 60.0 + t
         }
         val now = total(0)
@@ -533,6 +549,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         iceWarned = false
         stopRecorder.reset()
         overspeed.reset()
+        spoken.clear()
+        rerouteSaid.clear()
         loadLimits(route)
         prepareHazards(route)
         _state.value.destination?.let { caravan.setDestination(it.title, it.position) }
@@ -554,13 +572,34 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Заранее находит на маршруте лежачие полицейские, ремонт и камеры. */
+    /**
+     * Заранее находит на маршруте лежачие полицейские, ремонт и камеры. Считает в фоне (точек много),
+     * результат подставляет, только если маршрут за это время не сменился.
+     */
     private fun prepareHazards(route: RouteOption) {
-        spoken.clear()
         val st = _state.value
-        routeBumps = alongRoute(route, st.bumps, 25.0)
-        routeWorks = alongRoute(route, st.works, 40.0)
-        routeCams = alongRoute(route, cameraList.map { it.position }, 35.0)
+        val bumps = st.bumps
+        val works = st.works
+        val cams = cameraList.map { it.position }
+        routeBumps = emptyList()
+        routeWorks = emptyList()
+        routeCams = emptyList()
+        hazardsJob?.cancel()
+        hazardsJob = viewModelScope.launch {
+            val found = withContext(Dispatchers.Default) {
+                runCatching {
+                    Triple(
+                        alongRoute(route, bumps, 25.0).map { it.first to bumps[it.second] },
+                        alongRoute(route, works, 40.0).map { it.first to works[it.second] },
+                        alongRoute(route, cams, 35.0)
+                    )
+                }.getOrNull()
+            } ?: return@launch
+            if (_state.value.route !== route) return@launch
+            routeBumps = found.first
+            routeWorks = found.second
+            routeCams = found.third
+        }
     }
 
     /**
@@ -602,7 +641,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         if (!s.navigating) return null
 
         val fromIndex = s.position?.index ?: 0
-        val near = snapToRoute(route, here, fromIndex)
+        val near = snapToRoute(route, here, fromIndex, speedMps = speedMps, courseDeg = courseDeg)
         var snap = near?.takeIf { it.offsetM <= SNAP_MAX_M }
         var closest = near
         if (snap == null) {
@@ -611,28 +650,33 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             val fromM = route.cumM.getOrElse(fromIndex.coerceIn(0, route.cumM.size - 1)) { 0.0 }
             var ahead = fromIndex.coerceAtLeast(0)
             while (ahead < route.cumM.size - 1 && route.cumM[ahead] - fromM < 2000.0) ahead++
-            val wide = snapToRoute(route, here, fromIndex, window = (ahead - fromIndex).coerceAtLeast(150))
+            val wide = snapToRoute(route, here, fromIndex, window = (ahead - fromIndex).coerceAtLeast(150), speedMps = speedMps, courseDeg = courseDeg)
             closest = wide ?: near
             snap = wide?.takeIf { it.offsetM <= SNAP_MAX_M }
             if (snap == null) ru.shturman.routing.Diag.snapMisses++
         }
         ru.shturman.routing.Diag.snapOffset = snap?.offsetM ?: -1.0
         ru.shturman.routing.Diag.snapIndex = snap?.index ?: -1
+        // Вне маршрута место на нём не двигаем: стоим на прежнем, пока не вернёмся или не перестроимся
+        val onRoute = snap != null
         val position = if (snap != null) {
             RoutePosition(snap.index, snap.traveledM)
         } else {
-            locateOnRoute(route, here, fromIndex)
+            s.position ?: RoutePosition(0, 0.0)
         }
         val turn = nextTurn(route, position)
-        announceTurn(turn, speedMps)
-        vibrateForTurn(turn?.distanceM)
+        if (onRoute) {
+            announceTurn(turn, speedMps)
+            vibrateForTurn(turn)
+        }
         val limit = limits.firstOrNull { position.traveledM >= it.startM && position.traveledM < it.endM }?.kmh
-        // Один сигнал на одно превышение больше чем на 15 км/ч (routing/Overspeed.kt)
-        if (overspeed.update(kmh, limit) && s.overspeedSound && limit != null) ThemeSounds.speeding(kmh - limit)
+        // Один сигнал на одно превышение больше чем на 15 км/ч (routing/Overspeed.kt); вне маршрута ограничение не наше
+        val alarmLimit = if (onRoute) limit else null
+        if (overspeed.update(kmh, alarmLimit) && s.overspeedSound && alarmLimit != null) ThemeSounds.speeding(kmh - alarmLimit)
         val hazards = checkHazards(position.traveledM, s)
-        val notes = runCatching { ru.shturman.routing.paceNotes(route, position.traveledM) }.getOrDefault(emptyList())
+        val notes = runCatching { ru.shturman.routing.paceNotes(route, position.traveledM, fromIndex = position.index) }.getOrDefault(emptyList())
         // Крутой изгиб дороги впереди, а едем быстро: «Сбавьте до N» на дорожнике и голосом один раз
-        val advice = ru.shturman.routing.curveAdvice(notes, turn?.distanceM, kmh)
+        val advice = if (onRoute) ru.shturman.routing.curveAdvice(notes, turn?.distanceM, kmh) else null
         if (advice != null && s.voiceOn) {
             val at = position.traveledM + advice.second.distanceM
             if (spokenCurves.none { kotlin.math.abs(it - at) < 80.0 }) {
@@ -649,11 +693,15 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
 
-        updateNavNotification(kmh, nextTurn(route, position), route.totalM - position.traveledM)
+        updateNavNotification(kmh, turn, route.totalM - position.traveledM)
 
         // Съезд с маршрута, разворот, пропущенный поворот, движение назад: решает детектор (routing/Deviation.kt)
-        if (snap != null) lastTurnDistOnRoute = nextTurn(route, position)?.distanceM ?: Double.MAX_VALUE
-        if (snap != null) selfOff = false
+        if (snap != null) lastTurnDistOnRoute = turn?.distanceM ?: Double.MAX_VALUE
+        if (snap != null) {
+            selfOff = false
+            // снова на маршруте (ближе порога съезда): о следующем съезде можно сказать заново
+            if (snap.offsetM <= deviation.level.offsetM) rerouteSaid.clear()
+        }
         val event = deviation.update(
             System.currentTimeMillis(), closest?.offsetM ?: Double.MAX_VALUE, accuracyM, speedMps,
             courseDeg, closest?.bearing ?: -1.0, lastTurnDistOnRoute
@@ -731,16 +779,17 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private var vibeLevel = -1
 
     /** Вибро-отклик: за 300 м лёгкий, за 150 м средний, за 50 м сильный. Каждый раз один раз на поворот. */
-    private fun vibrateForTurn(distM: Double?) {
-        if (distM == null || !_state.value.turnVibro) return
+    private fun vibrateForTurn(turn: NextTurn?) {
+        if (turn == null || !_state.value.turnVibro) return
+        val distM = turn.distanceM
         val level = when {
             distM <= 50.0 -> 2
             distM <= 150.0 -> 1
             distM <= 300.0 -> 0
             else -> -1
         }
-        // новый поворот — вибрации заново, даже если он близко за прошлым
-        val key = _state.value.turn?.key ?: -1
+        // новый поворот (по только что найденному, а не по прошлому на экране) — вибрации заново
+        val key = turn.key
         if (key != vibeKey) { vibeKey = key; vibeLevel = -1 }
         if (level < 0) { vibeLevel = -1; return }
         if (level <= vibeLevel) return
@@ -786,20 +835,27 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private var lastNotifAt = 0L
+    /** Какой поворот был в уведомлении: сменился — обновляем сразу, не дожидаясь 5 секунд. */
+    private var lastNotifTurn = ""
     private var gpsWatch: kotlinx.coroutines.Job? = null
     private var gpsLostShown = false
 
-    /** Текст постоянного уведомления: скорость, ближайший поворот и сколько осталось ехать. Не чаще раза в 2 секунды. */
+    /**
+     * Текст постоянного уведомления: скорость, ближайший поворот и сколько осталось ехать.
+     * Не чаще раза в 5 секунд (уведомление дорогое для системы), но сразу, если сменился сам поворот.
+     */
     private fun updateNavNotification(kmh: Int, turn: NextTurn?, leftM: Double) {
         if (navPaused) return
         val now = System.currentTimeMillis()
-        if (now - lastNotifAt < 2_000L) return
+        val side = turn?.let { if (it.isLeft) "налево" else "направо" }
+        val turnSig = if (turn != null) "${turn.key}|$side|${turn.street}" else ""
+        if (now - lastNotifAt < 5_000L && turnSig == lastNotifTurn) return
         lastNotifAt = now
+        lastNotifTurn = turnSig
         gpsLostShown = false
         val title = "APEX · $kmh км/ч"
         val left = ru.shturman.ui.formatDistance(leftM.coerceAtLeast(0.0))
         val text = if (turn != null) {
-            val side = if (turn.isLeft) "налево" else "направо"
             val street = if (turn.street.isNotBlank()) ", ${turn.street}" else ""
             "Через ${ru.shturman.ui.formatDistance(turn.distanceM)}: $side$street · осталось $left"
         } else "Осталось $left"
@@ -856,7 +912,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         lastRerouteAt = now
         if (phrase != null) {
             showNotice(phrase)
-            if (_state.value.voiceOn) voice.say(phrase)
+            // голосом — один раз, пока не вернёмся на маршрут, а не при каждой новой попытке
+            if (_state.value.voiceOn && rerouteSaid.add(phrase)) voice.say(phrase)
         }
         val gen = routeGen
         // выбранный вариант сохраняем: после съезда с «Без камер» новый путь тоже объезжает камеры
@@ -935,26 +992,26 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (level > spokenLevel) {
             spokenLevel = level
-            voice.say(turnPhrase(level, d, turn.isLeft, turn.severity, turn.roundaboutExit))
+            voice.say(turnPhrase(level, d, turn.isLeft, turn.severity, turn.roundaboutExit, turn.roundabout))
         }
     }
 
     /** Лежачие полицейские (за 100 м), ремонт (за 500 м) и камеры (за 600 м): текст, голос один раз и радар-круг. */
     private fun checkHazards(traveled: Double, st: NavState): Pair<String?, CameraAhead?> {
         var hazard: String? = null
-        routeBumps.firstOrNull { it.first > traveled }?.let { (at, idx) ->
+        routeBumps.firstOrNull { it.first > traveled }?.let { (at, p) ->
             val d = at - traveled
             if (d <= 100.0) {
                 hazard = "Лежачий полицейский через ${d.toInt()} м"
-                if (st.voiceOn && spoken.add("bump$idx")) voice.say("Впереди лежачий полицейский", flush = false)
+                if (st.voiceOn && spoken.add("bump${p.lat},${p.lon}")) voice.say("Впереди лежачий полицейский", flush = false)
             }
         }
         if (hazard == null) {
-            routeWorks.firstOrNull { it.first > traveled }?.let { (at, idx) ->
+            routeWorks.firstOrNull { it.first > traveled }?.let { (at, p) ->
                 val d = at - traveled
                 if (d <= 500.0) {
                     hazard = "Ремонт дороги через ${d.toInt()} м"
-                    if (st.voiceOn && spoken.add("work$idx")) voice.say("Впереди ремонт дороги", flush = false)
+                    if (st.voiceOn && spoken.add("work${p.lat},${p.lon}")) voice.say("Впереди ремонт дороги", flush = false)
                 }
             }
         }
@@ -1073,13 +1130,17 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         val km = traveled / 1000.0
         val cost = Math.round(fuelLiters(traveled, dur.toDouble(), s.consumption.toDouble()) * s.fuelPrice).toInt()
         val avg = ru.shturman.stats.TripMath.avgKmh(km, dur)
-        runCatching {
-            tripLog.add(ru.shturman.stats.Trip(tripStartMs, km, dur, tripMaxKmh, avg, cost))
-            ru.shturman.service.NavService.notifyTripEnd(
-                getApplication(),
-                "${ru.shturman.ui.formatKm(traveled)} км · ${ru.shturman.ui.formatDuration(dur.toDouble())} · средняя $avg км/ч · макс. $tripMaxKmh · $cost ₽"
-            )
-        }.onFailure { ru.shturman.Errors.log("finishTrip", it) }
+        val trip = ru.shturman.stats.Trip(tripStartMs, km, dur, tripMaxKmh, avg, cost)
+        val summary = "${ru.shturman.ui.formatKm(traveled)} км · ${ru.shturman.ui.formatDuration(dur.toDouble())} · средняя $avg км/ч · макс. $tripMaxKmh · $cost ₽"
+        val app = getApplication<Application>()
+        // Журнал шифруется и пишется в память: делаем это в фоне, чтобы экран не подвисал при отмене маршрута.
+        // Отдельный поток, а не корутина экрана: запись не должна оборваться, если экран закрывают.
+        kotlin.concurrent.thread(name = "trip-save") {
+            runCatching {
+                tripLog.add(trip)
+                ru.shturman.service.NavService.notifyTripEnd(app, summary)
+            }.onFailure { ru.shturman.Errors.log("finishTrip", it) }
+        }
         tripStartMs = 0L
     }
 
