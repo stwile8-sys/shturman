@@ -169,6 +169,14 @@ data class NavState(
     val caravanMessage: String? = null,
     val members: List<CaravanMember> = emptyList(),
     val leaderDest: CaravanDest? = null,
+    /** Клан, в котором я состою (null — ни в каком). */
+    val clan: ru.shturman.routing.ClanInfo? = null,
+    /** Все участники клана, включая меня. */
+    val clanMembers: List<ru.shturman.routing.ClanMember> = emptyList(),
+    val clanMessage: String? = null,
+    /** Показывать ли меня клану. */
+    val clanShare: Boolean = true,
+    val myUid: String? = null,
 
     // Голосовое управление
     val listening: Boolean = false,
@@ -202,6 +210,15 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
     private val rerouteSaid = HashSet<String>()
     private var prevSpeed = 0f
     private var prevSpeedAt = 0L
+    private val clan = ru.shturman.routing.Clan(
+        onInfo = { i -> _state.update { it.copy(clan = i) } },
+        onMembers = { m -> _state.update { it.copy(clanMembers = m, myUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid) } },
+        onLost = { why ->
+            settings.edit().remove("clan_id").apply()
+            _state.update { it.copy(clanMessage = why) }
+            showNotice(why)
+        }
+    )
     private val caravan = Caravan(
         onMembers = { m -> onCaravanMembers(m) },
         onDest = { d -> _state.update { it.copy(leaderDest = d) } }
@@ -271,6 +288,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         ThemeSounds.enabled = settings.getBoolean("theme_sounds", true)
         ThemeSounds.setTheme(app, ShColors.themeId)
         voice.nightMode = settings.getBoolean("night_voice", true)
+        resumeClan()
         // Данные OpenStreetMap: камеры (на карте не рисуются, нужны для маршрута и радар-круга),
         // лежачие полицейские и ремонт дорог (рисуются на карте). Обновляются раз в неделю.
         viewModelScope.launch {
@@ -637,6 +655,8 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         }
         detectHardBraking(here, speedMps)
         caravan.sendPosition(here, selfOff)
+        clan.sendPosition(here, kmh)
+        clan.updateRoute(if (s.navigating) s.route?.points else null, s.destination?.title)
         val route = s.route ?: return null
         if (!s.navigating) return null
 
@@ -1328,8 +1348,9 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
             .remove("radar").remove("card_percent").remove("card_distance").remove("card_eta")
             .remove("card_remaining").remove("card_fuel").remove("consumption").remove("fuel_price")
             .remove("dev_level").remove("theme_sounds").remove("turn_vibro").remove("map3d")
-            .remove("hud_mirror").remove("night_screen")
+            .remove("hud_mirror").remove("night_screen").remove("clan_share")
             .apply()
+        clan.setSharing(true)
         ThemeSounds.enabled = true
         deviation.level = DeviationLevel.MEDIUM
         voice.nightMode = true
@@ -1338,9 +1359,88 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
                 voiceOn = true, fullscreen = false, satellite = false, overspeedSound = true, nightVoice = true,
                 radarOn = true, cardPercent = true, cardDistance = true, cardEta = true, cardRemaining = false,
                 cardFuel = false, consumption = 8.0f, fuelPrice = 60.0f, devLevel = 1, turnVibro = true, map3d = true,
-                hudMirror = true, nightScreen = true
+                hudMirror = true, nightScreen = true, clanShare = true
             )
         }
+    }
+
+    // ---------- клан ----------
+
+    private fun clanError(e: Throwable): String {
+        var t: Throwable? = e
+        while (t != null) {
+            if (t is IllegalStateException && !t.message.isNullOrBlank()) return t.message!!
+            t = t.cause?.takeIf { it !== t }
+        }
+        return "Не вышло. ${friendlyNetError(e)}"
+    }
+
+    /** После перезапуска возвращаемся в свой клан (ждём вход в аккаунт до минуты). */
+    private fun resumeClan() {
+        val id = settings.getString("clan_id", null) ?: return
+        val share = settings.getBoolean("clan_share", true)
+        _state.update { it.copy(clanShare = share) }
+        viewModelScope.launch {
+            repeat(30) {
+                if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null) {
+                    try {
+                        if (!clan.resume(id, share)) {
+                            settings.edit().remove("clan_id").apply()
+                            _state.update { it.copy(clanMessage = "Вы больше не в клане") }
+                        }
+                    } catch (_: Exception) { }
+                    return@launch
+                }
+                kotlinx.coroutines.delay(2_000L)
+            }
+        }
+    }
+
+    private fun clanAction(busy: String, done: String?, block: suspend () -> Unit) {
+        _state.update { it.copy(clanMessage = busy) }
+        viewModelScope.launch {
+            try {
+                block()
+                _state.update { it.copy(clanMessage = done) }
+            } catch (e: Exception) {
+                _state.update { it.copy(clanMessage = clanError(e)) }
+            }
+        }
+    }
+
+    fun createClan(name: String, password: String) = clanAction("Создаю клан…", "Клан создан. Скажите друзьям название и пароль.") {
+        val i = clan.create(name, password, _state.value.clanShare)
+        settings.edit().putString("clan_id", i.id).apply()
+        _state.update { it.copy(clan = i) }
+    }
+
+    fun joinClan(name: String, password: String) = clanAction("Вступаю…", null) {
+        val i = clan.join(name, password, _state.value.clanShare)
+        settings.edit().putString("clan_id", i.id).apply()
+        _state.update { it.copy(clan = i, clanMessage = "Вы в клане «${i.name}»") }
+    }
+
+    fun setClanShare(on: Boolean) {
+        settings.edit().putBoolean("clan_share", on).apply()
+        clan.setSharing(on)
+        _state.update { it.copy(clanShare = on) }
+    }
+
+    fun makeClanOwner(m: ru.shturman.routing.ClanMember) = clanAction("Передаю главенство…", "Теперь глава — ${m.name}") { clan.makeOwner(m) }
+
+    fun kickClanMember(m: ru.shturman.routing.ClanMember) = clanAction("Исключаю…", "${m.name} больше не в клане") { clan.kick(m) }
+
+    fun changeClanPassword(password: String) = clanAction("Меняю пароль…", "Пароль изменён. Новым участникам нужен новый пароль.") { clan.changePassword(password) }
+
+    fun leaveClan() = clanAction("Выхожу…", "Вы вышли из клана") {
+        val me = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        clan.leave(_state.value.clanMembers.count { it.uid != me })
+        settings.edit().remove("clan_id").apply()
+    }
+
+    fun disbandClan() = clanAction("Распускаю клан…", "Клан распущен") {
+        clan.disband()
+        settings.edit().remove("clan_id").apply()
     }
 
     // ---------- караван ----------
@@ -1470,6 +1570,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearRoute() {
         routeGen++
+        clan.updateRoute(null, null)
         ru.shturman.api.ExternalTrip.active = null
         autoStart = false
         finishTrip()
@@ -1489,6 +1590,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         ru.shturman.service.NavService.onCancel = null
         listener.stop()
         caravan.leave()
+        clan.close()
         voice.shutdown()
         recorder.flush()
         router.close()
