@@ -1,0 +1,62 @@
+commit 19fedf23d7bc4c4efd606f823cd27be94345ca46
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/routing/SmartSearch.kt:138:80 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Exception'.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/service/AutoStart.kt:86:105 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/service/NavService.kt:113:107 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/service/NavService.kt:120:18 'fun addAction(p0: Int, p1: CharSequence!, p2: PendingIntent!): Notification.Builder!' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/service/NavService.kt:151:111 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+----- tail -----
+Starting a Gradle Daemon (subsequent builds will be faster)
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig
+> Task :app:generateDebugResValues
+> Task :app:checkDebugAarMetadata
+> Task :app:injectCrashlyticsMappingFileIdDebug
+> Task :app:processDebugGoogleServices
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :app:mergeDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:parseDebugLocalResources
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :app:javaPreCompileDebug
+> Task :app:processDebugManifestForPackage
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:processDebugResources
+> Task :app:packageDebugUnitTestForUnitTest
+> Task :app:generateDebugUnitTestConfig
+> Task :app:compileDebugKotlin
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/NavViewModel.kt:299:32 Unchecked cast of 'List<Any>' to 'List<Camera>'.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/NavViewModel.kt:299:55 Unchecked cast of 'List<Any>' to 'List<LatLon>'.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/NavViewModel.kt:299:78 Unchecked cast of 'List<Any>' to 'List<LatLon>'.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/NavViewModel.kt:299:101 Unchecked cast of 'List<Any>' to 'List<LatLon>'.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/media/Music.kt:66:24 Condition is always 'true'.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/routing/SmartSearch.kt:138:80 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Exception'.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/service/AutoStart.kt:86:105 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/service/NavService.kt:113:107 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/service/NavService.kt:120:18 'fun addAction(p0: Int, p1: CharSequence!, p2: PendingIntent!): Notification.Builder!' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/service/NavService.kt:151:111 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/service/NavService.kt:166:111 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/shturman/shturman/app/src/main/java/ru/shturman/ui/MainLayout.kt:136:27 Condition is always 'true'.
+
+> Task :app:compileDebugJavaWithJavac
+> Task :app:processDebugJavaRes
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes
+> Task :app:testDebugUnitTest
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1792611571464.json
+
+BUILD SUCCESSFUL in 1m 40s
+30 actionable tasks: 30 executed
