@@ -97,6 +97,8 @@ data class NavState(
     val searching: Boolean = false,
     val results: List<Place> = emptyList(),
     val searchError: String? = null,
+    /** Как поиск понял запрос, если по-своему (другая раскладка, вид места, похожие). */
+    val searchHint: String? = null,
 
     val destination: Place? = null,
     val routeLoading: Boolean = false,
@@ -362,7 +364,7 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
 
     fun search(query: String) {
         if (query.trim().length < 3) {
-            _state.update { it.copy(results = emptyList(), searching = false, searchError = null) }
+            _state.update { it.copy(results = emptyList(), searching = false, searchError = null, searchHint = null) }
             return
         }
         _state.update { it.copy(searching = true, searchError = null) }
@@ -370,8 +372,15 @@ class NavViewModel(app: Application) : AndroidViewModel(app) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             try {
-                val found = Geocoder.search(query)
-                _state.update { it.copy(results = found, searching = false) }
+                val s = _state.value
+                val found = ru.shturman.routing.SmartSearch.search(
+                    query,
+                    here = ru.shturman.routing.Diag.lastPos ?: lastFix,
+                    recent = ru.shturman.ui.Recents.load(getApplication()),
+                    home = s.home,
+                    work = s.work
+                )
+                _state.update { it.copy(results = found.places, searchHint = found.hint, searching = false) }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {

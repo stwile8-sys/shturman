@@ -79,14 +79,16 @@ fun SearchScreen(
     onClose: () -> Unit,
     initialQuery: String = "",
     initialSaving: String? = null,
-    here: LatLon? = null
+    here: LatLon? = null,
+    /** Как навигатор понял запрос, если по-своему: «Ищу «гоголя 12»», «Ближайшие: азс». */
+    hint: String? = null
 ) {
     val context = LocalContext.current
     var query by remember { mutableStateOf(initialQuery) }
     // Если не null, ближайший выбранный адрес сохраняется как «home» или «work», а не открывает маршрут
     var saving by remember { mutableStateOf(initialSaving) }
     val focus = remember { FocusRequester() }
-    val recents = remember { Recents.load(context) }
+    val recents = remember { Recents.load(context).take(5) }
 
     BackHandler(onBack = onClose)
 
@@ -229,7 +231,7 @@ fun SearchScreen(
                 query.trim().length >= 3 && !searching && results.isEmpty() -> EmptyState(
                     kind = EmptyKind.SEARCH,
                     title = stringResource(ru.shturman.R.string.s_8767f9ec),
-                    hint = "Попробуйте написать короче: улицу и номер дома или название места.",
+                    hint = "Попробуйте написать иначе: улицу и номер дома, название места или что нужно — «заправка», «аптека».",
                     modifier = Modifier.padding(vertical = 12.dp)
                 )
             }
@@ -237,6 +239,9 @@ fun SearchScreen(
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 if (results.isNotEmpty()) {
                     item { Header("РЕЗУЛЬТАТЫ") }
+                    if (hint != null) item {
+                        Text(hint, color = ShColors.Accent, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
+                    }
                     itemsIndexed(results) { i, place ->
                         PlaceRow(
                             icon = ApexIcons.Pin,
