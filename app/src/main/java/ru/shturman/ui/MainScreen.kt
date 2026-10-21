@@ -238,7 +238,8 @@ fun MainScreen(user: UserInfo, onSignOut: () -> Unit, vm: NavViewModel = viewMod
                         onClose = { showSearch = false },
                         initialQuery = searchText,
                         initialSaving = searchSaving,
-                        here = s.hereForSearch()
+                        here = s.hereForSearch(),
+                        hint = s.searchHint
                     )
                 }
             }

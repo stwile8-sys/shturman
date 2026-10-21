@@ -13,32 +13,61 @@ data class Place(val title: String, val subtitle: String, val position: LatLon)
 
 /** Поиск адресов: бесплатный сервис Photon на данных OpenStreetMap (с подсказками по мере набора). */
 object Geocoder {
+    /** Псков: если своё положение неизвестно, результаты рядом с ним поднимаются выше. */
+    val PSKOV = LatLon(57.8136, 28.3496)
 
-    suspend fun search(query: String): List<Place> = withRetry { searchOnce(query) }
+    /** Обычный поиск (как раньше): умный разбор запроса — в [SmartSearch]. */
+    suspend fun search(query: String): List<Place> = SmartSearch.search(query, null).places
 
-    private suspend fun searchOnce(query: String): List<Place> = withContext(Dispatchers.IO) {
-        // Слишком длинные строки и спецсимволы не нужны сервису: режем и кодируем
+    /**
+     * Один запрос к Photon. [near] — вокруг какой точки искать в первую очередь, [tags] — только места
+     * этих видов (например "amenity:fuel"), [fallbackTitle] — название для мест без имени (безымянная АЗС).
+     */
+    suspend fun text(
+        query: String,
+        near: LatLon = PSKOV,
+        tags: List<String> = emptyList(),
+        limit: Int = 10,
+        fallbackTitle: String? = null
+    ): List<Place> = withRetry(attempts = 2) {
         val q = URLEncoder.encode(query.trim().take(150), "UTF-8")
-        // Результаты рядом с Псковом поднимаются выше
-        val url = URL("https://photon.komoot.io/api/?q=$q&limit=8&lat=57.8136&lon=28.3496")
+        val filter = tags.joinToString("") { "&osm_tag=" + URLEncoder.encode(it, "UTF-8") }
+        fetch("https://photon.komoot.io/api/?q=$q&limit=$limit&lat=${near.lat}&lon=${near.lon}$filter", fallbackTitle)
+    }
 
-        val conn = url.openConnection() as HttpURLConnection
+    /** Ближайшие места нужного вида вокруг точки (заправки, аптеки…): обратный поиск с фильтром. */
+    suspend fun nearby(
+        near: LatLon,
+        tags: List<String>,
+        radiusKm: Int = 15,
+        limit: Int = 10,
+        fallbackTitle: String? = null
+    ): List<Place> = withRetry(attempts = 2) {
+        val filter = tags.joinToString("") { "&osm_tag=" + URLEncoder.encode(it, "UTF-8") }
+        fetch("https://photon.komoot.io/reverse?lat=${near.lat}&lon=${near.lon}&radius=$radiusKm&limit=$limit$filter", fallbackTitle)
+    }
+
+    private suspend fun fetch(address: String, fallbackTitle: String?): List<Place> = withContext(Dispatchers.IO) {
+        val conn = URL(address).openConnection() as HttpURLConnection
         val text = try {
-            conn.connectTimeout = 10000
-            conn.readTimeout = 15000
+            conn.connectTimeout = 8000
+            conn.readTimeout = 12000
             conn.setRequestProperty("User-Agent", "Shturman/0.1 (Android)")
             if (conn.responseCode !in 200..299) throw IOException("Поиск недоступен (${conn.responseCode})")
             conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally {
             conn.disconnect()
         }
+        parse(text, fallbackTitle)
+    }
 
-        val features = JSONObject(text).getJSONArray("features")
+    internal fun parse(text: String, fallbackTitle: String? = null): List<Place> {
+        val features = JSONObject(text).optJSONArray("features") ?: return emptyList()
         val out = ArrayList<Place>()
         for (i in 0 until features.length()) {
             val f = features.getJSONObject(i)
-            val coords = f.getJSONObject("geometry").getJSONArray("coordinates")
-            val p = f.getJSONObject("properties")
+            val coords = f.optJSONObject("geometry")?.optJSONArray("coordinates") ?: continue
+            val p = f.optJSONObject("properties") ?: continue
 
             val name = p.optString("name")
             val street = p.optString("street")
@@ -47,17 +76,18 @@ object Geocoder {
 
             val title = when {
                 name.isNotEmpty() -> name
+                fallbackTitle != null -> fallbackTitle
                 streetLine.isNotEmpty() -> streetLine
                 else -> continue
             }
             val subtitle = listOf(
-                if (name.isNotEmpty()) streetLine else "",
-                p.optString("city").ifEmpty { p.optString("county") },
+                if (title != streetLine) streetLine else "",
+                p.optString("city").ifEmpty { p.optString("district") }.ifEmpty { p.optString("county") },
                 p.optString("state")
             ).filter { it.isNotEmpty() && it != title }.distinct().joinToString(", ")
 
             out.add(Place(title, subtitle, LatLon(coords.getDouble(1), coords.getDouble(0))))
         }
-        out
+        return out
     }
 }

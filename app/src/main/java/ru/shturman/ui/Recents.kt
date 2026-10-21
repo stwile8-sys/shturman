@@ -6,13 +6,14 @@ import ru.shturman.routing.Place
 import ru.shturman.routing.distanceM
 
 /**
- * Недавние места из поиска: последние 5 выбранных адресов. Хранятся только на телефоне
+ * Недавние места из поиска: последние 30 выбранных адресов (на экране — 5, остальные помогают поиску
+ * понять, куда человек ездит). Хранятся только на телефоне
  * (отдельный файл, в резервную копию и на сервер не попадают).
  */
 object Recents {
     private const val FILE = "recents"
     private const val KEY = "places"
-    private const val MAX = 5
+    private const val MAX = 30
 
     fun load(context: Context): List<Place> = runCatching {
         val arr = org.json.JSONArray(context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY, "[]"))
